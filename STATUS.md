@@ -167,8 +167,13 @@ data-provenance unit tests pass.
 ## Integration status
 
 Not integrated with OrcSDR. `idf_component.yml` exists and declares
-version `0.1.0` but nothing consumes it yet. The intended pin pattern
-(OrcSDR's `git:` URL + full commit-SHA, matching its existing
+version `0.1.0` but nothing consumes it yet. As of this session,
+`idf_component.yml` requires ESP-IDF `>=6.1,<7.0` (the latest stable 6.x
+line, chosen for robustness) — which is newer than what OrcSDR itself
+currently targets (`>=5.5.0,<5.6.0`). This is a real, recorded blocker for
+Phase 4, not yet resolved either direction — see `PROJECT_TRUTH.md`
+"Compatibility Goals" and `ROADMAP.md` Phase 4's Risk note. The intended
+pin pattern (OrcSDR's `git:` URL + full commit-SHA, matching its existing
 `esp_rtl_sdr` dependency) is documented in `PROJECT_TRUTH.md` "Public API
 and Versioning" but not yet used anywhere, since there's no OrcSDR-side
 manifest entry to point at OrcMaps yet.

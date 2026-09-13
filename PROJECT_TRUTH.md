@@ -309,7 +309,22 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
 - A properly-licensed `.pmtiles` archive built by any standard tool
   (Planetiler, tippecanoe, `pmtiles` CLI) should be a valid OrcMaps input,
   not just archives built by OrcMaps' own (not-yet-built) pack builder.
-- ESP-IDF ≥5.0 (`idf_component.yml`).
+- **ESP-IDF `>=6.1,<7.0`** (`idf_component.yml`) — the latest stable
+  ESP-IDF 6.x line as of 2026-09-13 (v6.1, released 2026-08-27; confirmed
+  via the GitHub releases API, not assumed). Chosen deliberately for
+  robustness — newest toolchain, current security fixes, longest support
+  window — over floating on the oldest still-supported release.
+  **Known tension, recorded rather than hidden:** OrcSDR's own current
+  manifest (`apps/orcsdr-tab5/main/idf_component.yml` in the OrcSDR repo)
+  pins `idf: ">=5.5.0,<5.6.0"` — *older* than what OrcMaps now requires.
+  This means OrcSDR cannot actually consume OrcMaps as a real dependency
+  (`ROADMAP.md` Phase 4) until OrcSDR itself moves to ESP-IDF 6.x, which
+  is not yet scheduled anywhere. This was a deliberate choice, not an
+  oversight — the alternative (targeting IDF 5.5 to match OrcSDR today)
+  would mean re-deciding this the moment OrcSDR upgrades. If Phase 4
+  becomes urgent before OrcSDR moves to IDF 6.x, the options are: OrcSDR
+  upgrades first, or this constraint is deliberately loosened with the
+  same rigor as any other decision in this file — not silently.
 
 ## Public API and Versioning
 
