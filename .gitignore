@@ -11,3 +11,8 @@ build_host_tests.exe
 .vscode/
 CMakeFiles/
 CMakeCache.txt
+
+# ESP-IDF local/generated. Keep sdkconfig.defaults and dependencies.lock.
+examples/**/sdkconfig
+examples/**/sdkconfig.old
+**/build_log.txt

@@ -10,10 +10,13 @@ tested against independently.
 
 The fixture is intentionally not real map data: tile payloads are short
 marker strings identifying their z/x/y, so tests can assert on exact
-contents without needing a vector-tile (MVT) decoder. Internal directory
-compression and tile compression are both NONE, so host tests exercise the
-container format (header, directory, Hilbert tile IDs, leaf dirs) without
-requiring a gzip/zlib dependency in the first milestone.
+contents without needing a vector-tile (MVT) decoder. Tile payloads are
+stored uncompressed (`Compression.NONE`). The official `pmtiles` writer
+may still gzip the directory even when `internal_compression` is
+requested as NONE -- the committed `tiny.pmtiles` header reports gzip
+internal compression, and `tests/host/test_pmtiles.cpp` asserts that.
+Do not hand-edit the binary; regenerate and re-check the header fields
+if the writer behavior changes.
 
 Regenerate with: python tests/fixtures/generate_fixture.py
 """

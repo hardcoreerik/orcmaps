@@ -1,16 +1,11 @@
-// Minimal ESP-IDF smoke test for the `orcmap` component. Proves the
-// portable core (geo math, PMTiles container reader, MVT decoder, style
-// system) actually compiles and links against a real ESP-IDF toolchain --
-// see docs/STATUS.md "Current blockers" for why this didn't exist before
-// and docs/ARCHITECTURE.md "Build system" for what it closes.
+// Minimal ESP-IDF smoke test for the `orcmap` component. Proves a generic
+// ESP-IDF application can compile and link the portable core (geo math,
+// style system) with no graphics framework -- see STATUS.md and
+// docs/ARCHITECTURE.md "Build system".
 //
-// Deliberately does NOT exercise file I/O (no adapters/esp_idf ByteSource
-// exists yet -- that's the next real gap, not this example's job) or
-// The generic smoke test does not yet exercise rendering; the initial
-// adapters/m5gfx backend now exists, but this example currently validates
-// the portable core and ESP-IDF integration only.
-// those adapters are built, per README.md's stated intent for
-// examples/generic-esp32.
+// Deliberately does NOT: open a map pack (no adapters/esp_idf ByteSource
+// yet), decode MVT at runtime, or draw pixels. Those are later examples
+// (graphics-specific work belongs in examples/m5stack-tab5, not here).
 
 #include "esp_log.h"
 #include "orcmap/geo.hpp"

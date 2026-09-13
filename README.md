@@ -18,12 +18,16 @@ so unrelated ESP32 projects can use it too.
 ## Status
 
 Early development. The map-pack container format is decided (PMTiles v3 —
-see [`docs/FORMAT_DECISION.md`](docs/FORMAT_DECISION.md)); the PMTiles
-archive reader, tile-coordinate math, and the style system are implemented
-and host-tested; a vector-tile decoder and any on-device renderer are not
-yet built. See [`STATUS.md`](STATUS.md) for the live, detailed snapshot
-and [`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the OrcSDR
-prototype this project supersedes.
+see [`docs/FORMAT_DECISION.md`](docs/FORMAT_DECISION.md)). Implemented and
+host-tested: PMTiles archive reader, Web Mercator tile math, MVT container
+decode (schema-agnostic), and the style system. An ESP-IDF compile/link
+smoke test exists at [`examples/generic-esp32`](examples/generic-esp32)
+and does **not** require M5GFX. Not yet built: the OrcMaps-owned feature
+model, viewport, renderer core, overlays, cache, and a real on-device map
+draw. `adapters/m5gfx` is an experimental sketch, not a finished
+integration. See [`STATUS.md`](STATUS.md) for the live snapshot and
+[`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the OrcSDR prototype
+this project supersedes.
 
 ## Design principles
 
@@ -31,7 +35,7 @@ prototype this project supersedes.
 2. **One basemap, many applications.** Base geography is shared; every consumer supplies its own overlays.
 3. **Bounded memory.** Map/pack size must never determine RAM usage — everything streams.
 4. **Portable core.** No application state (aircraft, nodes, RF data) inside the engine.
-5. **Display-backend-agnostic core, M5GFX-first adapter.** Rendering backend and map core are separable.
+5. **Graphics-framework-independent core.** M5GFX is the first *reference integration* because OrcSDR/Tab5 is the first real consumer — it is not the renderer architecture.
 6. **Map data is not firmware.** Packs install/update independently of the engine and the consuming app.
 7. **User data is not map-pack data.** Markers/waypoints survive pack replacement, are never uploaded during pack discovery.
 8. **Safe updates.** A corrupt or partial download never replaces a working pack.
@@ -41,23 +45,24 @@ prototype this project supersedes.
 ## Repository layout
 
 ```
-include/orcmap/      Public headers — the portable API
-src/core/             Geo math, tile addressing, viewport
-src/storage/          ByteSource abstraction (no direct filesystem coupling)
-src/tiles/            Pack/archive format reader
-src/render/           Rendering backend interface + tile→draw-call translation
-src/overlays/         Marker/polyline/polygon overlay primitives
-src/cache/            Bounded LRU tile caches (RAM/PSRAM + optional SD render cache)
-adapters/m5gfx/        M5GFX/LovyanGFX rendering backend
-adapters/esp_idf/      ESP-IDF filesystem ByteSource adapter
-tools/pack-builder/    Host-side: OSM extract -> map pack
-tools/pack-inspect/    Host-side: inspect a pack's metadata/contents
-tools/pack-verify/     Host-side: validate a pack against its manifest
-examples/m5stack-tab5/ Full example on M5Stack Tab5 (ESP32-P4)
-examples/generic-esp32/Minimal ESP32-S3 example
+include/orcmap/        Public headers — the portable API
+src/core/              Geo math, tile addressing (viewport not yet implemented)
+src/storage/           Reserved; ByteSource interface lives in include/orcmap/
+src/tiles/             PMTiles reader + MVT decoder
+src/render/            Style system today; renderer core not yet implemented
+src/overlays/          Planned marker/polyline/polygon overlay primitives
+src/cache/             Planned bounded LRU tile caches
+adapters/host/         stdio ByteSource for host tests/tools
+adapters/m5gfx/        EXPERIMENTAL M5GFX/LovyanGFX sketch (not compiled into core)
+adapters/esp_idf/      Planned ESP-IDF filesystem ByteSource adapter
+tools/pack-builder/    Planned host-side: OSM extract -> map pack
+tools/pack-inspect/    Planned host-side pack inspector
+tools/pack-verify/     Planned host-side pack verifier
+examples/m5stack-tab5/ Planned Tab5 graphics example
+examples/generic-esp32/ESP-IDF compile smoke test (no graphics framework)
 tests/host/            Host-buildable unit tests (no hardware required)
 tests/consumer/        External-consumer build gate (public headers only)
-data/sources/           Data provenance registry (one record per reviewed map-data source)
+data/sources/          Data provenance registry
 docs/                  Architecture, format decision, porting, licensing docs
 ```
 

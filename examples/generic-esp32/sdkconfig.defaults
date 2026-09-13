@@ -1,0 +1,4 @@
+# No chip is pinned. This example is a generic ESP-IDF consumer of
+# OrcMaps, not a Tab5/M5GFX demo. Configure a target before building:
+#   idf.py set-target esp32p4
+#   idf.py set-target esp32s3

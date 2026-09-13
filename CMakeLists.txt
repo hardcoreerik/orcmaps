@@ -1,12 +1,13 @@
 # OrcMaps -- standalone ESP-IDF component (repo root = component root).
 #
-# Portable core only (geo math + PMTiles archive reader) so far -- see
-# docs/STATUS.md for exact implementation state. adapters/esp_idf sources
-# are added here once that ByteSource adapter exists (docs/ROADMAP.md
-# Phase 2). Host-side tests do NOT build through this file -- they are a
-# separate standalone CMake project at tests/host/CMakeLists.txt, matching
-# the pattern already used by hardcoreerik/esp-rtl-sdr, so host tests never
-# need an ESP-IDF toolchain.
+# Portable core only (geo, PMTiles reader, MVT decoder, style system).
+# No M5GFX/M5Unified/graphics-framework dependency -- adapters/m5gfx is
+# optional integration, not registered here. adapters/esp_idf sources are
+# added here once that ByteSource adapter exists (docs/ROADMAP.md Phase 2).
+# Host-side tests do NOT build through this file -- they are a separate
+# standalone CMake project at tests/host/CMakeLists.txt, matching the
+# pattern already used by hardcoreerik/esp-rtl-sdr, so host tests never
+# need an ESP-IDF toolchain. See docs/STATUS.md for implementation state.
 
 idf_component_register(
     SRCS "src/core/geo.cpp"

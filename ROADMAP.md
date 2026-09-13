@@ -95,17 +95,31 @@ paths the current tests don't. Flagged, not yet mitigated.
       renderer rather than the decoder itself
 - [ ] `adapters/esp_idf` `ByteSource` (wraps OrcSDR's
       `orcsdr::storage::FileSystem` or raw ESP-IDF VFS)
-- [ ] `adapters/m5gfx` renderer backend (Color → RGB565, draw calls against
-      `lgfx::v1::LovyanGFX&`, matching ORCMAP1's existing portable-overload
-      pattern — see `docs/ORCMAP1_AUDIT.md` §4)
+- [ ] OrcMaps-owned Feature / Geometry model, and an explicit MVT →
+      OrcMaps translation boundary. MVT types must not become the
+      renderer architecture.
+- [ ] Graphics-independent renderer seam (`RenderTarget` or a
+      render-command stream — evaluate before locking in) plus a
+      host-testable render proof. M5GFX must consume that seam, not MVT.
+- [ ] `adapters/m5gfx` finished integration (Color → RGB565, draw calls
+      against `lgfx::v1::LovyanGFX&`). **A header-only EXPERIMENTAL sketch
+      exists** (`adapters/m5gfx/color.hpp`, `renderer.hpp`) but is still
+      MVT-typed and is not this checkbox.
 - [ ] Tile content schema decided (`docs/FORMAT_DECISION.md` "Deferred") and
       a `DecodedFeature -> orcmap::FeatureKind` mapping written against it —
       needs a real Lane County MVT tile to decide from, not the synthetic
-      fixture (`ROADMAP.md` Phase 1 risk note, still applicable)
-- [ ] Renderer core (`src/render/`) that walks decoded MVT features, calls
-      `ResolveFeatureStyle()`, issues draw calls
-- [ ] First on-device ESP-IDF build of the OrcMaps component (not yet
-      exercised at all — no ESP-IDF toolchain used so far)
+      fixture (`ROADMAP.md` Phase 1 risk note, still applicable). Any
+      temporary mapper used for a render proof is EXPERIMENTAL, not the
+      stable public API.
+- [ ] Renderer core (`src/render/`) that walks OrcMaps features (not
+      `MvtFeature`), calls `ResolveFeatureStyle()`, issues generic draw
+      operations
+- [ ] Minimal framework-independent Viewport (center lat/lon, zoom,
+      screen size)
+- [x] First ESP-IDF *compile/link* of the OrcMaps component:
+      `examples/generic-esp32` built against ESP-IDF 6.0.2, target
+      `esp32p4`. Smoke test only (geo + style log lines). Not on-device
+      functional validation, not a graphics demo, not in CI.
 
 **Dependencies:** Phase 1 (reader) must keep working; style system (done)
 feeds the renderer once it exists.
@@ -228,7 +242,12 @@ this phase on that basis.
 
 **Goal:** prove OrcMaps is reusable beyond OrcSDR.
 
-- [ ] `examples/generic-esp32` — a minimal, non-OrcSDR consumer
+- [x] `examples/generic-esp32` — ESP-IDF compile/link smoke test of the
+      portable core with **no** M5GFX/M5Unified dependency (proves a
+      generic ESP-IDF app can consume OrcMaps). Not a map-rendering demo.
+- [ ] A fuller non-OrcSDR example that actually opens a pack / draws
+      (graphics-specific examples stay separate; Tab5 stays in
+      `examples/m5stack-tab5`)
 - [ ] Stable, tagged OrcMaps releases (semver, `idf_component.yml` version
       bumps) that OrcSDR (and, ideally, at least one unrelated project)
       pin against

@@ -155,7 +155,11 @@ distribution under the documented source terms").
 - **Rendering: vector tiles decoded once, cached as RGB565** (RAM/PSRAM
   first, optional SD-backed cache second) — the hybrid approach, matching
   the yuiseki precedent and ORCMAP1's own informal sprite-cache pattern in
-  `adsb_dashboard.cpp`. Not yet implemented (no MVT decoder exists yet).
+  `adsb_dashboard.cpp`. **MVT decode is implemented; the renderer core,
+  generic feature model, viewport, and rendered-tile cache are not.** An
+  `adapters/m5gfx` sketch exists (header-only Color→RGB565 + LovyanGFX
+  helpers) but is EXPERIMENTAL, currently MVT-typed, and is not the
+  renderer architecture — see STATUS.md.
 - **Projection: standard Web Mercator tile math**
   (`orcmap::LatLonToTile`/`TileToLatLon`, `include/orcmap/geo.hpp`),
   implemented and host-tested. RF-specific distance/bearing/geodesic math
@@ -186,11 +190,15 @@ treated as a correctness rule, not a preference.
 - Secondary feasibility target: ESP32-S3, kept realistic by not letting
   core code assume Tab5-specific resources (PSRAM size, display size).
 - The core (`include/orcmap`, `src/core`, `src/tiles`, `src/render/style.cpp`)
-  has **zero** ESP-IDF, M5Stack, M5GFX, or LovyanGFX dependency today, and
-  must stay that way — this is enforced structurally (those headers are
-  never included from `src/core`, `src/tiles`, or the style system) and
-  verified by the fact that `tests/host` builds and passes on a plain host
-  C++17 toolchain with no ESP-IDF present.
+  has **zero** ESP-IDF, M5Stack, M5GFX, LovyanGFX, or other graphics-
+  framework dependency today, and must stay that way — this is enforced
+  structurally (those headers are never included from `src/core`,
+  `src/tiles`, or the style system) and verified by host tests plus the
+  `examples/generic-esp32` ESP-IDF smoke test, which must not require
+  M5GFX/M5Unified. M5GFX is the first *reference graphics integration*
+  (`adapters/m5gfx`), not the OrcMaps renderer architecture. Architectural
+  test: if `adapters/m5gfx/` were deleted, core must still build, run host
+  tests, open/decode map data, project, and style.
 
 ## Storage Model
 
@@ -204,12 +212,18 @@ Implemented adapters: `orcmap::host::FileByteSource`
 
 ## Rendering Model
 
-No renderer exists yet (see STATUS.md). The intended shape, per
+No renderer **core** exists yet (see STATUS.md). The intended shape, per
 `docs/STYLING.md`: a renderer consumes `orcmap::MapPaint` from
 `ResolveFeatureStyle()`, never reads style colors or hardcodes literals
 directly. `orcmap::Color` is plain RGBA8; conversion to a display's native
-pixel format (RGB565 for M5GFX) is an adapter's job (`adapters/m5gfx`, not
-yet implemented), not the core's.
+pixel format (RGB565 for M5GFX) is an adapter's job, not the core's.
+
+`adapters/m5gfx/` is an **EXPERIMENTAL sketch** (header-only `ToRgb565` and
+LovyanGFX draw helpers). It currently takes MVT decode types (`MvtFeature`
+etc.), which is the wrong long-term shape — MVT structures must stop at
+the MVT boundary; the renderer and graphics integrations consume an
+OrcMaps-owned feature/geometry model (not yet implemented). Do not grow
+that sketch until the generic seam exists.
 
 ## Styling Model
 
@@ -339,9 +353,13 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
 ## Public API and Versioning
 
 - **Public API surface is `include/orcmap/` plus the adapter directories**
-  (`adapters/host/`, and `adapters/m5gfx`/`adapters/esp_idf` once they
-  exist) — nothing under `src/` or `third_party/` is a consumer-facing
-  contract, ever. This is enforced structurally, not just by convention:
+  (`adapters/host/` today; `adapters/m5gfx` is an experimental integration
+  sketch, `adapters/esp_idf` is not yet implemented) — nothing under
+  `src/` or `third_party/` is a consumer-facing contract, ever. Format
+  headers `mvt.hpp` / `pmtiles.hpp` are public *today* because they are
+  what a consumer can actually call; they are not the long-term
+  application API (`MapEngine` / `Viewport` / generic features, none of
+  which exist yet). This is enforced structurally, not just by convention:
   `tests/consumer/` builds an external-consumer smoke test whose own
   include path never adds `src/` or `third_party/` — if that target builds,
   a real external project (OrcSDR included) could integrate the same way.
@@ -433,9 +451,12 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
 - Style system: 4 built-in compiled styles, `MapStyle`/`FeatureRule`/
   `ResolveFeatureStyle` API, `RenderedTileCacheKey` includes style
   id+version+renderer version.
-- Dependency: miniz (tinfl inflate subset), MIT, vendored under
-  `third_party/miniz`, used only for gzip/deflate inflate of PMTiles
-  directories/tiles. Recorded in `docs/DEPENDENCY_LEDGER.md`.
+- Dependency: miniz 3.1.2 (`richgel999/miniz` commit
+  `77d0dce8627735138c51770d1799a1ef48f2117d`), MIT, vendored as the full
+  3.1.2 source snapshot under `third_party/miniz`. Only inflate is
+  compiled (`miniz.c` + `miniz_tinfl.c` with `MINIZ_NO_DEFLATE_APIS` /
+  `MINIZ_NO_ZLIB_APIS` / `MINIZ_NO_ARCHIVE_APIS`). Recorded in
+  `docs/DEPENDENCY_LEDGER.md`.
 - Test fixture built via the official `pmtiles` Python package (BSD-3-
   Clause, dev-tool only, not vendored) rather than hand-rolled binary data —
   see `tests/fixtures/generate_fixture.py`.

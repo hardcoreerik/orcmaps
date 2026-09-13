@@ -13,28 +13,34 @@ flowchart TD
     Pack["Map Pack (.pmtiles)"]
     Source["orcmap::ByteSource"]
     Reader["orcmap::PmTilesReader"]
-    Tile["Tile Decoder (MVT) -- NOT IMPLEMENTED"]
-    Style["orcmap::MapStyle / ResolveFeatureStyle"]
+    Tile["MVT decoder -- IMPLEMENTED, schema-agnostic"]
+    Features["OrcMaps Feature / Geometry -- NOT IMPLEMENTED"]
+    Style["orcmap::MapStyle / ResolveFeatureStyle -- IMPLEMENTED"]
+    Viewport["Viewport -- NOT IMPLEMENTED"]
     Cache["Rendered Tile Cache -- NOT IMPLEMENTED"]
-    Renderer["Renderer (M5GFX adapter) -- NOT IMPLEMENTED"]
+    Core["Renderer core -- NOT IMPLEMENTED"]
+    M5["M5GFX adapter -- EXPERIMENTAL sketch, still MVT-typed"]
     Overlay["Overlay Layer -- NOT IMPLEMENTED"]
     Display["Display"]
 
     Pack --> Source
     Source --> Reader
     Reader --> Tile
-    Tile --> Renderer
-    Style --> Renderer
-    Cache <--> Renderer
-    Renderer --> Display
-    Overlay --> Renderer
+    Tile --> Features
+    Features --> Core
+    Style --> Core
+    Viewport --> Core
+    Cache <--> Core
+    Core --> M5
+    M5 --> Display
+    Overlay --> Core
 ```
 
-Implemented today: `Pack -> Source -> Reader` (fully, host-tested) and
-`Style` (fully, host-tested, but not yet wired to any renderer since none
-exists). Everything marked "NOT IMPLEMENTED" is real, scoped, and described
-below so the next work session builds toward this shape rather than
-guessing at it — see `ROADMAP.md` for sequencing.
+Implemented today: `Pack -> Source -> Reader` (host-tested), schema-agnostic
+`MVT decode` (host-tested), and `Style` (host-tested). An `adapters/m5gfx`
+sketch exists but draws MVT types directly — that is the wrong long-term
+shape and is not a finished renderer. Everything marked "NOT IMPLEMENTED"
+is real, scoped, and described below — see `ROADMAP.md` for sequencing.
 
 ## Major components
 
@@ -47,18 +53,19 @@ guessing at it — see `ROADMAP.md` for sequencing.
 | `orcmap::PmTilesReader` | `include/orcmap/pmtiles.hpp`, `src/tiles/pmtiles_reader.cpp` | Implemented (container layer only) |
 | Vector tile (MVT) decoder | `include/orcmap/mvt.hpp`, `src/tiles/mvt_decoder.cpp` | Implemented (schema-agnostic container decode only; no FeatureKind mapping) |
 | `orcmap::MapStyle` / style system | `include/orcmap/style.hpp`, `include/orcmap/color.hpp`, `include/orcmap/cache_key.hpp`, `src/render/style.cpp` | Implemented |
-| Renderer core | `src/render/` | Not implemented (only style.cpp exists in this dir so far) |
-| M5GFX adapter | `adapters/m5gfx/` | Implemented (initial/minimal LovyanGFX geometry rendering backend) |
+| Renderer core | `src/render/` | PLANNED (only `style.cpp` exists in this dir so far) |
+| M5GFX adapter | `adapters/m5gfx/` | EXPERIMENTAL sketch (header-only Color→RGB565 + LovyanGFX helpers; not a CMake component; not compiled into core; currently takes MVT types — to be retargeted onto an OrcMaps feature/render seam) |
 | Overlay primitives | `src/overlays/` | Not implemented (empty dir) |
 | Tile/rendered-tile cache | `src/cache/` | Not implemented (empty dir); `RenderedTileCacheKey` shape exists in `include/orcmap/cache_key.hpp` |
 | Pack builder | `tools/pack-builder/` | Not implemented (empty dir) |
 | Pack inspector/verifier | `tools/pack-inspect/`, `tools/pack-verify/` | Not implemented (empty dirs) |
-| Examples | `examples/m5stack-tab5/`, `examples/generic-esp32/` | Partial: `generic-esp32` implemented; `m5stack-tab5` not yet implemented |
+| Generic ESP32 example | `examples/generic-esp32/` | PARTIAL: ESP-IDF compile/link smoke test of the portable core (no graphics framework) |
+| Tab5 example | `examples/m5stack-tab5/` | Not implemented (empty dir) |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles` (+ `generate_fixture.py`) | Implemented |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |
 | Consumer build gate | `tests/consumer/` | Implemented, passing |
-| Data provenance registry | `data/sources/*.json` | Implemented, 9 records (2 `CONFIRMED`, rest `REVIEW_REQUIRED` pending primary-source verification or per-record filtering -- see `docs/DATA_PROVENANCE_REGISTRY.md`) |
+| Data provenance registry | `data/sources/*.json` | Implemented, 9 records (4 `CONFIRMED`: Natural Earth, OpenStreetMap, geoBoundaries gbOpen, Google Open Buildings; 5 `REVIEW_REQUIRED` -- see `docs/DATA_PROVENANCE_REGISTRY.md`) |
 | Pack manifest schema | `docs/PACK_MANIFEST_SCHEMA.md` | Documented, not implemented (no pack builder exists) |
 
 ## Repository layout
@@ -79,17 +86,20 @@ src/overlays/         Empty -- marker/polyline/polygon primitives, planned.
 src/cache/            Empty -- bounded LRU tile cache, planned.
 adapters/host/        file_byte_source.{hpp,cpp} -- stdio ByteSource for
                       host tests and future host-side tools.
-adapters/m5gfx/       Empty -- M5GFX/LovyanGFX rendering backend, planned.
+adapters/m5gfx/       EXPERIMENTAL sketch: color.hpp + renderer.hpp
+                      (header-only; not compiled into core).
 adapters/esp_idf/     Empty -- ESP-IDF filesystem ByteSource, planned.
 tools/pack-builder/   Empty -- OSM extract -> .pmtiles, planned.
 tools/pack-inspect/   Empty -- inspect a pack's metadata/contents, planned.
 tools/pack-verify/    Empty -- validate a pack against its manifest, planned.
-examples/             Empty -- Tab5 and generic ESP32-S3 examples, planned.
+examples/generic-esp32/  ESP-IDF compile/link smoke test of the portable
+                      core. No M5GFX/M5Unified. Not a map demo.
+examples/m5stack-tab5/   Empty -- Tab5 graphics example, planned.
 tests/host/           Host-buildable unit tests (no ESP-IDF needed).
 tests/consumer/       External-consumer build gate -- public headers only,
                       see "Consumer integration test" below.
 tests/fixtures/       Committed test fixtures + the script that builds them.
-third_party/miniz/    Vendored miniz (tinfl inflate subset), MIT license.
+third_party/miniz/    Vendored miniz 3.1.2 full snapshot; only inflate compiled.
 data/sources/         Data provenance registry: one JSON record per
                       reviewed map-data source, see "Data provenance and
                       attribution" below.
@@ -111,10 +121,20 @@ docs/                 Architecture/decision/porting/licensing documents.
    fit in the root alone, and reads the tile's bytes directly from the
    archive at the resolved offset/length. Returns `false` (not an error)
    for a sparse/missing tile.
-4. **Not yet implemented:** decoding those bytes as MVT vector geometry,
-   resolving each decoded feature's `orcmap::FeatureKind` and calling
-   `ResolveFeatureStyle()` for its paint, drawing through a renderer
-   backend, and caching the rendered result.
+4. **Implemented, separately:** `orcmap::DecodeMvtTile()` turns
+   *already-decompressed* MVT tile bytes into `MvtTile` / `MvtLayer` /
+   `MvtFeature` structures. `GetTile()` returns bytes **as stored**
+   (still compressed if `Header().tile_compression` is gzip/brotli/zstd).
+   There is not yet a public generic tile-payload decompression seam
+   between those two calls — `Inflate()` is private to
+   `pmtiles_reader.cpp` and is used for directories/metadata. The
+   synthetic fixture's *tile* payloads are uncompressed, so host tests
+   do not yet exercise that gap.
+5. **Not yet implemented:** translating MVT structures into an
+   OrcMaps-owned Feature / Geometry model, mapping features to
+   `orcmap::FeatureKind`, a graphics-independent renderer core +
+   viewport, drawing through a graphics integration, and caching the
+   rendered result.
 
 ## Map pack / archive layer
 
@@ -189,8 +209,11 @@ geometry types, all four attribute value representations actually
 exercised (string/double/int64/bool), and corruption handling (empty
 buffer, garbage bytes, truncated tile).
 
-Not yet built: the renderer step that walks a decoded `MvtTile` and issues
-draw calls — see "Renderer" below.
+Not yet built: an OrcMaps-owned Feature / Geometry model (MVT types must
+not become the renderer architecture), a `FeatureKind` mapper (blocked on
+the tile-content-schema decision), and a renderer core that walks *those*
+generic features and issues graphics-independent draw operations — see
+"Renderer" below.
 
 ## Projection / coordinates
 
@@ -207,12 +230,20 @@ stays in OrcSDR.
 
 ## Renderer
 
-Not implemented. Per `docs/STYLING.md`, the intended contract is: renderer
-code calls `orcmap::ResolveFeatureStyle(kind, zoom, style)` and draws using
-the returned `orcmap::MapPaint`, never reading style colors directly or
+**PLANNED** — no renderer core exists in `src/render/` (only `style.cpp`).
+Per `docs/STYLING.md`, the intended contract is: renderer code calls
+`orcmap::ResolveFeatureStyle(kind, zoom, style)` and draws using the
+returned `orcmap::MapPaint`, never reading style colors directly or
 hardcoding literals. `orcmap::Color` is plain RGBA8 with zero display-API
 dependency; converting to a display's native pixel format is an adapter's
 responsibility.
+
+`adapters/m5gfx/` is an **EXPERIMENTAL sketch**, not that renderer core:
+header-only `ToRgb565` plus `DrawFeature` against `lgfx::v1::LovyanGFX&`.
+It currently includes `orcmap/mvt.hpp` and draws `MvtFeature` geometry
+directly. That coupling is a known defect of the sketch, not the target
+architecture. M5GFX must not gain architectural privilege: if
+`adapters/m5gfx/` were deleted, core must still build and host-test.
 
 ## Style system
 
@@ -406,30 +437,37 @@ tooling:
   (`idf_component_register`), matching `hardcoreerik/esp-rtl-sdr`'s
   pattern exactly (repo root = component root). Currently registers only
   the portable-core sources that exist (`src/core/geo.cpp`,
-  `src/tiles/pmtiles_reader.cpp`, `src/render/style.cpp`, vendored miniz).
+  `src/tiles/pmtiles_reader.cpp`, `src/tiles/mvt_decoder.cpp`,
+  `src/render/style.cpp`, vendored miniz). `REQUIRES ""` — core has no
+  M5GFX/M5Unified/ESP-IDF component dependency.
 - `tests/host/CMakeLists.txt`: separate, standalone CMake project (its own
   `project()` call), building `orcmap_host_tests` directly from source —
   no ESP-IDF toolchain involved. This is deliberate, again matching
   `esp-rtl-sdr`'s precedent, so host tests are always runnable in a plain
   dev environment.
-- No ESP-IDF build has been exercised yet (no ESP-IDF toolchain available
-  in this development environment) — the component registration is
-  structurally correct per ESP-IDF conventions but not yet build-verified
-  against a real ESP-IDF SDK. Flagged explicitly rather than claimed as
-  proven.
+- `examples/generic-esp32/`: in-tree ESP-IDF application that consumes the
+  repo-root `orcmap` component. **Compile/link of the portable core has
+  been proven** against ESP-IDF 6.0.2, target `esp32p4` (see STATUS.md).
+  It is a smoke test, not a map demo: no file I/O, no graphics framework.
+  GitHub Actions does **not** yet run this build.
+- GitHub Actions today: Documentation Truth and Data Provenance Truth
+  only. Host C++ tests, consumer smoke test, ESP-IDF compile, sanitizers,
+  and fuzzing are **not** CI gates yet — do not claim they are.
 
 ## Dependency inventory
 
 See `docs/DEPENDENCY_LEDGER.md` for the full, authoritative table. Summary:
-miniz (tinfl inflate subset only, MIT, vendored under `third_party/miniz`)
-is the only runtime dependency. The official `pmtiles` Python package
+miniz 3.1.2 (MIT, full source snapshot vendored under `third_party/miniz`;
+only inflate is compiled) is the only runtime dependency. The official `pmtiles` Python package
 (BSD-3-Clause) is a dev-only fixture-generation tool, not vendored, not
 shipped.
 
 ## Performance architecture
 
-Not yet measurable — no renderer, no real pack, no on-device build
-exercised. See `docs/PERFORMANCE.md` (placeholder) and `ROADMAP.md`.
+Not yet measurable — no renderer core, no real pack, no on-device map
+draw. `examples/generic-esp32` proves the component links; it is not a
+performance result. See `docs/PERFORMANCE.md` (placeholder) and
+`ROADMAP.md`.
 
 ## Security / integrity
 
@@ -454,7 +492,9 @@ substitutes for the other.
 
 ## Future extension points
 
-- `adapters/esp_idf`, `adapters/m5gfx`: designed for, not yet built.
+- `adapters/esp_idf`: designed for, not yet built.
+- `adapters/m5gfx`: EXPERIMENTAL sketch exists; not a finished
+  integration and not the renderer architecture.
 - External `.orcstyle` files: `MapStyle`'s shape doesn't block this (see
   `docs/STYLING.md`), no loader exists.
 - Brotli/zstd tile compression: `Inflate()` currently only implements gzip

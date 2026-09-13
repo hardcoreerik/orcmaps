@@ -6,26 +6,34 @@ Last updated: 2026-09-13
 
 Phase 0 (repo foundation, format decision) and Phase 1 (format vertical
 slice, synthetic fixture) are complete. Phase 2 (rendering foundation) is
-underway: the MVT vector-tile decoder is now implemented and host-tested.
-What's left in Phase 2: deciding the tile content schema and mapping
-decoded features to it, the ESP-IDF/M5GFX adapters, and the renderer core
-itself — none of which can start for real without an ESP-IDF/M5GFX
-environment this session doesn't have. Work pulled forward from later
-phases earlier this session, per explicit request: the style system, and a
-full IP/provenance safety system (data provenance registry + checker,
-pack-manifest schema, runtime attribution API, consumer integration test,
-`CONTRIBUTING.md`).
+underway.
+
+**IMPLEMENTED:** PMTiles reader, Web Mercator math, schema-agnostic MVT
+decode, style system, host + consumer tests, provenance registry,
+`examples/generic-esp32` ESP-IDF compile/link of the portable core
+(ESP-IDF 6.0.2 / `esp32p4`, no graphics framework).
+
+**EXPERIMENTAL / SKETCH:** `adapters/m5gfx/` (header-only Color→RGB565 +
+LovyanGFX helpers). Currently takes MVT types — the wrong long-term
+shape. Not compiled into core. Not a finished integration.
+
+**PLANNED (Phase 2 remaining):** OrcMaps-owned Feature / Geometry model,
+MVT→OrcMaps translation boundary, graphics-independent render seam,
+retarget M5GFX onto that seam, tile-payload decompression seam, minimal
+Viewport, host render proof, `adapters/esp_idf` ByteSource.
+
+**BLOCKED on real data (later):** tile-content schema / stable
+`FeatureKind` mapping, Lane County pack, performance numbers. Do not
+finalize schema from `tiny.mvt`.
 
 ## Repository / branch state
 
-- `hardcoreerik/orcmaps`, `main` branch, single contributor session so far.
+- `hardcoreerik/orcmaps`, `main` branch.
 - Local working copy: `F:\Ai\OrcMaps`.
-- Prior work (bootstrap, the Documentation Truth CI, the IP/provenance
-  safety system, the ESP-IDF compatibility policy) is committed and pushed
-  to `origin/main`. This turn's MVT decoder work is complete locally and
-  validated, committed/pushed as part of finishing this work — see git log
-  for the actual commit if this line is stale by the time you're reading
-  it; don't trust prose over `git log`.
+- Treat `git log` / `git status` as authoritative over this paragraph.
+  MVT decoder, `examples/generic-esp32`, and the `adapters/m5gfx` sketch
+  are already on `origin/main` as of `be2b8fb`. This file's job is to
+  describe that HEAD honestly, not to recap one session.
 - OrcSDR's own branch (`grok/orcmap1-readable-map`, worktree
   `F:\Ai\OrcSDR-Temp\OrcSDR-orcmap1-readable-map`) is **untouched** by this
   work — no integration has started, per `ROADMAP.md` Phase 4 not begun.
@@ -53,11 +61,12 @@ pack-manifest schema, runtime attribution API, consumer integration test,
   (Natural Earth, OpenStreetMap, U.S. Census TIGER/Line, NOAA ETOPO, USGS
   National Map (deliberate non-approval placeholder), USDOT NAD, Overture
   Places, geoBoundaries gbOpen, Google Open Buildings), validated by
-  `tools/check_data_provenance.py`. **2 of 9 are `CONFIRMED`/approved for
-  official use** (Natural Earth, OpenStreetMap); the rest are
-  `REVIEW_REQUIRED` pending primary-source verification or (for Overture)
-  per-record license filtering — see each record's `notes` field and
-  `ROADMAP.md` "Deferred work" for exactly what's outstanding.
+  `tools/check_data_provenance.py`. **4 of 9 are `CONFIRMED`/approved for
+  official use** (Natural Earth, OpenStreetMap, geoBoundaries gbOpen,
+  Google Open Buildings); the other 5 are `REVIEW_REQUIRED` pending
+  primary-source verification or (for Overture) per-record license
+  filtering — see each record's `notes` field and `ROADMAP.md` "Deferred
+  work" for exactly what's outstanding.
 - `tests/consumer/` — a second, independent CMake project proving a
   public-headers-only build works (structurally, via CMake include-path
   visibility, not just as a documented rule).
@@ -73,58 +82,66 @@ pack-manifest schema, runtime attribution API, consumer integration test,
   content schema decision (`docs/FORMAT_DECISION.md` "Deferred").
   Host-tested against a real MVT fixture built with the `mapbox-vector-tile`
   reference encoder.
-- Host test suite: **29 test functions, all passing** (25 from before this
-  turn + 4 new MVT decoder tests).
+- `examples/generic-esp32` — ESP-IDF compile/link smoke test of the
+  portable core (geo math + style resolve logged at runtime). Built
+  against ESP-IDF 6.0.2, target `esp32p4`. **Does not depend on M5GFX or
+  M5Unified.** Does not open a pack, decode MVT at runtime, or draw
+  pixels. Not a CI gate.
+- Host test suite: **29 test functions, all passing**.
 
 ## What is partially working
 
-- Nothing is "partially working" in the sense of flaky/incomplete-but-
-  running — everything implemented either fully passes its tests or
-  doesn't exist yet. Caveats worth knowing:
-  - The PMTiles reader has only been exercised against a synthetic fixture
-    whose directory fits in the root (no leaf-directory fetch exercised
-    end-to-end against real data) and whose tile payloads are uncompressed
-    (gzip inflate is only exercised on the directory, not on tile bytes) —
-    see `ROADMAP.md` Phase 1 risks.
-  - The MVT decoder has likewise only been exercised against a small
-    synthetic fixture (3 layers, 1 feature each) built by a reference
-    encoder, not a real-world tile with hundreds of features, deeply
-    nested multi-ring polygons, or unusual attribute value combinations —
-    a real Lane County tile may exercise code paths the current tests
-    don't (same caveat pattern as the PMTiles reader above).
-  - The data provenance registry's `official_pack_allowed: true` sources
-    (Natural Earth, OpenStreetMap) are approved for use, but no pack
-    builder exists yet to actually consume them — the registry is ahead of
-    the tooling that will read it, deliberately (schema/direction
-    established now, per the original request, without forcing incomplete
-    pack-building functionality).
+- **`adapters/m5gfx/` — EXPERIMENTAL sketch, not a renderer.** Header-only
+  `ToRgb565` and `DrawFeature` against `lgfx::v1::LovyanGFX&`. Not a CMake
+  component, not compiled into core, not used by `examples/generic-esp32`,
+  no tests. It currently includes `orcmap/mvt.hpp` and draws `MvtFeature`
+  geometry — that coupling is a defect of the sketch. Do not extend it
+  until an OrcMaps-owned feature/render seam exists.
+- The PMTiles reader has only been exercised against a synthetic fixture
+  whose directory fits in the root (no leaf-directory fetch exercised
+  end-to-end against real data) and whose tile payloads are uncompressed
+  (gzip inflate is only exercised on the directory, not on tile bytes) —
+  see `ROADMAP.md` Phase 1 risks. `GetTile()` returns bytes as stored;
+  `DecodeMvtTile()` wants decompressed MVT; there is no public generic
+  tile-payload decompression seam yet.
+- The MVT decoder has likewise only been exercised against a small
+  synthetic fixture (3 layers, 1 feature each) built by a reference
+  encoder, not a real-world tile with hundreds of features, deeply
+  nested multi-ring polygons, or unusual attribute value combinations —
+  a real Lane County tile may exercise code paths the current tests
+  don't.
+- The data provenance registry's `official_pack_allowed: true` sources
+  (the 4 `CONFIRMED` records) are approved for use, but no pack builder
+  exists yet to actually consume them.
 
 ## What is being worked on
 
-Nothing mid-flight — this turn's work (the MVT decoder) is at a clean
-stopping point (all tests green, all docs consistent with actual code,
-both CI checkers passing against the real repo). Next session should pick
-up Phase 2's remaining items (tile content schema decision, ESP-IDF/M5GFX
-adapters, renderer core) per `ROADMAP.md`, or resolve one of the
-`REVIEW_REQUIRED` provenance records if that's the priority instead.
+First approved slice (docs + generic-esp32 M5-dep removal + miniz
+provenance) is complete. Next engine work is the OrcMaps-owned Feature /
+Geometry model and graphics-independent render seam — not more M5GFX
+draw calls, and not OrcSDR integration.
 
 ## Current blockers
 
-- No ESP-IDF toolchain available in this development environment — the
-  ESP-IDF component registration (`CMakeLists.txt`) is written to match
-  `esp-rtl-sdr`'s proven pattern but has never actually been built against
-  a real ESP-IDF SDK. This blocks any on-device verification until an
-  ESP-IDF build environment is available.
-- No M5GFX/LovyanGFX headers available in this environment either — the
-  `adapters/m5gfx` renderer backend can be designed but not compiled here.
+- No OrcMaps-owned Feature / Geometry model, so there is nothing
+  format-independent for a renderer or M5GFX to consume. This is the
+  actual Phase 2 architecture hole.
+- No public generic tile-payload decompression seam (`GetTile()` returns
+  stored bytes; `DecodeMvtTile()` wants decompressed MVT).
 - No real OSM extract pipeline exists yet (Geofabrik download + osmium/
-  Planetiler) — needed before Phase 3 can start.
-- Several data sources are blocked on primary-source verification that
-  couldn't be completed from this environment: NOAA ETOPO's ISO metadata
-  page returned HTTP 503, USDOT NAD's disclaimer page returned HTTP 403
-  (twice, two mirrors) — both need a direct re-fetch (possibly via an
-  actual browser) before those records can move from `REVIEW_REQUIRED` to
-  `CONFIRMED`.
+  Planetiler) — needed before Phase 3 can start, and before the tile
+  content schema can be decided from evidence.
+- Several data sources are blocked on primary-source verification: NOAA
+  ETOPO's ISO metadata page returned HTTP 503, USDOT NAD's disclaimer page
+  returned HTTP 403 (twice, two mirrors) — both need a direct re-fetch
+  before those records can move from `REVIEW_REQUIRED` to `CONFIRMED`.
+  These do **not** block Phase 2/3 (Lane County can use the already-
+  `CONFIRMED` `openstreetmap` record).
+
+No longer blockers (corrected 2026-09-13): ESP-IDF 6.0.2 is present and
+`examples/generic-esp32` has compiled/linked the portable core for
+`esp32p4`. M5GFX headers are not required for core work; the m5gfx
+adapter is an optional sketch.
 
 ## Known bugs
 
@@ -139,10 +156,11 @@ function again.
 
 ## Current performance measurements
 
-None yet. No renderer, no real pack, no on-device build.
-`docs/PERFORMANCE.md` is a placeholder. The only real numbers in the repo are
-cited third-party numbers from the yuiseki precedent, in
-`docs/FORMAT_DECISION.md` — not OrcMaps' own measurements.
+None yet. No renderer core, no real pack, no on-device map draw.
+`docs/PERFORMANCE.md` is a placeholder. The generic-esp32 smoke test
+proves the component *links*; it is not a performance result. The only
+real numbers in the repo are cited third-party numbers from the yuiseki
+precedent, in `docs/FORMAT_DECISION.md` — not OrcMaps' own measurements.
 
 ## Test status
 
@@ -187,7 +205,9 @@ data-provenance unit tests pass.
 ## Integration status
 
 Not integrated with OrcSDR. `idf_component.yml` exists and declares
-version `0.1.0` but nothing consumes it yet. `idf_component.yml`'s
+version `0.1.0`. The in-tree `examples/generic-esp32` consumes the
+component via `EXTRA_COMPONENT_DIRS` (local convenience, not the
+version-pinned `git:` + SHA pattern OrcSDR will use). `idf_component.yml`'s
 declared ESP-IDF floor is `>=5.0` — deliberately broad, so it doesn't
 conflict with OrcSDR's own `>=5.5.0,<5.6.0` pin. OrcMaps is developed and
 tested against the latest ESP-IDF 6.x (currently v6.1) as its own
@@ -209,9 +229,9 @@ manifest entry to point at OrcMaps yet.
 3. CMake layout copies `esp-rtl-sdr`'s exact convention (root
    `CMakeLists.txt` = ESP-IDF component, `tests/host/CMakeLists.txt` =
    separate standalone host project) rather than inventing a new layout.
-4. miniz (tinfl subset) vendored for inflate, MIT-licensed, recorded in
-   `docs/DEPENDENCY_LEDGER.md` — chosen over requiring system zlib so the
-   same code path works identically on host and (eventually) ESP-IDF.
+4. miniz 3.1.2 (`77d0dce8627735138c51770d1799a1ef48f2117d`) vendored as
+   the full source snapshot under `third_party/miniz`; only inflate is
+   compiled. MIT-licensed, recorded in `docs/DEPENDENCY_LEDGER.md`.
 5. Style system built ahead of the original phase ordering, per explicit
    request; `MapStyle`/`ResolveFeatureStyle` API is considered stable
    enough for a renderer to build against.
@@ -225,10 +245,10 @@ manifest entry to point at OrcMaps yet.
    enum, three map-pack policy classes (Clean/Permissive/Open), a JSON
    provenance registry (`data/sources/`), and Data Provenance Truth CI
    (`tools/check_data_provenance.py`, mirroring Documentation Truth's
-   deterministic-stdlib-only design). Nine starter records reviewed; only
-   2 are `CONFIRMED`/approved today — the checker actively prevents the
-   other 7 from being used officially until resolved, which is the system
-   working as intended, not a gap.
+   deterministic-stdlib-only design). Nine starter records reviewed; 4 are
+   `CONFIRMED`/approved today — the checker actively prevents the other 5
+   from being used officially until resolved, which is the system working
+   as intended, not a gap.
 9. Code-vs-data license separation formalized architecturally, not just in
    prose: `orcmap::AttributionInfo`/`MapSourceInfo` establish the runtime
    API shape without forcing a full `MapEngine` implementation that
@@ -252,30 +272,33 @@ manifest entry to point at OrcMaps yet.
     protobuf parser was judged not worth the footprint for four fixed
     message shapes. Schema-agnostic by design; recorded in
     `docs/DEPENDENCY_LEDGER.md` "Resolved: MVT decoding".
+14. Core graphics independence: M5GFX is the first *reference
+    integration*, not the renderer architecture. `examples/generic-esp32`
+    must not depend on M5GFX/M5Unified. If `adapters/m5gfx/` were deleted,
+    core must still build and host-test.
+15. GitHub Actions today are Documentation Truth + Data Provenance Truth
+    only. Host C++ tests, consumer smoke test, ESP-IDF compile, sanitizers,
+    and fuzzing are **not** CI gates yet.
 
 ## Next 3-7 actions
 
-1. Decide the tile content schema (`docs/FORMAT_DECISION.md` "Deferred") —
-   needs a real Lane County MVT tile to decide from, not further staring
-   at the synthetic fixture. Write the `DecodedFeature -> FeatureKind`
-   mapping once decided.
-2. Build a real (small) OSM-derived `.pmtiles` archive for Lane County
-   using a proper extract pipeline (Geofabrik + Planetiler or tippecanoe),
-   to replace the synthetic fixture as the thing actually being decoded —
-   this can now reference the `openstreetmap` provenance record, which is
-   already `CONFIRMED`/approved, and gives the MVT decoder its first
-   real-world exercise (see "What is partially working" above).
-3. Write `adapters/esp_idf`'s `ByteSource` once an ESP-IDF environment is
-   available.
-4. Write `adapters/m5gfx`'s Color→RGB565 conversion and draw-call backend.
-5. Get a first ESP-IDF build of the `orcmap` component actually compiling
-   against a real ESP-IDF SDK (currently unverified).
-6. Record real performance numbers in `docs/PERFORMANCE.md` as soon as
-   there's anything to measure.
-7. Resolve the `REVIEW_REQUIRED` provenance records (see `ROADMAP.md`
-   "Deferred work") when there's time between engine-critical-path work —
-   none of them block Phase 2/3, since Phase 3's Lane County pack only
-   needs the already-`CONFIRMED` `openstreetmap` record.
+1. OrcMaps-owned Feature / Geometry model + explicit MVT → OrcMaps
+   translation boundary. Keep any semantic mapper EXPERIMENTAL until a
+   real Lane County tile informs it.
+2. Evaluate RenderTarget vs render-command stream; implement the smallest
+   graphics-independent seam; add a host-testable render proof.
+3. Retarget `adapters/m5gfx` onto that seam; remove `orcmap/mvt.hpp` from
+   it.
+4. Public generic tile-payload decompression path (`GetTile` → decompress
+   → format decoder). Unsupported Brotli/Zstd stay clean failures.
+5. Minimal Viewport (center lat/lon, zoom, screen size).
+6. `adapters/esp_idf` ByteSource.
+7. Then a real Lane County/Eugene pack from the already-`CONFIRMED`
+   `openstreetmap` record — schema, leaf directories, compressed tiles,
+   and performance numbers come from that evidence, not `tiny.mvt`.
+
+Do not do this tranche: OrcSDR integration, a second graphics framework,
+overlay application features, pack marketplace UI.
 
 Ongoing discipline (not a one-time action): keep both
 `tools/check_documentation_truth.py` and `tools/check_data_provenance.py`
@@ -284,17 +307,15 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — clean stopping point. Every file this session touched or added is
-either fully implemented and tested, or a deliberate, documented
-placeholder (e.g. the `usgs-national-map` registry record, which exists
-specifically to record a non-approval rather than to approve too broadly).
+None for the cleanup slice. Engine Feature / Geometry work has not
+started.
 
 ## Notes for the next development session
 
-- Read `PROJECT_TRUTH.md` first for durable constraints (including the
-  new "IP and Provenance Safety Model" and "Public API and Versioning"
-  sections), then this file for what's actually done, then `ROADMAP.md`
-  Phase 2 for what's next.
+- Read `PROJECT_TRUTH.md` first for durable constraints, then this file
+  for what's actually done, then `ROADMAP.md` Phase 2 for what's next.
+  If those three disagree with the code, the code wins — then fix the
+  docs in the same change.
 - The synthetic test fixture (`tests/fixtures/tiny.pmtiles`) is
   deliberately not real map data — don't try to "improve" it into a real
   map; build a real archive separately for Phase 3, and keep the synthetic

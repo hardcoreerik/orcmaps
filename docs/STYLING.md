@@ -88,8 +88,9 @@ step-function) zoom resolver — see `ResolveFeatureStyle()`'s doc comment.
 `orcmap::Color` (`include/orcmap/color.hpp`) is a plain RGBA8 struct with
 no dependency on M5GFX, LovyanGFX, LVGL, or any display API. Converting to
 a display's native pixel format (e.g. RGB565 for M5GFX/LovyanGFX) is an
-**adapter's** job, not the style system's — see `adapters/m5gfx` (not yet
-implemented; tracked in `ROADMAP.md`). This keeps the same
+**adapter's** job, not the style system's — see `adapters/m5gfx` (an
+EXPERIMENTAL header-only sketch today, not a finished integration;
+tracked in `ROADMAP.md`). This keeps the same
 `MapStyle`/`ResolveFeatureStyle()` API usable by a future LVGL or host-side
 test renderer without change.
 
