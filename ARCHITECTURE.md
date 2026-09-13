@@ -45,7 +45,7 @@ guessing at it — see `ROADMAP.md` for sequencing.
 | ESP-IDF `ByteSource` adapter | `adapters/esp_idf/` | Not implemented (empty dir) |
 | Geo/tile math | `include/orcmap/geo.hpp`, `src/core/geo.cpp` | Implemented |
 | `orcmap::PmTilesReader` | `include/orcmap/pmtiles.hpp`, `src/tiles/pmtiles_reader.cpp` | Implemented (container layer only) |
-| Vector tile (MVT) decoder | `src/tiles/` | Not implemented |
+| Vector tile (MVT) decoder | `include/orcmap/mvt.hpp`, `src/tiles/mvt_decoder.cpp` | Implemented (schema-agnostic container decode only; no FeatureKind mapping) |
 | `orcmap::MapStyle` / style system | `include/orcmap/style.hpp`, `include/orcmap/color.hpp`, `include/orcmap/cache_key.hpp`, `src/render/style.cpp` | Implemented |
 | Renderer core | `src/render/` | Not implemented (only style.cpp exists in this dir so far) |
 | M5GFX adapter | `adapters/m5gfx/` | Not implemented (empty dir) |
@@ -66,9 +66,10 @@ guessing at it — see `ROADMAP.md` for sequencing.
 ```
 include/orcmap/      Public headers: byte_source.hpp, geo.hpp, pmtiles.hpp,
                       color.hpp, style.hpp, cache_key.hpp, attribution.hpp,
-                      map_source.hpp
+                      map_source.hpp, mvt.hpp
 src/core/             geo.cpp (Web Mercator tile math)
-src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader)
+src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader),
+                      mvt_decoder.cpp (schema-agnostic MVT geometry decoder)
 src/render/           style.cpp (built-in styles + resolver). Renderer
                       core itself not yet added here.
 src/storage/          Empty -- reserved for any storage-layer logic beyond
@@ -158,10 +159,38 @@ test fixture.
 
 ## Vector tile decode
 
-Not implemented. `GetTile()` returns raw (still-compressed-per-
-`Header().tile_compression`) bytes; decoding those as MVT (protobuf-based
-vector tile geometry) is unbuilt. This is the next major implementation
-gap before any real map can render — see `ROADMAP.md` Phase 2.
+Implemented: `orcmap::DecodeMvtTile()` (`include/orcmap/mvt.hpp`,
+`src/tiles/mvt_decoder.cpp`) decodes MVT-encoded tile bytes (as returned
+by `PmTilesReader::GetTile()`, already decompressed by the caller) into
+`MvtTile` -> `MvtLayer[]` -> `MvtFeature[]`, each feature carrying its
+geometry (as rings of tile-local `MvtPoint{x,y}`, one ring per
+`MoveTo`/polygon-ring), geometry type (point/linestring/polygon), and
+attributes (parallel `attribute_keys`/`attribute_values` arrays, values as
+an `std::variant<monostate, string, double, int64_t, uint64_t, bool>`).
+
+Implemented as a minimal, hand-rolled protobuf-wire-format reader scoped
+to exactly the four MVT message shapes (Tile/Layer/Feature/Value) — not a
+general-purpose protobuf parser, and not a dependency on any existing MVT
+library. See `docs/DEPENDENCY_LEDGER.md` "Resolved: MVT decoding" for why.
+Geometry command decoding (MoveTo/LineTo/ClosePath, zigzag-delta-encoded
+coordinates) follows the public MVT spec directly.
+
+**Deliberately schema-agnostic**: this decoder has no opinion about what a
+layer named `"road"` or an attribute named `"class"` means — it decodes
+exactly what's encoded, nothing more. Mapping decoded features to
+`orcmap::FeatureKind` (`include/orcmap/style.hpp`) for rendering is a
+separate, still-unbuilt step — see `docs/FORMAT_DECISION.md` "Deferred:
+tile content schema", which this work does not resolve, by design.
+
+Host-tested (`tests/host/test_mvt.cpp`) against `tests/fixtures/tiny.mvt`,
+a fixture built with the widely-used `mapbox-vector-tile` reference
+encoder (see `tests/fixtures/generate_mvt_fixture.py`), covering all three
+geometry types, all four attribute value representations actually
+exercised (string/double/int64/bool), and corruption handling (empty
+buffer, garbage bytes, truncated tile).
+
+Not yet built: the renderer step that walks a decoded `MvtTile` and issues
+draw calls — see "Renderer" below.
 
 ## Projection / coordinates
 
@@ -314,9 +343,11 @@ high-latitude clamping, round-trip containment), PMTiles container
 tiles, corrupt-file handling, Hilbert ID uniqueness/monotonicity), the
 style system (built-in ids, default style, runtime switching with graceful
 fallback, zoom visibility, Night style's no-blue-light constraint, style
-distinctness, cache-key behavior), and the runtime attribution helpers
-(no-sources/excluded/included/mixed/deduplicated cases). All passing as of
-this writing — see `STATUS.md` for how to reproduce.
+distinctness, cache-key behavior), the runtime attribution helpers
+(no-sources/excluded/included/mixed/deduplicated cases), and MVT decode
+(all three geometry types, all four exercised attribute value
+representations, corrupt/truncated/empty-buffer handling). All passing as
+of this writing — see `STATUS.md` for how to reproduce.
 
 ## Consumer integration test
 

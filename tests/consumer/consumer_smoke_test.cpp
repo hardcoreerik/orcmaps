@@ -9,21 +9,24 @@
 // a violation here is a build failure, not a code-review-only rule.
 //
 // This exercises what's real today (docs/STATUS.md): tile-coordinate math,
-// opening a real PMTiles archive and reading a tile by z/x/y, resolving a
-// built-in style, and the runtime attribution API. It deliberately does
-// NOT exercise MapEngine/Viewport/rendering/overlays, because none of
-// those exist yet -- see docs/ARCHITECTURE.md. Extend this file as real
-// API surface is added, rather than stubbing out functionality that isn't
-// there.
+// opening a real PMTiles archive and reading a tile by z/x/y, decoding a
+// real MVT vector tile, resolving a built-in style, and the runtime
+// attribution API. It deliberately does NOT exercise
+// MapEngine/Viewport/rendering/overlays, because none of those exist yet
+// -- see docs/ARCHITECTURE.md. Extend this file as real API surface is
+// added, rather than stubbing out functionality that isn't there.
 
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <string>
+#include <vector>
 
 #include "file_byte_source.hpp"       // adapters/host -- public integration adapter.
 #include "orcmap/attribution.hpp"     // include/orcmap -- public API.
 #include "orcmap/geo.hpp"
 #include "orcmap/map_source.hpp"
+#include "orcmap/mvt.hpp"
 #include "orcmap/pmtiles.hpp"
 #include "orcmap/style.hpp"
 
@@ -63,16 +66,29 @@ bool CheckStyleAndAttribution() {
   return required.size() == 1 && required[0].text == "(c) OpenStreetMap contributors";
 }
 
+bool CheckMvtDecode(const std::string& mvt_fixture_path) {
+  std::ifstream f(mvt_fixture_path, std::ios::binary);
+  const std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)),
+                                   std::istreambuf_iterator<char>());
+  if (data.empty()) return false;
+  orcmap::MvtTile tile;
+  if (!orcmap::DecodeMvtTile(data.data(), data.size(), &tile)) return false;
+  return tile.layers.size() == 3;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   const std::string fixture_path =
       argc > 1 ? argv[1] : "tests/fixtures/tiny.pmtiles";
+  const std::string mvt_fixture_path =
+      argc > 2 ? argv[2] : "tests/fixtures/tiny.mvt";
 
   bool ok = true;
   ok &= CheckTileMath();
   ok &= CheckPmTilesOpenAndRead(fixture_path);
   ok &= CheckStyleAndAttribution();
+  ok &= CheckMvtDecode(mvt_fixture_path);
 
   if (ok) {
     std::printf("PASS: OrcMaps consumer smoke test (public headers only)\n");

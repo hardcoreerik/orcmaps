@@ -142,10 +142,16 @@ distribution under the documented source terms").
   bounded-memory seek+read with a real ESP32-S3 precedent
   (`yuiseki/m5-cardputer-offgrid-tiny-map`, ~78 GiB whole-planet vector
   PMTiles archive, no PSRAM).
-- **Tile content schema: not yet decided** (general OpenMapTiles-style MVT
-  vs. a narrower OrcMaps-specific schema). Deferred to measurement against
-  the Lane County vertical slice — see `docs/FORMAT_DECISION.md` "Deferred:
-  tile content schema".
+- **MVT container decode: implemented, schema-agnostic**
+  (`orcmap::DecodeMvtTile()`, `include/orcmap/mvt.hpp`,
+  `src/tiles/mvt_decoder.cpp`, hand-rolled minimal protobuf reader — no
+  protobuf library dependency, see `docs/DEPENDENCY_LEDGER.md` "Resolved:
+  MVT decoding"). **Tile content schema itself: still not decided**
+  (general OpenMapTiles-style MVT vs. a narrower OrcMaps-specific schema).
+  The decoder works either way — it decodes layers/features/geometry/
+  attributes exactly as encoded with no opinion about what they mean.
+  Deferred to measurement against the Lane County vertical slice — see
+  `docs/FORMAT_DECISION.md` "Deferred: tile content schema".
 - **Rendering: vector tiles decoded once, cached as RGB565** (RAM/PSRAM
   first, optional SD-backed cache second) — the hybrid approach, matching
   the yuiseki precedent and ORCMAP1's own informal sprite-cache pattern in

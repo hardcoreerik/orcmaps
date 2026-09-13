@@ -86,12 +86,22 @@ paths the current tests don't. Flagged, not yet mitigated.
       `style.cpp`) — done ahead of the original phase order because it was
       explicitly requested mid-session; does not block the items below, but
       means "Style System" is no longer its own later phase (folded in here)
-- [ ] MVT (vector tile) decoder — **not started, the current critical path**
+- [x] MVT (vector tile) decoder — schema-agnostic container decode
+      (`orcmap::DecodeMvtTile()`), hand-rolled minimal protobuf reader,
+      host-tested against a real MVT fixture. **Not yet done: mapping
+      decoded features to `orcmap::FeatureKind` for rendering** — that's
+      the tile-content-schema decision (`docs/FORMAT_DECISION.md`
+      "Deferred"), still open, and now the actual next blocker for a
+      renderer rather than the decoder itself
 - [ ] `adapters/esp_idf` `ByteSource` (wraps OrcSDR's
       `orcsdr::storage::FileSystem` or raw ESP-IDF VFS)
 - [ ] `adapters/m5gfx` renderer backend (Color → RGB565, draw calls against
       `lgfx::v1::LovyanGFX&`, matching ORCMAP1's existing portable-overload
       pattern — see `docs/ORCMAP1_AUDIT.md` §4)
+- [ ] Tile content schema decided (`docs/FORMAT_DECISION.md` "Deferred") and
+      a `DecodedFeature -> orcmap::FeatureKind` mapping written against it —
+      needs a real Lane County MVT tile to decide from, not the synthetic
+      fixture (`ROADMAP.md` Phase 1 risk note, still applicable)
 - [ ] Renderer core (`src/render/`) that walks decoded MVT features, calls
       `ResolveFeatureStyle()`, issues draw calls
 - [ ] First on-device ESP-IDF build of the OrcMaps component (not yet

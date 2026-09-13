@@ -1,0 +1,92 @@
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <variant>
+#include <vector>
+
+namespace orcmap {
+
+// Generic Mapbox Vector Tile (MVT) container decoder. Spec:
+// github.com/mapbox/vector-tile-spec (an open specification -- this
+// decoder implements it directly from the spec, not from any existing
+// MVT library's source; see docs/DEPENDENCY_LEDGER.md).
+//
+// This decoder is deliberately SCHEMA-AGNOSTIC: it turns MVT bytes into
+// layers/features/geometry/attributes exactly as encoded, with no opinion
+// about what a layer named "water" or an attribute named "class" means.
+// Mapping decoded features to orcmap::FeatureKind (include/orcmap/style.hpp)
+// is a separate step, still undecided -- see docs/FORMAT_DECISION.md
+// "Deferred: tile content schema". Keeping this decoder schema-agnostic
+// means that decision can still go either way (general OpenMapTiles-style
+// schema vs. a narrower OrcMaps-specific one) without rewriting this file.
+//
+// Bounded-memory by construction: decoding one tile allocates only what
+// that tile's own layers/features/geometry require (typically a few KB to
+// tens of KB for a real tile), and never touches anything outside the
+// caller-supplied byte range -- there is no separate "whole archive" state
+// here, unlike PmTilesReader (which this decoder has no dependency on;
+// PmTilesReader hands over already-extracted, already-decompressed tile
+// bytes -- see orcmap::PmTilesReader::GetTile()).
+
+enum class MvtGeomType : uint8_t {
+  kUnknown = 0,
+  kPoint = 1,
+  kLineString = 2,
+  kPolygon = 3,
+};
+
+// One decoded attribute value. MVT's four wire representations (string,
+// float, double, one of four integer/bool encodings) collapse to this
+// set: both float_value and double_value become `double`; int_value and
+// sint_value (already zigzag-decoded) become `int64_t`; uint_value stays
+// `uint64_t`; bool_value stays `bool`. `std::monostate` represents "not
+// present" (should not normally appear in a decoded feature's attributes,
+// only as MvtLayer::values[]' notional "no value" case, which MVT's own
+// spec doesn't actually allow -- present for variant completeness).
+using MvtValue = std::variant<std::monostate, std::string, double, int64_t,
+                               uint64_t, bool>;
+
+struct MvtPoint {
+  int32_t x = 0;  // Tile-local coordinates, [0, layer.extent) nominally
+  int32_t y = 0;  // (MVT allows slight overflow for features crossing a
+                  // tile's buffer zone; this decoder does not clamp it).
+};
+
+// One geometry ring/path: for kPoint, one point per MvtPoint entry (MVT
+// allows multi-point features); for kLineString, a connected sequence of
+// points; for kPolygon, one ring (the decoder does not compute which
+// rings are outer/inner -- see the file header comment).
+using MvtRing = std::vector<MvtPoint>;
+
+struct MvtFeature {
+  uint64_t id = 0;
+  MvtGeomType geom_type = MvtGeomType::kUnknown;
+  std::vector<MvtRing> geometry;
+  // Parallel arrays, not a map: attribute order as encoded is preserved,
+  // and small linear scans are cheaper than a map on embedded hardware
+  // for the handful of attributes a real feature carries.
+  std::vector<std::string> attribute_keys;
+  std::vector<MvtValue> attribute_values;
+};
+
+struct MvtLayer {
+  std::string name;
+  uint32_t version = 1;
+  uint32_t extent = 4096;
+  std::vector<MvtFeature> features;
+};
+
+struct MvtTile {
+  std::vector<MvtLayer> layers;
+};
+
+// Decodes one MVT tile's raw bytes (as returned by
+// orcmap::PmTilesReader::GetTile(), already decompressed by the caller --
+// see docs/ARCHITECTURE.md "Vector tile decode"). Returns false on any
+// structural problem (truncated data, invalid varint, malformed geometry
+// command stream, tag index out of range) -- never throws, never reads
+// past `length`.
+bool DecodeMvtTile(const uint8_t* data, size_t length, MvtTile* out);
+
+}  // namespace orcmap

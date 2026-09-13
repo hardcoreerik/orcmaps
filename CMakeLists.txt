@@ -11,6 +11,7 @@
 idf_component_register(
     SRCS "src/core/geo.cpp"
          "src/tiles/pmtiles_reader.cpp"
+         "src/tiles/mvt_decoder.cpp"
          "src/render/style.cpp"
          "third_party/miniz/miniz.c"
          "third_party/miniz/miniz_tinfl.c"

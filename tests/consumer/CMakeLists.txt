@@ -17,6 +17,7 @@ set(ORCMAP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 add_library(orcmap_engine STATIC
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
+    ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
     ${ORCMAP_ROOT}/src/render/style.cpp
     ${ORCMAP_ROOT}/adapters/host/file_byte_source.cpp
     ${ORCMAP_ROOT}/third_party/miniz/miniz.c
@@ -50,4 +51,5 @@ enable_testing()
 add_test(
     NAME orcmap_consumer_smoke_test
     COMMAND orcmap_consumer_smoke_test ${ORCMAP_ROOT}/tests/fixtures/tiny.pmtiles
+            ${ORCMAP_ROOT}/tests/fixtures/tiny.mvt
 )

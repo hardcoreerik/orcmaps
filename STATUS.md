@@ -4,25 +4,28 @@ Last updated: 2026-09-13
 
 ## Current development focus
 
-Phase 0 (repo foundation, format decision) is complete, including work
-pulled forward from later phases because it was explicitly requested this
-session: the style system, and a full IP/provenance safety system (data
-provenance registry + checker, pack-manifest schema, runtime attribution
-API, consumer integration test, `CONTRIBUTING.md`). Phase 1 (format
-vertical slice) is done against a synthetic fixture. Phase 2's critical
-path — an MVT vector-tile decoder and a first real renderer — has not been
-started yet.
+Phase 0 (repo foundation, format decision) and Phase 1 (format vertical
+slice, synthetic fixture) are complete. Phase 2 (rendering foundation) is
+underway: the MVT vector-tile decoder is now implemented and host-tested.
+What's left in Phase 2: deciding the tile content schema and mapping
+decoded features to it, the ESP-IDF/M5GFX adapters, and the renderer core
+itself — none of which can start for real without an ESP-IDF/M5GFX
+environment this session doesn't have. Work pulled forward from later
+phases earlier this session, per explicit request: the style system, and a
+full IP/provenance safety system (data provenance registry + checker,
+pack-manifest schema, runtime attribution API, consumer integration test,
+`CONTRIBUTING.md`).
 
 ## Repository / branch state
 
 - `hardcoreerik/orcmaps`, `main` branch, single contributor session so far.
 - Local working copy: `F:\Ai\OrcMaps`.
-- Prior work (bootstrap + a docs fix + the Documentation Truth CI) is
-  committed and pushed to `origin/main`. This session's IP/provenance
-  safety and integration-model work (see below) is complete locally and
-  validated, and is committed/pushed as part of finishing this work — see
-  git log for the actual commit if this line is stale by the time you're
-  reading it; don't trust prose over `git log`.
+- Prior work (bootstrap, the Documentation Truth CI, the IP/provenance
+  safety system, the ESP-IDF compatibility policy) is committed and pushed
+  to `origin/main`. This turn's MVT decoder work is complete locally and
+  validated, committed/pushed as part of finishing this work — see git log
+  for the actual commit if this line is stale by the time you're reading
+  it; don't trust prose over `git log`.
 - OrcSDR's own branch (`grok/orcmap1-readable-map`, worktree
   `F:\Ai\OrcSDR-Temp\OrcSDR-orcmap1-readable-map`) is **untouched** by this
   work — no integration has started, per `ROADMAP.md` Phase 4 not begun.
@@ -59,10 +62,19 @@ started yet.
   public-headers-only build works (structurally, via CMake include-path
   visibility, not just as a documented rule).
 - Documentation Truth CI (`tools/check_documentation_truth.py`) and its
-  new sibling, Data Provenance Truth CI (`tools/check_data_provenance.py`)
-  — both passing against this repo, both with their own unit test suites.
-- Host test suite: **25 test functions, all passing** (20 engine tests +
-  5 new attribution tests this session).
+  sibling, Data Provenance Truth CI (`tools/check_data_provenance.py`) —
+  both passing against this repo, both with their own unit test suites.
+- `orcmap::DecodeMvtTile()` (`include/orcmap/mvt.hpp`,
+  `src/tiles/mvt_decoder.cpp`) — decodes real MVT vector-tile bytes
+  (layers, features, geometry, typed attributes) via a hand-rolled minimal
+  protobuf reader, no protobuf library dependency. Schema-agnostic by
+  design: it does not yet know how to turn a decoded feature into an
+  `orcmap::FeatureKind` — that mapping is still blocked on the tile
+  content schema decision (`docs/FORMAT_DECISION.md` "Deferred").
+  Host-tested against a real MVT fixture built with the `mapbox-vector-tile`
+  reference encoder.
+- Host test suite: **29 test functions, all passing** (25 from before this
+  turn + 4 new MVT decoder tests).
 
 ## What is partially working
 
@@ -74,6 +86,12 @@ started yet.
     end-to-end against real data) and whose tile payloads are uncompressed
     (gzip inflate is only exercised on the directory, not on tile bytes) —
     see `ROADMAP.md` Phase 1 risks.
+  - The MVT decoder has likewise only been exercised against a small
+    synthetic fixture (3 layers, 1 feature each) built by a reference
+    encoder, not a real-world tile with hundreds of features, deeply
+    nested multi-ring polygons, or unusual attribute value combinations —
+    a real Lane County tile may exercise code paths the current tests
+    don't (same caveat pattern as the PMTiles reader above).
   - The data provenance registry's `official_pack_allowed: true` sources
     (Natural Earth, OpenStreetMap) are approved for use, but no pack
     builder exists yet to actually consume them — the registry is ahead of
@@ -83,11 +101,12 @@ started yet.
 
 ## What is being worked on
 
-Nothing mid-flight — this session's work is at a clean stopping point
-(all tests green, all docs consistent with actual code, both CI checkers
-passing against the real repo). Next session should start at Phase 2 (MVT
-decoder) per `ROADMAP.md`, or resolve one of the `REVIEW_REQUIRED`
-provenance records if that's the priority instead.
+Nothing mid-flight — this turn's work (the MVT decoder) is at a clean
+stopping point (all tests green, all docs consistent with actual code,
+both CI checkers passing against the real repo). Next session should pick
+up Phase 2's remaining items (tile content schema decision, ESP-IDF/M5GFX
+adapters, renderer core) per `ROADMAP.md`, or resolve one of the
+`REVIEW_REQUIRED` provenance records if that's the priority instead.
 
 ## Current blockers
 
@@ -137,9 +156,10 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 25 test functions
-covering geo math, PMTiles container parsing, the style system, and the
-runtime attribution API — see `ARCHITECTURE.md` "Testing architecture").
+(one `ctest` entry, `orcmap_host_tests`, itself running 29 test functions
+covering geo math, PMTiles container parsing, the style system, the
+runtime attribution API, and MVT decode — see `ARCHITECTURE.md` "Testing
+architecture").
 
 Consumer smoke test (separate CMake project):
 
@@ -220,19 +240,31 @@ manifest entry to point at OrcMaps yet.
     Origin) contribution certification, explicitly flagging that a formal
     CLA + attorney review is the right next step if contribution volume
     ever outgrows this lightweight approach — not adopted preemptively.
+12. ESP-IDF compatibility: `idf_component.yml` floor stays broad
+    (`>=5.0`, satisfied by OrcSDR's current `>=5.5.0,<5.6.0` pin); the
+    latest ESP-IDF 6.x (v6.1) is OrcMaps' own dev/CI toolchain target, a
+    deliberately separate concept — see `PROJECT_TRUTH.md` "Compatibility
+    Goals". Confirmed with the user: OrcSDR is expected to eventually port
+    to the latest ESP-IDF itself; this floor is not expected to be raised
+    to chase our own dev toolchain.
+13. MVT decoder: hand-rolled minimal protobuf reader
+    (`orcmap::DecodeMvtTile()`), not a library — a general-purpose
+    protobuf parser was judged not worth the footprint for four fixed
+    message shapes. Schema-agnostic by design; recorded in
+    `docs/DEPENDENCY_LEDGER.md` "Resolved: MVT decoding".
 
 ## Next 3-7 actions
 
-1. Start Phase 2: pick/build a minimal MVT (vector tile / protobuf)
-   decoder — evaluate hand-rolled minimal parser vs. an existing small
-   library before choosing, per `docs/DEPENDENCY_LEDGER.md`'s "candidates
-   under evaluation" entry, and record its provenance the same way miniz
-   was recorded.
+1. Decide the tile content schema (`docs/FORMAT_DECISION.md` "Deferred") —
+   needs a real Lane County MVT tile to decide from, not further staring
+   at the synthetic fixture. Write the `DecodedFeature -> FeatureKind`
+   mapping once decided.
 2. Build a real (small) OSM-derived `.pmtiles` archive for Lane County
    using a proper extract pipeline (Geofabrik + Planetiler or tippecanoe),
    to replace the synthetic fixture as the thing actually being decoded —
    this can now reference the `openstreetmap` provenance record, which is
-   already `CONFIRMED`/approved.
+   already `CONFIRMED`/approved, and gives the MVT decoder its first
+   real-world exercise (see "What is partially working" above).
 3. Write `adapters/esp_idf`'s `ByteSource` once an ESP-IDF environment is
    available.
 4. Write `adapters/m5gfx`'s Color→RGB565 conversion and draw-call backend.
