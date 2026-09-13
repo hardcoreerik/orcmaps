@@ -321,10 +321,15 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   (`ROADMAP.md` Phase 4) until OrcSDR itself moves to ESP-IDF 6.x, which
   is not yet scheduled anywhere. This was a deliberate choice, not an
   oversight — the alternative (targeting IDF 5.5 to match OrcSDR today)
-  would mean re-deciding this the moment OrcSDR upgrades. If Phase 4
-  becomes urgent before OrcSDR moves to IDF 6.x, the options are: OrcSDR
-  upgrades first, or this constraint is deliberately loosened with the
-  same rigor as any other decision in this file — not silently.
+  would mean re-deciding this the moment OrcSDR upgrades. **Expected
+  resolution direction, confirmed 2026-09-13: OrcSDR is expected to
+  eventually port to the latest ESP-IDF itself — OrcMaps' requirement is
+  not expected to be loosened to chase OrcSDR's current, older pin.**
+  Phase 4 (OrcSDR integration) is therefore understood to be gated on an
+  OrcSDR-side ESP-IDF upgrade, not an OrcMaps-side downgrade. If that
+  expectation ever changes, update this note the same way any other
+  decision here gets updated — don't let Phase 4 work start on the
+  opposite assumption.
 
 ## Public API and Versioning
 

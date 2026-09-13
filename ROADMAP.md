@@ -159,9 +159,11 @@ basemaps migrate off `offline_map.cpp`.
 
 **Risk:** OrcMaps requires ESP-IDF `>=6.1,<7.0`; OrcSDR's current manifest
 pins `>=5.5.0,<5.6.0` — see `PROJECT_TRUTH.md` "Compatibility Goals" for
-the full note. This phase cannot start for real until either OrcSDR moves
-to ESP-IDF 6.x, or that constraint is deliberately revisited. Check this
-before beginning Phase 4 work, not after hitting a build failure.
+the full note. **Expected resolution: OrcSDR ports to the latest ESP-IDF
+itself; OrcMaps' requirement is not expected to move down to meet OrcSDR's
+current pin.** This phase is therefore gated on an OrcSDR-side upgrade —
+confirm that's actually landed before starting Phase 4 work, not after
+hitting a build failure.
 
 ## Phase 5 — Full-screen map application
 
