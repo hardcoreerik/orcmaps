@@ -56,12 +56,17 @@ guessing at it — see `ROADMAP.md` for sequencing.
 | Examples | `examples/m5stack-tab5/`, `examples/generic-esp32/` | Not implemented (empty dirs) |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles` (+ `generate_fixture.py`) | Implemented |
+| Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |
+| Consumer build gate | `tests/consumer/` | Implemented, passing |
+| Data provenance registry | `data/sources/*.json` | Implemented, 9 records (2 `CONFIRMED`, rest `REVIEW_REQUIRED` pending primary-source verification or per-record filtering -- see `docs/DATA_PROVENANCE_REGISTRY.md`) |
+| Pack manifest schema | `docs/PACK_MANIFEST_SCHEMA.md` | Documented, not implemented (no pack builder exists) |
 
 ## Repository layout
 
 ```
 include/orcmap/      Public headers: byte_source.hpp, geo.hpp, pmtiles.hpp,
-                      color.hpp, style.hpp, cache_key.hpp
+                      color.hpp, style.hpp, cache_key.hpp, attribution.hpp,
+                      map_source.hpp
 src/core/             geo.cpp (Web Mercator tile math)
 src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader)
 src/render/           style.cpp (built-in styles + resolver). Renderer
@@ -80,8 +85,13 @@ tools/pack-inspect/   Empty -- inspect a pack's metadata/contents, planned.
 tools/pack-verify/    Empty -- validate a pack against its manifest, planned.
 examples/             Empty -- Tab5 and generic ESP32-S3 examples, planned.
 tests/host/           Host-buildable unit tests (no ESP-IDF needed).
+tests/consumer/       External-consumer build gate -- public headers only,
+                      see "Consumer integration test" below.
 tests/fixtures/       Committed test fixtures + the script that builds them.
 third_party/miniz/    Vendored miniz (tinfl inflate subset), MIT license.
+data/sources/         Data provenance registry: one JSON record per
+                      reviewed map-data source, see "Data provenance and
+                      attribution" below.
 docs/                 Architecture/decision/porting/licensing documents.
 ```
 
@@ -185,6 +195,39 @@ the canonical reference; not duplicated here). Summary: `MapStyle` +
 styles in `src/render/style.cpp`. Host-tested in
 `tests/host/test_style.cpp`.
 
+## Data provenance and attribution
+
+Two related but distinct pieces, both implemented today:
+
+- **Build-time / review-time provenance**: `data/sources/*.json`, one
+  record per reviewed map-data source (`docs/DATA_PROVENANCE_REGISTRY.md`
+  for the schema, `docs/DATA_AND_LICENSING.md` for the policy). Validated
+  by `tools/check_data_provenance.py`
+  (`.github/workflows/data-provenance.yml`), the sibling to Documentation
+  Truth described below. This has nothing to do with the C++ engine at
+  runtime — it's what gates which datasets are even allowed into an
+  official pack build.
+- **Runtime attribution**: `orcmap::AttributionInfo`
+  (`include/orcmap/attribution.hpp`) and `orcmap::MapSourceInfo` +
+  `CollectRequiredAttribution()` (`include/orcmap/map_source.hpp`),
+  host-tested in `tests/host/test_attribution.cpp`. This is what a future
+  consuming application asks the *running* engine, once pack manifests
+  and discovery exist to populate `MapSourceInfo` for real — the intent
+  (`docs/DATA_AND_LICENSING.md` "Runtime attribution") is that an
+  application never hard-codes `"(c) OpenStreetMap contributors"`; it
+  calls something like `map.activeSources()` and reads each source's
+  `AttributionInfo` instead. Today these two structs exist and are
+  correct, but nothing populates a real `MapSourceInfo` from an actual
+  opened pack yet — that wiring depends on the pack manifest
+  (`docs/PACK_MANIFEST_SCHEMA.md`) and pack discovery, neither of which
+  exist yet (`ROADMAP.md`).
+
+The core engine intentionally never renders attribution text itself
+(`AttributionInfo` carries `text`/`url`, not a draw call) — this mirrors
+the same reasoning as the style system not rendering itself: it would
+constrain the application/renderer adapter's UI flexibility. See
+`docs/STYLING.md` "Renderer relationship" for the parallel case.
+
 ## Label system
 
 Not implemented. ORCMAP1 drew labels with no collision avoidance or
@@ -233,6 +276,15 @@ ESP-IDF component (`idf_component.yml`, already present in this repo,
 implements its own `adapters/esp_idf`-shaped `ByteSource` and any
 OrcSDR-specific overlay types entirely in OrcSDR's own code.
 
+The "never includes `src/` internals" rule is not just a convention —
+`tests/consumer/` (see "Consumer integration test" below) structurally
+proves a consumer can build against `include/orcmap/` + `adapters/host/`
+alone, the same shape OrcSDR would use with `adapters/esp_idf/` once it
+exists. Pinning follows OrcSDR's existing `esp-rtl-sdr` dependency exactly
+(`git:` URL + full 40-character commit SHA, not a branch or floating tag)
+— see `PROJECT_TRUTH.md` "Public API and Versioning" for the actual
+manifest snippet this is modeled on.
+
 ## Error handling
 
 `PmTilesReader::Open()`/`GetTile()`/`ReadMetadata()` never throw; they
@@ -259,36 +311,63 @@ an independent reference implementation, not just against itself.
 Current coverage: geo/tile math (wrap, clamp, known tiles, antimeridian,
 high-latitude clamping, round-trip containment), PMTiles container
 (header fields, metadata, known-tile byte-exact content, sparse/missing
-tiles, corrupt-file handling, Hilbert ID uniqueness/monotonicity), and the
+tiles, corrupt-file handling, Hilbert ID uniqueness/monotonicity), the
 style system (built-in ids, default style, runtime switching with graceful
 fallback, zoom visibility, Night style's no-blue-light constraint, style
-distinctness, cache-key behavior). All passing as of this writing — see
-`STATUS.md` for how to reproduce.
+distinctness, cache-key behavior), and the runtime attribution helpers
+(no-sources/excluded/included/mixed/deduplicated cases). All passing as of
+this writing — see `STATUS.md` for how to reproduce.
 
-## Documentation tooling
+## Consumer integration test
 
-`tools/check_documentation_truth.py` (tested by
-`tests/test_documentation_truth.py`, 15 unit tests, run via
-`python -m unittest discover -s tests -p 'test_documentation_truth.py'`)
-is a deterministic, stdlib-only checker adapted from OrcSDR's own
-`documentation-truth.yml`/`check_documentation_truth.py`. It runs in CI
-(`.github/workflows/documentation-truth.yml`, on every PR, push to `main`,
-and weekly) and should be run locally
-(`python tools/check_documentation_truth.py`) before committing any change
-to `README.md`, `PROJECT_TRUTH.md`, `ARCHITECTURE.md`, `ROADMAP.md`,
-`STATUS.md`, `LICENSING.md`, or `docs/*.md`. It checks: local Markdown
-links resolve, backtick-quoted repository file references resolve
-(excluding brace-expansion shorthand like `foo.{hpp,cpp}`), this file's
-"Major components" table's empty/implemented directory claims match the
-actual filesystem, documented host-test-function counts match the actual
-count of `void TestXxx(...)` definitions in `tests/host/test_*.cpp`,
-documented component version strings match `idf_component.yml`, an
-unqualified claim that this project lacks CI never survives alongside an
-existing workflow file, no AI-prompt residue leaks into committed docs,
-and any future historical/
-superseded doc carries a visible marker. See `PROJECT_TRUTH.md` "Local
-Development Conventions" for why this exists as a project rule, not
-optional tooling.
+`tests/consumer/` (`CMakeLists.txt` + `consumer_smoke_test.cpp`) is a
+second, separate standalone CMake project — not a subdirectory of
+`tests/host/` — that builds a small executable using *only* headers under
+`include/orcmap/` and `adapters/host/`, linked against the engine sources
+compiled the normal way. Its own include path never adds `src/` or
+`third_party/`, so a consumer-side `#include` reaching into engine
+internals is a build failure, not a lint warning — see "OrcSDR integration
+boundary" above and `PROJECT_TRUTH.md` "Public API and Versioning". It
+exercises what's real today: tile-coordinate math, opening the fixture
+archive and reading a tile, resolving a built-in style, and the runtime
+attribution API. Extend it as real API surface is added; do not let it
+silently stop reflecting what a real consumer would need.
+
+## Documentation and provenance tooling
+
+Two deterministic, stdlib-only checkers, both adapted from (or, for the
+second, modeled directly on) OrcSDR's own `documentation-truth.yml`/
+`check_documentation_truth.py` pattern — see `PROJECT_TRUTH.md` "Local
+Development Conventions" for why both exist as project rules, not optional
+tooling:
+
+- **`tools/check_documentation_truth.py`** (tested by
+  `tests/test_documentation_truth.py`, 17 unit tests, run via
+  `python -m unittest discover -s tests -p 'test_documentation_truth.py'`).
+  Runs in CI (`.github/workflows/documentation-truth.yml`, on every PR,
+  push to `main`, and weekly). Checks: local Markdown links resolve,
+  backtick-quoted repository file references resolve (excluding
+  brace-expansion shorthand like `foo.{hpp,cpp}`), this file's "Major
+  components" table's empty/implemented directory claims match the actual
+  filesystem, documented host-test-function counts match the actual count
+  of `void TestXxx(...)` definitions in `tests/host/test_*.cpp` (masking
+  fenced code blocks first, so an example value in a `docs/*.md` sample
+  JSON block can't be misread as a real claim), documented component
+  version strings match `idf_component.yml` (same code-fence masking), an
+  unqualified claim that this project lacks CI never survives alongside an
+  existing workflow file, no AI-prompt residue leaks into committed docs,
+  any future historical/superseded doc carries a visible marker, and the
+  provenance policy documents below actually exist and `PROJECT_TRUTH.md`
+  still states the IP-safety principle.
+- **`tools/check_data_provenance.py`** (tested by
+  `tests/test_data_provenance.py`, 20 unit tests) is the sibling checker
+  for map-data licensing policy rather than documentation consistency —
+  see "Data provenance and attribution" above for what it validates. It
+  does not decide what a license means; it enforces decisions already
+  recorded in `data/sources/*.json` against `docs/DATA_PROVENANCE_REGISTRY.md`'s
+  rules (e.g. `ODBL` sources must have `share_alike_required: true`, no
+  source can be `clean_pack_allowed` unless its class is public-domain-
+  class, `REVIEW_REQUIRED` sources can never be `official_pack_allowed`).
 
 ## Build system
 
@@ -331,6 +410,16 @@ not reinvent). `PmTilesReader` itself defends against malformed/hostile
 archive *structure* (oversized allocations, cyclic leaf directories) but
 performs no cryptographic verification of archive contents — that is a
 pack-installer-layer concern, not the reader's.
+
+Adjacent but distinct: **legal/IP integrity**, i.e. knowing a pack's
+contents were legitimately sourced in the first place, is handled by the
+data provenance registry (`data/sources/*.json`,
+`tools/check_data_provenance.py`) and, once pack manifests exist,
+`sources[].provenance_id` references validated against it
+(`docs/PACK_MANIFEST_SCHEMA.md` "Future checker extension"). SHA-256
+answers "is this the exact bytes we published"; the provenance registry
+answers "were we allowed to publish this at all" — both matter, neither
+substitutes for the other.
 
 ## Future extension points
 

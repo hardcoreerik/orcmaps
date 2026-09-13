@@ -40,8 +40,18 @@ must be recorded before use, with:
   compatible permissive license is deliberately vendored, noted as such)
 
 This ledger lives in [`docs/DEPENDENCY_LEDGER.md`](docs/DEPENDENCY_LEDGER.md)
-(created as dependencies are actually added — currently empty because no
-third-party code has been incorporated yet). No dependency should be added to
-this project "because GitHub makes it easy" — each one is a deliberate,
-reviewed decision, particularly given the intent to keep this project
-commercially licensable.
+and is kept current as dependencies are added (currently: miniz, MIT,
+vendored). No dependency should be added to this project "because GitHub
+makes it easy" — each one is a deliberate, reviewed decision, particularly
+given the intent to keep this project commercially licensable.
+
+The same discipline applies to map **data** sources, via a separate,
+machine-readable registry ([`data/sources/`](data/sources/), enforced by
+`tools/check_data_provenance.py`) rather than a prose ledger — see
+[`docs/DATA_AND_LICENSING.md`](docs/DATA_AND_LICENSING.md) and
+[`docs/DATA_PROVENANCE_REGISTRY.md`](docs/DATA_PROVENANCE_REGISTRY.md).
+
+## Contributions
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how the dual-license model
+above applies to externally submitted contributions.

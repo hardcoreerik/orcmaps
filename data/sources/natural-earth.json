@@ -1,0 +1,29 @@
+{
+  "id": "natural-earth",
+  "name": "Natural Earth",
+  "publisher": "Natural Earth (Tom Patterson, Nathaniel Vaughn Kelso, and volunteers, in partnership with NACIS)",
+  "source": {
+    "url": "https://www.naturalearthdata.com/",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "Public Domain",
+    "license_class": "PUBLIC_DOMAIN_VERIFIED",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true,
+    "modification_allowed": true,
+    "attribution_required": false,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://www.naturalearthdata.com/about/terms-of-use/",
+    "reviewed_date": "2026-09-13",
+    "confidence": "CONFIRMED"
+  },
+  "policy": {
+    "official_pack_allowed": true,
+    "clean_pack_allowed": true
+  },
+  "notes": "Voluntary public-domain dedication by the dataset's private authors, not a government-PD case. Attribution is explicitly NOT required, though an optional courtesy credit is suggested by the publisher ('Made with Natural Earth.'). Candidate source for the 'World Base' low-zoom OrcMaps Clean pack tier."
+}

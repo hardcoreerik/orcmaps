@@ -1,0 +1,29 @@
+{
+  "id": "overture-places",
+  "name": "Overture Maps Foundation -- Places (CDLA-licensed subset only)",
+  "publisher": "Overture Maps Foundation",
+  "source": {
+    "url": "https://docs.overturemaps.org/attribution/",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "CDLA Permissive 2.0 (for records whose `source` property is CDLA-licensed; Places also contains Apache-2.0 Foursquare-sourced and CC0 AllThePlaces-sourced records NOT covered by this record)",
+    "license_class": "CDLA_PERMISSIVE",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true,
+    "modification_allowed": true,
+    "attribution_required": true,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://docs.overturemaps.org/blog/2025/09/24/release-notes/",
+    "reviewed_date": "2026-09-13",
+    "confidence": "REVIEW_REQUIRED"
+  },
+  "policy": {
+    "official_pack_allowed": false,
+    "clean_pack_allowed": false
+  },
+  "notes": "Overture Places is NOT a single-license dataset: license varies per record by its `source` property (CDLA Permissive 2.0 for most providers, Apache 2.0 for Foursquare-sourced records, CC0 1.0 for AllThePlaces-sourced records). This record intentionally models only the CDLA-licensed subset. REVIEW_REQUIRED because OrcMaps has no per-record source-filtering implementation yet -- ingesting Places today would pull in all three licenses undifferentiated, which is not acceptable for a single clean license_class. Do not flip to official_pack_allowed=true until a filtering step (keep only `source` != Foursquare, or otherwise partition by license) exists in the pack builder, or until a decision is made to track the Apache/CC0 subsets as their own separate registry records instead."
+}

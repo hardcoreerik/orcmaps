@@ -1,0 +1,29 @@
+{
+  "id": "geoboundaries-gbopen",
+  "name": "geoBoundaries -- gbOpen product only",
+  "publisher": "geoBoundaries (William & Mary geoLab)",
+  "source": {
+    "url": "https://www.geoboundaries.org/",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "CC BY 4.0",
+    "license_class": "PERMISSIVE_ATTRIBUTION",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true,
+    "modification_allowed": true,
+    "attribution_required": true,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://www.geoboundaries.org/api.html",
+    "reviewed_date": "2026-09-13",
+    "confidence": "CONFIRMED"
+  },
+  "policy": {
+    "official_pack_allowed": true,
+    "clean_pack_allowed": false
+  },
+  "notes": "This record covers gbOpen ONLY. geoBoundaries publishes two other products under DIFFERENT terms that must NOT be conflated with this record: gbHumanitarian (mirrored from UN OCHA, 'may have less open licensure') and gbAuthoritative (mirrored from UN SALB, explicitly NOT usable commercially). If either of those is ever wanted, create a separate registry record for it -- do not extend this record's approval to cover them. Also note: individual per-country boundary layers within gbOpen may carry their own `boundaryLicense` metadata field that can differ from the blanket CC BY 4.0 label; spot-check before bulk ingest. Attribution: display 'geoBoundaries' prominently with a link to www.geoboundaries.org (or the full URL where a link isn't possible)."
+}

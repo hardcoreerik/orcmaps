@@ -1,0 +1,29 @@
+{
+  "id": "noaa-etopo",
+  "name": "NOAA ETOPO Global Relief Model",
+  "publisher": "NOAA National Centers for Environmental Information (NCEI)",
+  "source": {
+    "url": "https://www.ncei.noaa.gov/products/etopo-global-relief-model",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "Presumed U.S. Government Work / Public Domain (17 U.S.C. §105) -- NOT directly confirmed",
+    "license_class": "UNKNOWN",
+    "commercial_use_allowed": false,
+    "redistribution_allowed": false,
+    "modification_allowed": false,
+    "attribution_required": false,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ngdc.mgg.dem%3Aetopo_2022",
+    "reviewed_date": "2026-09-13",
+    "confidence": "REVIEW_REQUIRED"
+  },
+  "policy": {
+    "official_pack_allowed": false,
+    "clean_pack_allowed": false
+  },
+  "notes": "No single authoritative page with an explicit license/use-constraints statement was successfully loaded during research (the ISO 19115 metadata 'Use Constraints' page returned HTTP 503). NOAA/NCEI is a US federal agency, so US_FEDERAL_PUBLIC_DOMAIN is the plausible eventual classification, but this record deliberately does NOT assume that yet -- boolean fields above are conservatively set to false/unknown rather than inferred. IMPORTANT caveat even once confirmed: ETOPO blends in higher-resolution regional bathymetry/topography source grids in certain areas, some of which may be licensed from third parties -- a blanket 'ETOPO is public domain' conclusion may not hold for every region. Do not approve without re-fetching the ISO metadata page (or an equivalent primary source) and checking the regional-source-blending question."
+}

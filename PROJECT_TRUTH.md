@@ -49,6 +49,64 @@ on `hardcoreerik/esp-rtl-sdr`.
   `apps/orcsdr-tab5/ui/adsb_dashboard.cpp` and `lora_dashboard.cpp`). It
   proved the UI concept works; its limits are not requirements for OrcMaps.
 
+## IP and Provenance Safety Model
+
+This is a durable principle, not a preference — treat a change to it the
+same as any other decision this document protects (see "Document
+authority"):
+
+> OrcMaps uses an IP- and provenance-safe development model. Every
+> external code dependency, dataset, asset, font, icon set, schema, map
+> style source, build-time tool, or other third-party material must have
+> known provenance and known usage rights before it is incorporated into
+> official OrcMaps source or official OrcMaps map packs. Unknown licensing
+> is rejected rather than assumed safe.
+>
+> OrcMaps prefers public-domain and permissively licensed sources when
+> practical, but properly understood open-data licenses such as ODbL are
+> allowed when they materially improve the project. Their obligations must
+> remain explicit and isolated.
+
+In one sentence: **we are not banning OpenStreetMap; we are banning
+ambiguity.** A dataset under a clearly-understood license with real,
+recorded obligations is approvable. A dataset whose terms haven't actually
+been read is not, regardless of how reputable the publisher looks —
+including a `.gov` domain; see `docs/DATA_AND_LICENSING.md` "Government
+data isn't automatically safe" for why agency-level trust is explicitly
+rejected in favor of dataset-level review.
+
+This principle has a real, running enforcement mechanism, not just prose:
+
+- **Code and build-time tool provenance**: `DEPENDENCY_LEDGER.md`.
+- **Map data provenance**: a machine-readable registry at
+  `data/sources/*.json`, one record per reviewed dataset, validated by
+  `tools/check_data_provenance.py` (CI:
+  `.github/workflows/data-provenance.yml`). See
+  `docs/DATA_PROVENANCE_REGISTRY.md` for the full schema and
+  `docs/DATA_AND_LICENSING.md` for the plain-language policy, including the
+  **OrcMaps Clean / Permissive / Open** map-pack classification system.
+- **AI-assisted development is not exempt.** If an AI agent finds a GitHub
+  implementation, a dataset, a font, an icon, or a fixture and wants to
+  incorporate it, the identical review standard applies — "an AI generated
+  it for us" is never proof the underlying source material is ours to use.
+  See `docs/DATA_AND_LICENSING.md` "Contribution / AI-assisted development
+  safeguard".
+- **Code licensing and map-data licensing remain separate intellectual-
+  property layers, always.** A map pack being ODbL does not make the
+  OrcMaps engine ODbL. A public-domain map source does not make the
+  OrcMaps engine public domain. A commercial OrcMaps engine license would
+  not make OSM (or any other source's) data proprietary. See
+  `docs/DATA_AND_LICENSING.md` "Code and data are different intellectual-
+  property layers" — this is architectural, not just contractual: the
+  engine reads a `MapSource`/PMTiles archive, it never becomes what it
+  reads.
+
+We do not describe any of this as "zero legal risk" or "copyright risk
+free" anywhere in this project, including in casual conversation — see
+`docs/DATA_AND_LICENSING.md`'s opening section for why, and the preferred
+phrasing ("verified low-risk source", "approved for official OrcMaps
+distribution under the documented source terms").
+
 ## Core Design Principles
 
 1. Offline first — a downloaded pack renders with zero network access.
@@ -188,19 +246,45 @@ version — this is enforced by `tests/host/test_style.cpp`.
 
 ## Data Licensing Rules
 
-See `docs/DATA_AND_LICENSING.md` in full. Key rules:
+See `docs/DATA_AND_LICENSING.md` in full, and `docs/DATA_PROVENANCE_REGISTRY.md`
+for the machine-readable classification schema. Key rules:
 
 - Never build packs by bulk-downloading `tile.openstreetmap.org` or any
-  other raster tile service — OSM's tile service explicitly prohibits this
-  usage for offline archive construction.
+  other commercial map tile service — OSM's tile service explicitly
+  prohibits offline/bulk use of its rendered tiles (confirmed against
+  `operations.osmfoundation.org/policies/tiles/`), separate from and in
+  addition to whatever the underlying data's own license permits.
 - Packs come from legitimate extract data (OSM `.osm.pbf` extracts via
   Geofabrik/planet + osmium/Planetiler/tippecanoe, or another source whose
   terms explicitly permit offline redistribution).
 - Every pack must carry source/source_url/source_date/license/attribution/
-  generator/generator_version/data_version/sha256 in its metadata.
+  generator/generator_version/data_version/sha256 in its metadata — see
+  `docs/PACK_MANIFEST_SCHEMA.md` for the full manifest schema (established,
+  not yet implemented — no pack builder exists yet).
 - Engine license and map-data license are independent. OSM-derived data
   carries ODbL obligations (attribution, share-alike on the *data*) that
   apply regardless of the engine's own license.
+- **Government-produced does not mean automatically approved.** U.S.
+  federal government works are public domain by statute (17 U.S.C. §105),
+  a real and strong basis — but sources are approved *dataset by dataset*,
+  never by agency. A specific USGS product, for instance, can blend in
+  third-party-licensed content; see the `usgs-national-map` registry
+  record for a worked example of a deliberate non-approval pending
+  narrower, dataset-specific review.
+- **Three map-pack policy classes** (`docs/DATA_AND_LICENSING.md`): **Clean**
+  (public-domain-class sources only — no attribution/share-alike
+  obligation, can in principle be exclusive), **Permissive** (commercially
+  usable, attribution required, no database share-alike), **Open** (ODbL-
+  class sources — allowed, must remain clearly identified, never silently
+  blended into a Clean pack). A pack's class is only as permissive as its
+  most restrictive constituent source.
+- Where practical, keep different license-obligation sources in separately
+  loadable `MapSource`s rather than one blended archive (`world-base` /
+  `terrain` / `us-roads` / `osm-detail`, etc.) — this is a "where
+  practical" architectural preference, not an absolute rule, and physical
+  packaging may still merge sources later if performance testing justifies
+  it, **provided the logical provenance boundary survives in manifest
+  metadata regardless.**
 
 ## Performance Constraints
 
@@ -227,6 +311,43 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   not just archives built by OrcMaps' own (not-yet-built) pack builder.
 - ESP-IDF ≥5.0 (`idf_component.yml`).
 
+## Public API and Versioning
+
+- **Public API surface is `include/orcmap/` plus the adapter directories**
+  (`adapters/host/`, and `adapters/m5gfx`/`adapters/esp_idf` once they
+  exist) — nothing under `src/` or `third_party/` is a consumer-facing
+  contract, ever. This is enforced structurally, not just by convention:
+  `tests/consumer/` builds an external-consumer smoke test whose own
+  include path never adds `src/` or `third_party/` — if that target builds,
+  a real external project (OrcSDR included) could integrate the same way.
+  Extend that test as real API surface (`MapEngine`, `Viewport`, overlays)
+  is added, rather than letting it go stale once written.
+- **OrcSDR pins a specific OrcMaps commit/version, never `main`.** The
+  precedent is OrcSDR's existing `esp-rtl-sdr` dependency
+  (`apps/orcsdr-tab5/main/idf_component.yml` in the OrcSDR repo):
+  ```
+  esp_rtl_sdr:
+    git: https://github.com/hardcoreerik/esp-rtl-sdr.git
+    version: 1cd19d1363daea49b013c2d28a25750fcbfcff78
+  ```
+  a `git:` URL plus a full 40-character immutable commit SHA — not a
+  branch, not a floating tag. OrcMaps is not published to the ESP
+  Component Registry (and won't be without an explicit instruction to do
+  so), so this exact `git:` + SHA pattern is how OrcSDR's future OrcMaps
+  dependency should look too, once integration actually happens
+  (`ROADMAP.md` Phase 4 — not started).
+- **Semantic versioning, pre-1.0 discipline.** `idf_component.yml` starts
+  at `0.1.0`. Before 1.0, the public API can still evolve, but changes
+  must be deliberate and documented (this file + `ARCHITECTURE.md`), not
+  incidental. After 1.0, a breaking public-API change requires a major
+  version bump.
+- **Map-pack releases are versioned separately from engine releases.** An
+  engine version (e.g. `OrcMaps v0.4.0`) and a map-pack version (`Oregon Clean
+  2026.09`) are independent release trains — updating map data should
+  never force an engine release unless pack-format/API compatibility
+  actually changed. See `docs/PACK_MANIFEST_SCHEMA.md` "Compatibility
+  metadata" for how a pack states what engine version it needs.
+
 ## Local Development Conventions
 
 - All local branches/worktrees for OrcMaps development are created under
@@ -250,6 +371,22 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   claims and what the repository actually contains (it already caught and
   this session fixed a real drift: a test-count claim that said 17 when
   the actual count was 20).
+- **Data Provenance Truth CI is the sibling gate for map-data licensing.**
+  `.github/workflows/data-provenance.yml` runs
+  `tools/check_data_provenance.py` on the same schedule as Documentation
+  Truth. It enforces the registry rules in "IP and Provenance Safety
+  Model" above (e.g. an `UNKNOWN` or `REVIEW_REQUIRED` source can never be
+  marked `official_pack_allowed`, an `ODBL` source can never be marked
+  `clean_pack_allowed`) — it does not replace human legal judgment, it
+  enforces decisions that have already been made and recorded, the same
+  way `check_documentation_truth.py` doesn't decide what's true, only
+  catches when a doc stops matching what is.
+- **Contributions**: `CONTRIBUTING.md` documents the practical mechanics
+  and the DCO-style ("Developer Certificate of Origin") licensing
+  certification contributors implicitly make — chosen deliberately over a
+  heavier CLA tool, with an explicit flag that a formal CLA + attorney
+  review is the right next step if contribution volume ever makes the
+  lightweight approach unclear.
 
 ## Naming Conventions
 
@@ -281,13 +418,35 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   `CMakeLists.txt` is the ESP-IDF component registration file;
   `tests/host/CMakeLists.txt` is a separate standalone host-only CMake
   project (no ESP-IDF toolchain required to build/run tests).
+- Data provenance registry: JSON (not YAML) under `data/sources/`, one
+  record per reviewed dataset, validated by
+  `tools/check_data_provenance.py` — JSON chosen specifically to keep the
+  checker standard-library-only, matching `check_documentation_truth.py`'s
+  own no-third-party-dependency discipline.
+- Nine starter provenance records reviewed and committed: Natural Earth
+  and OpenStreetMap `CONFIRMED`/approved; U.S. Census TIGER/Line, NOAA
+  ETOPO, USGS National Map (deliberately unapproved as a whole — see its
+  own record's notes), USDOT NAD, and Overture Places `REVIEW_REQUIRED`
+  pending primary-source verification or per-record license filtering;
+  geoBoundaries gbOpen and Google Open Buildings (CC BY 4.0 option)
+  `CONFIRMED`/approved. See `data/sources/*.json` and
+  `docs/DATA_PROVENANCE_REGISTRY.md`.
+- `tests/consumer/` established as the external-consumer build gate,
+  structurally isolated from `src/`/`third_party/` via CMake include-path
+  visibility rather than a documentation-only rule.
+- `include/orcmap/attribution.hpp` and `include/orcmap/map_source.hpp`:
+  minimal, header-only runtime attribution API
+  (`AttributionInfo`, `MapSourceInfo`, `CollectRequiredAttribution()`),
+  host-tested. No `MapEngine`/`Viewport`/discovery implementation yet —
+  this establishes the shape those will eventually populate.
 
 ## Explicit Non-Goals
 
 - OrcMaps will not know what an aircraft, LoRa node, RF site, or any other
   OrcSDR concept is.
-- OrcMaps will not implement payment/license enforcement (commercial
-  licensing stays a manual agreement process).
+- OrcMaps will not implement payment/license enforcement, DRM, activation
+  keys, or entitlement systems (commercial licensing stays a manual
+  agreement process — see `CONTRIBUTING.md`).
 - OrcMaps will not require every user to install a full-planet pack —
   tiered packs (world/country/state/local) are the goal, sharing one
   rendering path.
@@ -307,6 +466,15 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   the closest reference).
 - External style file format (`.orcstyle`) — shape not designed, though the
   `MapStyle` struct is already serializable-shaped for it later.
+- Several provenance records are `REVIEW_REQUIRED`, not `CONFIRMED` — see
+  each record's `notes` field for exactly what's unverified (e.g. TIGER/
+  Line's exact repackaging-attribution clause wording, ETOPO's license
+  page returning HTTP 503 during research, NAD's rights page returning
+  HTTP 403, Overture Places needing per-record license filtering before
+  ingest). None of these are usable in an official pack until resolved —
+  see "IP and Provenance Safety Model" above.
+- Pack manifest schema is documented (`docs/PACK_MANIFEST_SCHEMA.md`) but
+  unimplemented — no pack builder exists to produce one yet.
 
 ## Historical Context That Matters
 

@@ -1,0 +1,29 @@
+{
+  "id": "openstreetmap",
+  "name": "OpenStreetMap",
+  "publisher": "OpenStreetMap Foundation / OpenStreetMap contributors",
+  "source": {
+    "url": "https://www.openstreetmap.org/copyright",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "ODbL 1.0 (Open Database License) for data contributed since 2012-09-12; legacy CC BY-SA 2.0 for older contributions",
+    "license_class": "ODBL",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true,
+    "modification_allowed": true,
+    "attribution_required": true,
+    "share_alike_required": true,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://www.osmfoundation.org/wiki/Licence",
+    "reviewed_date": "2026-09-13",
+    "confidence": "CONFIRMED"
+  },
+  "policy": {
+    "official_pack_allowed": true,
+    "clean_pack_allowed": false
+  },
+  "notes": "Standard attribution form: '© OpenStreetMap contributors', linking to https://www.openstreetmap.org/copyright. Share-alike applies to Derivative Databases (e.g. our .pmtiles packs, which retain queryable geometry/attributes) -- it does NOT force the OrcMaps engine's own AGPL/commercial license to change; see DATA_AND_LICENSING.md 'Code and data are different intellectual-property layers'. MUST be acquired via raw .osm.pbf extracts (Geofabrik, planet file) through a proper extraction pipeline -- see the separate, explicit rule below about the tile.openstreetmap.org RASTER TILE SERVICE, which is a completely different thing from this data license and prohibits bulk/offline use of its rendered tiles regardless of this record's terms. This record covers the underlying OSM DATABASE only, not that service."
+}

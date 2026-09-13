@@ -17,10 +17,13 @@ so unrelated ESP32 projects can use it too.
 
 ## Status
 
-Early development — architecture and format decision in progress. See
-[`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the prototype this
-project supersedes, and [`docs/FORMAT_DECISION.md`](docs/FORMAT_DECISION.md)
-(once written) for the evidence behind the map-pack format choice.
+Early development. The map-pack container format is decided (PMTiles v3 —
+see [`docs/FORMAT_DECISION.md`](docs/FORMAT_DECISION.md)); the PMTiles
+archive reader, tile-coordinate math, and the style system are implemented
+and host-tested; a vector-tile decoder and any on-device renderer are not
+yet built. See [`STATUS.md`](STATUS.md) for the live, detailed snapshot
+and [`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the OrcSDR
+prototype this project supersedes.
 
 ## Design principles
 
@@ -32,7 +35,7 @@ project supersedes, and [`docs/FORMAT_DECISION.md`](docs/FORMAT_DECISION.md)
 6. **Map data is not firmware.** Packs install/update independently of the engine and the consuming app.
 7. **User data is not map-pack data.** Markers/waypoints survive pack replacement, are never uploaded during pack discovery.
 8. **Safe updates.** A corrupt or partial download never replaces a working pack.
-9. **Provenance matters.** Every pack carries source, license, attribution, and hash metadata.
+9. **Provenance matters.** Every pack carries source, license, attribution, and hash metadata — enforced by a machine-readable registry (`data/sources/`) and CI, not just documented. See [`docs/DATA_AND_LICENSING.md`](docs/DATA_AND_LICENSING.md).
 10. **No unauthorized tile scraping.** Packs are built from legitimate extract data (e.g. OSM `.pbf` extracts), never bulk-scraped raster tile servers.
 
 ## Repository layout
@@ -53,6 +56,8 @@ tools/pack-verify/     Host-side: validate a pack against its manifest
 examples/m5stack-tab5/ Full example on M5Stack Tab5 (ESP32-P4)
 examples/generic-esp32/Minimal ESP32-S3 example
 tests/host/            Host-buildable unit tests (no hardware required)
+tests/consumer/        External-consumer build gate (public headers only)
+data/sources/           Data provenance registry (one record per reviewed map-data source)
 docs/                  Architecture, format decision, porting, licensing docs
 ```
 
@@ -66,3 +71,8 @@ Map **data** distributed alongside this engine (e.g. prebuilt map packs) is
 subject to its own source license (typically OpenStreetMap's ODbL) —
 engine licensing and data licensing are independent. See
 [`docs/DATA_AND_LICENSING.md`](docs/DATA_AND_LICENSING.md).
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md), including how licensing and data
+provenance apply to contributions.

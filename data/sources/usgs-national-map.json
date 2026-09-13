@@ -1,0 +1,29 @@
+{
+  "id": "usgs-national-map",
+  "name": "USGS National Map datasets (placeholder -- NOT an approved source)",
+  "publisher": "U.S. Geological Survey",
+  "source": {
+    "url": "https://www.usgs.gov/programs/national-geospatial-program/national-map",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "Mixed -- USGS-authored content is Public Domain (17 U.S.C. §105), but NOT uniformly true for every National Map layer",
+    "license_class": "UNKNOWN",
+    "commercial_use_allowed": false,
+    "redistribution_allowed": false,
+    "modification_allowed": false,
+    "attribution_required": false,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+    "reviewed_date": "2026-09-13",
+    "confidence": "REVIEW_REQUIRED"
+  },
+  "policy": {
+    "official_pack_allowed": false,
+    "clean_pack_allowed": false
+  },
+  "notes": "DELIBERATE PLACEHOLDER, not an approval of 'USGS National Map' as a whole -- this record exists specifically to document that we do NOT approve by agency, only by specific dataset (see DATA_AND_LICENSING.md 'Government data isn't automatically safe'). USGS's own copyright page confirms not all USGS-site content is public domain; third-party-sourced material can be embedded in USGS products with separate restrictions. Specific flag: the National Transportation Dataset (NTD) has historically incorporated Census TIGER/Line data plus, for certain products, commercially-licensed HERE road data -- it is NOT safe to assume NTD is uniformly public domain without checking the specific download product's metadata. The National Hydrography Dataset (NHD) looks more straightforwardly USGS-authored but was not independently spot-checked here either. Before approving any specific USGS National Map layer, create a SEPARATE, narrower registry record for that exact dataset (e.g. 'usgs-nhd', 'usgs-ntd') with its own evidence and confidence -- do not broaden this record's approval instead of narrowing it."
+}

@@ -1,0 +1,29 @@
+{
+  "id": "usdot-national-address-database",
+  "name": "USDOT National Address Database (NAD)",
+  "publisher": "U.S. Department of Transportation",
+  "source": {
+    "url": "https://www.transportation.gov/gis/national-address-database",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "Presumed Public Domain (federal aggregation) -- NOT directly confirmed",
+    "license_class": "UNKNOWN",
+    "commercial_use_allowed": false,
+    "redistribution_allowed": false,
+    "modification_allowed": false,
+    "attribution_required": false,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://www.transportation.gov/mission/open/gis/national-address-database/national-address-database-nad-disclaimer",
+    "reviewed_date": "2026-09-13",
+    "confidence": "REVIEW_REQUIRED"
+  },
+  "policy": {
+    "official_pack_allowed": false,
+    "clean_pack_allowed": false
+  },
+  "notes": "The primary disclaimer/rights page returned HTTP 403 on direct fetch attempts (tried two mirrors); the public-domain conclusion here is reconstructed from secondary/cached summaries only, not a direct primary-source read -- treat as unconfirmed. Additional nuance even if the federal compilation itself is public domain: NAD aggregates state/local/tribal-submitted address data, and USDOT does not appear to assert it has independently cleared rights on every contributing sub-source. Also flag a NON-copyright usage restriction the disclaimer reportedly states: the data is 'not intended for use as a mailing list' and may be subject to individual state statutes restricting that specific use -- record this separately from the license determination if/when this source is approved, since it's a use restriction rather than a copyright term."
+}

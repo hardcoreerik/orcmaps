@@ -22,7 +22,10 @@ class DocumentationTruthTests(unittest.TestCase):
             "Host test suite: 2 test functions, all passing.\n"
             "Declares version 0.1.0.\n",
         )
-        self.write("PROJECT_TRUTH.md", "Project truth.\n")
+        self.write("PROJECT_TRUTH.md", "Project truth. Uses an IP/provenance safety model.\n")
+        self.write("docs/DATA_AND_LICENSING.md", "Data and licensing policy.\n")
+        self.write("docs/DATA_PROVENANCE_REGISTRY.md", "Provenance registry schema.\n")
+        self.write("CONTRIBUTING.md", "Contributing guide.\n")
         self.write(
             "ARCHITECTURE.md",
             "| Component | Path | Status |\n"
@@ -116,6 +119,18 @@ class DocumentationTruthTests(unittest.TestCase):
         self.write("docs/history/old.md", "Historical: some stale note.\n")
         report = self.report()
         self.assertFalse(any(item.code == "history-label" for item in report.warnings))
+
+    def test_missing_provenance_doc_fails(self):
+        (self.root / "docs/DATA_AND_LICENSING.md").unlink()
+        self.assertTrue(
+            any(item.code == "provenance-docs-missing" for item in self.report().errors)
+        )
+
+    def test_project_truth_without_provenance_mention_fails(self):
+        self.write("PROJECT_TRUTH.md", "Project truth, no relevant mention here.\n")
+        self.assertTrue(
+            any(item.code == "provenance-principle-missing" for item in self.report().errors)
+        )
 
 
 if __name__ == "__main__":

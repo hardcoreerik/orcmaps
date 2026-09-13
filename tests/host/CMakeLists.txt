@@ -15,6 +15,7 @@ add_executable(orcmap_host_tests
     test_geo.cpp
     test_pmtiles.cpp
     test_style.cpp
+    test_attribution.cpp
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/render/style.cpp

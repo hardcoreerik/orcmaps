@@ -1,4 +1,5 @@
 build/
+build-consumer/
 build_obj/
 __pycache__/
 *.pyc

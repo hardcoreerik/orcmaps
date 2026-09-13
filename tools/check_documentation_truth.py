@@ -27,6 +27,7 @@ CURRENT_DOCS = (
     "ROADMAP.md",
     "STATUS.md",
     "LICENSING.md",
+    "CONTRIBUTING.md",
 )
 # Historical/superseded docs are exempt from the prompt-residue and
 # resolved-claim checks below, same as OrcSDR's HISTORICAL_DOCS. Empty for
@@ -75,6 +76,20 @@ def _text(root: Path, relative: str) -> str | None:
 
 def _line(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
+
+
+_CODE_FENCE_PATTERN = re.compile(r"```.*?```", re.S)
+
+
+def _mask_code_fences(text: str) -> str:
+    """Replaces the contents of fenced code blocks with spaces (preserving
+    length/line numbers) so checks that scan prose for claims -- like the
+    component-version check -- don't misread example/sample values inside
+    a ```json ...``` block as a real claim about this repository.
+    """
+    def _blank(match: re.Match) -> str:
+        return re.sub(r"[^\n]", " ", match.group(0))
+    return _CODE_FENCE_PATTERN.sub(_blank, text)
 
 
 def _current_markdown(root: Path) -> list[Path]:
@@ -266,7 +281,8 @@ def _check_component_version(root: Path, report: Report) -> None:
     checked_any = False
     for path in _current_markdown(root):
         text = path.read_text(encoding="utf-8")
-        for m in version_mention.finditer(text):
+        masked = _mask_code_fences(text)
+        for m in version_mention.finditer(masked):
             quoted = m.group(1)
             # Only a version-looking token that isn't the current one, and
             # isn't clearly framed as historical/example text, is drift.
@@ -284,6 +300,37 @@ def _check_component_version(root: Path, report: Report) -> None:
             )
     if checked_any and not any(item.code == "component-version" for item in report.errors):
         report.passes.append(f"Documented component version matches idf_component.yml ({current})")
+
+
+_REQUIRED_PROVENANCE_DOCS = (
+    "docs/DATA_AND_LICENSING.md",
+    "docs/DATA_PROVENANCE_REGISTRY.md",
+)
+
+
+def _check_provenance_docs_exist(root: Path, report: Report) -> None:
+    """Documentation Truth stays responsible for doc consistency (not
+    license policy itself -- that's tools/check_data_provenance.py), but it
+    does verify the provenance *documentation* this project's IP-safety
+    principle (PROJECT_TRUTH.md) depends on hasn't quietly disappeared, and
+    that PROJECT_TRUTH.md hasn't drifted away from stating that principle.
+    """
+    for relative in _REQUIRED_PROVENANCE_DOCS:
+        if _text(root, relative) is None:
+            report.add(
+                "ERROR", "provenance-docs-missing", relative,
+                1, "required provenance policy document is missing",
+            )
+    truth = _text(root, "PROJECT_TRUTH.md")
+    if truth is not None and not re.search(r"provenance", truth, re.I):
+        report.add(
+            "ERROR", "provenance-principle-missing", "PROJECT_TRUTH.md", 1,
+            "PROJECT_TRUTH.md no longer mentions provenance -- the IP/provenance "
+            "safety principle must stay documented there",
+        )
+    if not any(item.code in ("provenance-docs-missing", "provenance-principle-missing")
+               for item in report.errors):
+        report.passes.append("Provenance policy documentation is present")
 
 
 def _check_resolved_claims(root: Path, report: Report) -> None:
@@ -343,6 +390,7 @@ def run_checks(root: Path) -> Report:
         _check_component_table_dirs,
         _check_test_function_count,
         _check_component_version,
+        _check_provenance_docs_exist,
         _check_resolved_claims,
         _check_prompt_residue,
         _check_history_labels,

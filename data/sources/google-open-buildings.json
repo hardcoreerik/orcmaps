@@ -1,0 +1,29 @@
+{
+  "id": "google-open-buildings",
+  "name": "Google Open Buildings",
+  "publisher": "Google Research",
+  "source": {
+    "url": "https://sites.research.google/gr/open-buildings/",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "Dual-licensed: CC BY 4.0 or ODbL 1.0 (recipient's choice). This record adopts the CC BY 4.0 option.",
+    "license_class": "PERMISSIVE_ATTRIBUTION",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true,
+    "modification_allowed": true,
+    "attribution_required": true,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://sites.research.google/gr/open-buildings/",
+    "reviewed_date": "2026-09-13",
+    "confidence": "CONFIRMED"
+  },
+  "policy": {
+    "official_pack_allowed": true,
+    "clean_pack_allowed": false
+  },
+  "notes": "Google dual-licenses this dataset specifically for ODbL/OSM interoperability. This registry deliberately records the CC BY 4.0 option as OrcMaps' chosen basis, NOT ODbL -- choosing CC BY avoids pulling ODbL's share-alike obligation onto this dataset when it's used outside an OSM-blended context. If this data is ever merged directly with OSM data such that the combined product is itself a Derivative Database of OSM, the merged result inherits ODbL obligations regardless of this record -- that would need its own review at merge time, not just at ingest time."
+}

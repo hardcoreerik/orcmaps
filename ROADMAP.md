@@ -29,6 +29,23 @@ decision and a portable, host-tested core.
 - [x] Documentation Truth CI (`.github/workflows/documentation-truth.yml` +
       `tools/check_documentation_truth.py`, adapted from OrcSDR's own,
       with unit tests in `tests/test_documentation_truth.py`)
+- [x] IP/provenance safety model recorded as a durable principle in
+      `PROJECT_TRUTH.md`, with code-vs-data-license separation formalized
+      architecturally (`include/orcmap/attribution.hpp`,
+      `include/orcmap/map_source.hpp`)
+- [x] Data-license classification system + Clean/Permissive/Open map-pack
+      classes defined (`docs/DATA_AND_LICENSING.md`,
+      `docs/DATA_PROVENANCE_REGISTRY.md`)
+- [x] Data provenance registry (`data/sources/*.json`, 9 starter records)
+      + Data Provenance Truth CI
+      (`.github/workflows/data-provenance.yml` +
+      `tools/check_data_provenance.py`, `tests/test_data_provenance.py`)
+- [x] `CONTRIBUTING.md` with a DCO-style contribution/relicensing policy
+- [x] Consumer integration test (`tests/consumer/`) proving a public-
+      headers-only build works, structurally enforced via CMake include
+      visibility
+- [x] Pack manifest schema documented (`docs/PACK_MANIFEST_SCHEMA.md`,
+      direction only — no pack builder exists to implement it against yet)
 
 **Exit criteria:** met.
 
@@ -98,6 +115,13 @@ OrcSDR still builds.
       extract (Geofabrik or similar) via a proper tiler (Planetiler/
       tippecanoe) — not the Overpass-JSON or incomplete-GeoJSON scripts
       documented in `docs/ORCMAP1_AUDIT.md` §8
+- [ ] Real pack manifest produced alongside it, following
+      `docs/PACK_MANIFEST_SCHEMA.md`, referencing the `openstreetmap`
+      provenance record (already `CONFIRMED`/approved) by id
+- [ ] `tools/check_data_provenance.py` extended to validate manifest
+      `sources[].provenance_id` references, per `docs/PACK_MANIFEST_SCHEMA.md`
+      "Future checker extension" — there is nothing to check until this
+      phase produces a real manifest
 - [ ] Pan works (viewport moves, new tiles load, cache reused where
       possible)
 - [ ] Zoom works (tile set changes correctly across zoom levels)
@@ -115,7 +139,13 @@ OrcSDR still builds.
 basemaps migrate off `offline_map.cpp`.
 
 - [ ] OrcSDR's `idf_component.yml` gains a version-pinned dependency on
-      `hardcoreerik/orcmaps`
+      `hardcoreerik/orcmaps`, in the exact `git:` URL + full commit-SHA
+      shape already used for `esp_rtl_sdr` (`PROJECT_TRUTH.md` "Public API
+      and Versioning") — never a branch or floating tag
+- [ ] `tests/consumer/` extended/mirrored as needed once OrcSDR is the
+      real consumer, so drift between "what the smoke test proves" and
+      "what OrcSDR actually needs" gets caught before it becomes an
+      integration surprise
 - [ ] ADS-B basemap migrated (preserve the existing sprite-cache pattern in
       `adsb_dashboard.cpp`; ADS-B keeps owning aircraft state and its own
       polar-math overlay placement — see `docs/ORCMAP1_AUDIT.md` §5)
@@ -134,7 +164,10 @@ basemaps migrate off `offline_map.cpp`.
 - [ ] Drag-to-pan, touch zoom
 - [ ] Current center/zoom display, center-on-receiver, center-on-selected
 - [ ] Marker placement (tap/long-press), naming, delete, recenter
-- [ ] Visible attribution, pack info
+- [ ] Visible attribution, pack info — consumes
+      `orcmap::CollectRequiredAttribution()` (`include/orcmap/map_source.hpp`,
+      already implemented/tested) once real `MapSourceInfo` values exist
+      to feed it
 - [ ] Graceful "no data for this area/zoom" state
 - [ ] Map Style switcher wired into Settings → Maps (per
       `docs/STYLING.md` "OrcSDR-specific styling guidance" — deferred until
@@ -192,6 +225,15 @@ basemaps migrate off `offline_map.cpp`.
 - Label collision avoidance / priority rendering.
 - Payment/commercial-license enforcement — explicit non-goal for now, see
   `PROJECT_TRUTH.md`.
+- Resolve the `REVIEW_REQUIRED` provenance records: directly fetch and
+  quote the Census TIGER/Line TechDoc's attribution clause, re-fetch
+  NOAA ETOPO's ISO metadata "use constraints" page (503 during research),
+  re-fetch the USDOT NAD disclaimer page (403 during research, twice),
+  decide the Overture Places per-record source-filtering approach, and
+  split `usgs-national-map`'s placeholder record into narrower
+  dataset-specific records (e.g. `usgs-nhd`) once actually needed. None of
+  these block current work — they block those specific sources becoming
+  usable.
 
 ## Research questions
 

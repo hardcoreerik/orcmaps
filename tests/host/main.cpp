@@ -6,6 +6,7 @@
 void RunGeoTests();
 void RunPmTilesTests(const std::string& fixture_path);
 void RunStyleTests();
+void RunAttributionTests();
 
 int main(int argc, char** argv) {
   const std::string fixture_path =
@@ -14,6 +15,7 @@ int main(int argc, char** argv) {
   RunGeoTests();
   RunPmTilesTests(fixture_path);
   RunStyleTests();
+  RunAttributionTests();
 
   if (orcmap::test::g_failures == 0) {
     std::printf("PASS: all OrcMaps host tests passed\n");

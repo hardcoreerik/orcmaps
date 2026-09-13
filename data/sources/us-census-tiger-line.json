@@ -1,0 +1,29 @@
+{
+  "id": "us-census-tiger-line",
+  "name": "U.S. Census Bureau TIGER/Line Shapefiles",
+  "publisher": "U.S. Census Bureau",
+  "source": {
+    "url": "https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html",
+    "retrieved": "2026-09-13"
+  },
+  "rights": {
+    "license": "Public Domain (U.S. Government Work, 17 U.S.C. §105)",
+    "license_class": "US_FEDERAL_PUBLIC_DOMAIN",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true,
+    "modification_allowed": true,
+    "attribution_required": true,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://www2.census.gov/geo/pdfs/maps-data/data/tiger/tgrshp2024/TGRSHP2024_TechDoc.pdf",
+    "reviewed_date": "2026-09-13",
+    "confidence": "REVIEW_REQUIRED"
+  },
+  "policy": {
+    "official_pack_allowed": false,
+    "clean_pack_allowed": false
+  },
+  "notes": "Public-domain status under 17 U.S.C. §105 is well-established and high-confidence (this is a U.S. federal government work). What is NOT yet directly confirmed from a primary source: the exact wording of the Census Bureau's requested acknowledgment/attribution clause for repackaged distributions, and the restriction on using 'TIGER/Line' within a commercial product's own name. The TechDoc PDF above could not be directly fetched and read during research; conclusions here are from secondary corroboration. Strong candidate for the US-region OrcMaps Clean pack tier (roads/boundaries) once the primary source is directly verified -- do not flip to CONFIRMED/official_pack_allowed=true until someone has actually opened and quoted the TechDoc's terms section."
+}
