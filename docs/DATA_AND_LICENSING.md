@@ -59,7 +59,8 @@ OSM data is ODbL-licensed. Redistributing OSM-derived map packs requires:
 
 ## Per-pack ledger
 
-Following the same pattern as OrcSDR's `docs/DATA_SOURCE_LEDGER.md`, every
+Following the same pattern as OrcSDR's *docs/DATA_SOURCE_LEDGER.md* (a file
+in the `hardcoreerik/OrcSDR` repository, not this one), every
 published map pack should have a ledger entry recording: publisher, retrieval
 method, retrieval timestamp, license/terms review, exact transformation
 command + tool version used to build it, SHA-256, and a removal/takedown

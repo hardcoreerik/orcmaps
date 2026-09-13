@@ -227,6 +227,30 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   not just archives built by OrcMaps' own (not-yet-built) pack builder.
 - ESP-IDF ≥5.0 (`idf_component.yml`).
 
+## Local Development Conventions
+
+- All local branches/worktrees for OrcMaps development are created under
+  `F:\Ai\OrcMaps-Temp\` — the same pattern OrcSDR already uses
+  (`F:\Ai\OrcSDR-Temp\`). The primary clone stays at `F:\Ai\OrcMaps`; a
+  worktree for branch `foo` goes at `F:\Ai\OrcMaps-Temp\OrcMaps-foo` (or
+  similar), never scattered elsewhere.
+- **Documentation Truth CI is a project rule, not optional tooling.**
+  `.github/workflows/documentation-truth.yml` runs
+  `tools/check_documentation_truth.py` on every PR, push to `main`, and
+  weekly on a schedule — adapted directly from OrcSDR's own
+  `documentation-truth.yml`/`tools/check_documentation_truth.py`, which is
+  explicitly credited by the user as part of what has made that project's
+  workflow work well. Every durable-doc edit (`PROJECT_TRUTH.md`,
+  `ARCHITECTURE.md`, `ROADMAP.md`, `STATUS.md`, `README.md`,
+  `LICENSING.md`, `docs/*.md`) should be checked locally
+  (`python tools/check_documentation_truth.py` from the repo root) before
+  committing — the same discipline as running host tests before pushing.
+  See "Document authority" at the end of this file for why this matters:
+  the checker exists specifically to catch the gap between what a doc
+  claims and what the repository actually contains (it already caught and
+  this session fixed a real drift: a test-count claim that said 17 when
+  the actual count was 20).
+
 ## Naming Conventions
 
 - Files/types: `PascalCase` for types (`PmTilesReader`, `MapStyle`),

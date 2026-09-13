@@ -1,5 +1,7 @@
 build/
 build_obj/
+__pycache__/
+*.pyc
 build_host_tests.exe
 *.obj
 *.pdb

@@ -265,6 +265,31 @@ fallback, zoom visibility, Night style's no-blue-light constraint, style
 distinctness, cache-key behavior). All passing as of this writing — see
 `STATUS.md` for how to reproduce.
 
+## Documentation tooling
+
+`tools/check_documentation_truth.py` (tested by
+`tests/test_documentation_truth.py`, 15 unit tests, run via
+`python -m unittest discover -s tests -p 'test_documentation_truth.py'`)
+is a deterministic, stdlib-only checker adapted from OrcSDR's own
+`documentation-truth.yml`/`check_documentation_truth.py`. It runs in CI
+(`.github/workflows/documentation-truth.yml`, on every PR, push to `main`,
+and weekly) and should be run locally
+(`python tools/check_documentation_truth.py`) before committing any change
+to `README.md`, `PROJECT_TRUTH.md`, `ARCHITECTURE.md`, `ROADMAP.md`,
+`STATUS.md`, `LICENSING.md`, or `docs/*.md`. It checks: local Markdown
+links resolve, backtick-quoted repository file references resolve
+(excluding brace-expansion shorthand like `foo.{hpp,cpp}`), this file's
+"Major components" table's empty/implemented directory claims match the
+actual filesystem, documented host-test-function counts match the actual
+count of `void TestXxx(...)` definitions in `tests/host/test_*.cpp`,
+documented component version strings match `idf_component.yml`, an
+unqualified claim that this project lacks CI never survives alongside an
+existing workflow file, no AI-prompt residue leaks into committed docs,
+and any future historical/
+superseded doc carries a visible marker. See `PROJECT_TRUTH.md` "Local
+Development Conventions" for why this exists as a project rule, not
+optional tooling.
+
 ## Build system
 
 - Repo-root `CMakeLists.txt`: ESP-IDF component registration

@@ -26,6 +26,9 @@ decision and a portable, host-tested core.
       ledger (`docs/DEPENDENCY_LEDGER.md`)
 - [x] Four-document project-memory system (this file + `PROJECT_TRUTH.md` +
       `ARCHITECTURE.md` + `STATUS.md`)
+- [x] Documentation Truth CI (`.github/workflows/documentation-truth.yml` +
+      `tools/check_documentation_truth.py`, adapted from OrcSDR's own,
+      with unit tests in `tests/test_documentation_truth.py`)
 
 **Exit criteria:** met.
 

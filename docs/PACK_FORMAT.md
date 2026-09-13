@@ -13,7 +13,7 @@ normative reference for the byte format itself.
 `src/tiles/pmtiles_reader.cpp`) reads the container: header, root/leaf
 directories (gzip or uncompressed), and tile-byte lookup by z/x/y via the
 spec's Hilbert tile-ID addressing. It does **not** yet decode tile
-*contents* (MVT vector geometry) — see `docs/STATUS.md` for exact state.
+*contents* (MVT vector geometry) — see `STATUS.md` for exact state.
 `GetTile()` returns the tile's bytes as stored (still compressed per
 `Header().tile_compression` if applicable); decompressing and interpreting
 those bytes is the render layer's job, not the archive reader's.
@@ -52,4 +52,4 @@ this document, until it's actually implemented. Not yet designed.
 Not yet implemented. Per `docs/ORCMAP1_AUDIT.md` §6, this will be
 directory-scan based (enumerate installed `.pmtiles` files under a known
 maps directory) rather than the fixed 16-slot table OrcSDR's current
-`catalog_sync` uses — tracked in `docs/ROADMAP.md`.
+`catalog_sync` uses — tracked in `ROADMAP.md`.

@@ -6,11 +6,13 @@ standalone repository. It is the baseline OrcMaps must equal or exceed for the
 Lane County vertical slice, and the source of constraints (memory budgets,
 concurrency rules, storage API shape) OrcMaps inherits.
 
-Source files audited: `apps/orcsdr-tab5/ui/offline_map.{hpp,cpp}`,
-`adsb_dashboard.cpp`, `lora_dashboard.cpp`, `catalog_sync.{hpp,cpp}`,
-`orcsdr_storage.{hpp,cpp}`, `wifi_service.{hpp,cpp}`, `settings_app.{hpp,cpp}`,
-`tools/data_catalog/*`, `docs/DATA_CATALOG.md`, `docs/DATA_SOURCE_LEDGER.md`,
-`LICENSING.md`.
+Source files audited, all in the `hardcoreerik/OrcSDR` repository (none of
+these paths exist in this OrcMaps repository):
+*apps/orcsdr-tab5/ui/offline_map.{hpp,cpp}*,
+*adsb_dashboard.cpp*, *lora_dashboard.cpp*, *catalog_sync.{hpp,cpp}*,
+*orcsdr_storage.{hpp,cpp}*, *wifi_service.{hpp,cpp}*, *settings_app.{hpp,cpp}*,
+*tools/data_catalog/**, *docs/DATA_CATALOG.md*, *docs/DATA_SOURCE_LEDGER.md*,
+*LICENSING.md*.
 
 ## 1. ORCMAP1 format (what exists today)
 
@@ -154,11 +156,12 @@ abstraction (`read(offset, dest, length)`, `size()`, `valid()`) fills, with
 an adapter wrapping this exact `orcsdr::storage::FileSystem` for the OrcSDR
 integration.
 
-## 8. Build pipeline (`tools/data_catalog/build_lane_county_map.py`, x2)
+## 8. Build pipeline (OrcSDR's *tools/data_catalog/build_lane_county_map.py*, x2)
 
-Two **different, incomplete-alone** scripts, not one tool duplicated:
+Two **different, incomplete-alone** scripts, not one tool duplicated (both
+in the OrcSDR repository, not this one):
 
-- `tools/data_catalog/build_lane_county_map.py`: consumes raw **Overpass API
+- *tools/data_catalog/build_lane_county_map.py*: consumes raw **Overpass API
   JSON** directly (not a proper `.osm.pbf` extract), does its own
   Ramer-Douglas-Peucker simplification and priority-based greedy packing into
   the 640-segment budget, but has **10 hardcoded labels** — no real label
@@ -180,7 +183,7 @@ queries (rate-limited, not intended for bulk/reproducible builds).
 `hardcoreerik/esp-rtl-sdr` already follows exactly this pattern as a
 standalone, version-pinned dependency: same dual license, own repo, own
 releases. **OrcMaps repeats this established pattern** rather than inventing
-a new one. `docs/DATA_CATALOG.md` / `docs/DATA_SOURCE_LEDGER.md` already
+a new one. OrcSDR's *docs/DATA_CATALOG.md* / *docs/DATA_SOURCE_LEDGER.md* already
 treat maps as a *separate governance track* from the other catalog data
 ("Maps are imported and validated separately... require a separate rights
 and format review") — i.e. current docs already anticipate maps not living

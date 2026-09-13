@@ -14,8 +14,8 @@ real renderer — has not been started yet.
 
 - `hardcoreerik/orcmaps`, `main` branch, single contributor session so far.
 - Local working copy: `F:\Ai\OrcMaps`.
-- Not yet committed to git as of this writing (working tree has all files
-  described below; commit + push is the immediate next action).
+- Committed and pushed to `origin/main` (bootstrap commit plus a follow-up
+  docs fix). Working tree clean as of this writing.
 - OrcSDR's own branch (`grok/orcmap1-readable-map`, worktree
   `F:\Ai\OrcSDR-Temp\OrcSDR-orcmap1-readable-map`) is **untouched** by this
   work — no integration has started, per `ROADMAP.md` Phase 4 not begun.
@@ -33,7 +33,7 @@ real renderer — has not been started yet.
 - `orcmap::MapStyle` + 4 built-in styles (`orcsdr-dark`, `standard-light`,
   `high-contrast-field`, `night-red-safe`) + `ResolveFeatureStyle()` +
   `StyleManager` runtime switching + `RenderedTileCacheKey`.
-- Host test suite: **17 test functions, all passing.**
+- Host test suite: **20 test functions, all passing.**
 
 ## What is partially working
 
@@ -75,8 +75,8 @@ coordinates" as a cautionary note for anyone touching that function again.
 
 ## Current performance measurements
 
-None yet. No renderer, no real pack, no on-device build. `docs/
-PERFORMANCE.md` is a placeholder. The only real numbers in the repo are
+None yet. No renderer, no real pack, no on-device build.
+`docs/PERFORMANCE.md` is a placeholder. The only real numbers in the repo are
 cited third-party numbers from the yuiseki precedent, in
 `docs/FORMAT_DECISION.md` — not OrcMaps' own measurements.
 
@@ -90,7 +90,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 17 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 20 test functions
 covering geo math, PMTiles container parsing, and the style system — see
 `ARCHITECTURE.md` "Testing architecture" for the full list).
 
@@ -115,24 +115,38 @@ version `0.1.0` but nothing consumes it yet.
 5. Style system built now (ahead of the original phase ordering) because
    it was explicitly requested mid-session; `MapStyle`/`ResolveFeatureStyle`
    API is considered stable enough for a renderer to build against.
+6. Documentation Truth CI added, adapted from OrcSDR's own
+   (`.github/workflows/documentation-truth.yml`,
+   `tools/check_documentation_truth.py`, `tests/test_documentation_truth.py`,
+   15 unit tests) — see `PROJECT_TRUTH.md` "Local Development Conventions".
+   Running it against this repo for the first time found and fixed real
+   drift: a stale host-test-count claim (documented count was three lower
+   than the actual number of test functions) and several path references
+   that incorrectly nested two root-level files under the docs directory.
+7. Local worktree convention set: `F:\Ai\OrcMaps-Temp\`, matching OrcSDR's
+   `F:\Ai\OrcSDR-Temp\` pattern.
 
 ## Next 3-7 actions
 
-1. Commit and push this work to `hardcoreerik/orcmaps` `main`.
-2. Start Phase 2: pick/build a minimal MVT (vector tile / protobuf)
+1. Start Phase 2: pick/build a minimal MVT (vector tile / protobuf)
    decoder — evaluate hand-rolled minimal parser vs. an existing small
    library before choosing, per `docs/DEPENDENCY_LEDGER.md`'s "candidates
    under evaluation" entry.
-3. Build a real (small) OSM-derived `.pmtiles` archive for Lane County
+2. Build a real (small) OSM-derived `.pmtiles` archive for Lane County
    using a proper extract pipeline (Geofabrik + Planetiler or tippecanoe),
    to replace the synthetic fixture as the thing actually being decoded.
-4. Write `adapters/esp_idf`'s `ByteSource` once an ESP-IDF environment is
+3. Write `adapters/esp_idf`'s `ByteSource` once an ESP-IDF environment is
    available.
-5. Write `adapters/m5gfx`'s Color→RGB565 conversion and draw-call backend.
-6. Get a first ESP-IDF build of the `orcmap` component actually compiling
+4. Write `adapters/m5gfx`'s Color→RGB565 conversion and draw-call backend.
+5. Get a first ESP-IDF build of the `orcmap` component actually compiling
    against a real ESP-IDF SDK (currently unverified).
-7. Record real performance numbers in `docs/PERFORMANCE.md` as soon as
+6. Record real performance numbers in `docs/PERFORMANCE.md` as soon as
    there's anything to measure.
+
+Ongoing discipline (not a one-time action): keep
+`tools/check_documentation_truth.py` passing on every change — run it
+locally before committing, same workflow as OrcSDR's own "Documentation
+Truth" CI.
 
 ## Files / areas currently in motion
 

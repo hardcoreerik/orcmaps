@@ -89,7 +89,7 @@ step-function) zoom resolver — see `ResolveFeatureStyle()`'s doc comment.
 no dependency on M5GFX, LovyanGFX, LVGL, or any display API. Converting to
 a display's native pixel format (e.g. RGB565 for M5GFX/LovyanGFX) is an
 **adapter's** job, not the style system's — see `adapters/m5gfx` (not yet
-implemented; tracked in `docs/ROADMAP.md`). This keeps the same
+implemented; tracked in `ROADMAP.md`). This keeps the same
 `MapStyle`/`ResolveFeatureStyle()` API usable by a future LVGL or host-side
 test renderer without change.
 
@@ -127,8 +127,8 @@ ever happens.
 If/when OrcMaps caches pre-rendered tiles (e.g. as RGB565 on SD — see
 `docs/FORMAT_DECISION.md`'s hybrid-rendering decision), the cache key
 **must** include style identity, or a style switch would incorrectly
-redisplay a tile rendered under the previous style. `include/orcmap/
-cache_key.hpp` defines `RenderedTileCacheKey`:
+redisplay a tile rendered under the previous style.
+`include/orcmap/cache_key.hpp` defines `RenderedTileCacheKey`:
 
 ```
 pack_id_hash, z, x, y, style_id_hash, style_version, renderer_version
@@ -165,7 +165,7 @@ own engine-level default (`orcmap::DefaultStyle()`) is `standard-light`,
 since OrcMaps must remain useful to consumers with no reason to want a
 tactical/RF aesthetic. A future OrcSDR Settings → Maps → Map Style screen
 would just call `StyleManager::SetStyle()`/`SetStyleById()` — not yet built
-(tracked in `docs/ROADMAP.md`), since the ask was to get the underlying API
+(tracked in `ROADMAP.md`), since the ask was to get the underlying API
 right first.
 
 ## Testing
@@ -188,6 +188,6 @@ build`):
   id, and are identical for the same (pack, tile, style) triple
 
 Not yet testable: actual rendered output (no renderer exists yet — see
-`docs/STATUS.md`). Once a renderer exists, the natural next test is
+`STATUS.md`). Once a renderer exists, the natural next test is
 rendering the same viewport under multiple styles and asserting the outputs
 differ (a hash-of-pixels comparison), per the original design brief.
