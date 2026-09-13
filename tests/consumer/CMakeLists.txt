@@ -37,6 +37,7 @@ target_include_directories(orcmap_engine PUBLIC
 )
 target_compile_definitions(orcmap_engine PRIVATE
     MINIZ_NO_DEFLATE_APIS
+    MINIZ_NO_ZLIB_APIS
     MINIZ_NO_ARCHIVE_APIS
     $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
 )

@@ -22,6 +22,7 @@ idf_component_register(
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     MINIZ_NO_DEFLATE_APIS
+    MINIZ_NO_ZLIB_APIS
     MINIZ_NO_ARCHIVE_APIS
 )
 

@@ -28,6 +28,7 @@ add_executable(orcmap_host_tests
 
 target_compile_definitions(orcmap_host_tests PRIVATE
     MINIZ_NO_DEFLATE_APIS
+    MINIZ_NO_ZLIB_APIS
     MINIZ_NO_ARCHIVE_APIS
     $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
 )
