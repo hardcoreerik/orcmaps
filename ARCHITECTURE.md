@@ -48,12 +48,12 @@ guessing at it — see `ROADMAP.md` for sequencing.
 | Vector tile (MVT) decoder | `include/orcmap/mvt.hpp`, `src/tiles/mvt_decoder.cpp` | Implemented (schema-agnostic container decode only; no FeatureKind mapping) |
 | `orcmap::MapStyle` / style system | `include/orcmap/style.hpp`, `include/orcmap/color.hpp`, `include/orcmap/cache_key.hpp`, `src/render/style.cpp` | Implemented |
 | Renderer core | `src/render/` | Not implemented (only style.cpp exists in this dir so far) |
-| M5GFX adapter | `adapters/m5gfx/` | Not implemented (empty dir) |
+| M5GFX adapter | `adapters/m5gfx/` | Implemented (initial/minimal LovyanGFX geometry rendering backend) |
 | Overlay primitives | `src/overlays/` | Not implemented (empty dir) |
 | Tile/rendered-tile cache | `src/cache/` | Not implemented (empty dir); `RenderedTileCacheKey` shape exists in `include/orcmap/cache_key.hpp` |
 | Pack builder | `tools/pack-builder/` | Not implemented (empty dir) |
 | Pack inspector/verifier | `tools/pack-inspect/`, `tools/pack-verify/` | Not implemented (empty dirs) |
-| Examples | `examples/m5stack-tab5/`, `examples/generic-esp32/` | Not implemented (empty dirs) |
+| Examples | `examples/m5stack-tab5/`, `examples/generic-esp32/` | Partial: `generic-esp32` implemented; `m5stack-tab5` not yet implemented |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles` (+ `generate_fixture.py`) | Implemented |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |

@@ -6,7 +6,9 @@
 //
 // Deliberately does NOT exercise file I/O (no adapters/esp_idf ByteSource
 // exists yet -- that's the next real gap, not this example's job) or
-// rendering (no adapters/m5gfx exists yet either). Extend this example as
+// The generic smoke test does not yet exercise rendering; the initial
+// adapters/m5gfx backend now exists, but this example currently validates
+// the portable core and ESP-IDF integration only.
 // those adapters are built, per README.md's stated intent for
 // examples/generic-esp32.
 
