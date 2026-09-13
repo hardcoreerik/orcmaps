@@ -1,0 +1,43 @@
+# Standalone host unit tests (no ESP-IDF). Build directly:
+#   cmake -S tests/host -B build -G "Visual Studio 18 2026"   (or any generator)
+#   cmake --build build --config Release
+#   ctest --test-dir build -C Release --output-on-failure
+cmake_minimum_required(VERSION 3.16)
+project(orcmaps_host_tests LANGUAGES CXX C)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(ORCMAP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+
+add_executable(orcmap_host_tests
+    main.cpp
+    test_geo.cpp
+    test_pmtiles.cpp
+    test_style.cpp
+    ${ORCMAP_ROOT}/src/core/geo.cpp
+    ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
+    ${ORCMAP_ROOT}/src/render/style.cpp
+    ${ORCMAP_ROOT}/adapters/host/file_byte_source.cpp
+    ${ORCMAP_ROOT}/third_party/miniz/miniz.c
+    ${ORCMAP_ROOT}/third_party/miniz/miniz_tinfl.c
+)
+
+target_compile_definitions(orcmap_host_tests PRIVATE
+    MINIZ_NO_DEFLATE_APIS
+    MINIZ_NO_ARCHIVE_APIS
+    $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
+)
+
+target_include_directories(orcmap_host_tests PRIVATE
+    ${ORCMAP_ROOT}/include
+    ${ORCMAP_ROOT}/third_party/miniz
+    ${ORCMAP_ROOT}/adapters/host
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+enable_testing()
+add_test(
+    NAME orcmap_host_tests
+    COMMAND orcmap_host_tests ${ORCMAP_ROOT}/tests/fixtures/tiny.pmtiles
+)

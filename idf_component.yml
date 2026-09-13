@@ -1,0 +1,16 @@
+description: "OrcMaps -- offline map engine for embedded devices"
+url: "https://github.com/hardcoreerik/orcmaps"
+repository: "https://github.com/hardcoreerik/orcmaps.git"
+documentation: "https://github.com/hardcoreerik/orcmaps/tree/main/docs"
+issues: "https://github.com/hardcoreerik/orcmaps/issues"
+license: "AGPL-3.0-only"
+version: "0.1.0"
+
+# OrcMaps' portable core (src/core, src/tiles, src/storage, src/cache,
+# src/overlays) has no ESP-IDF dependency and is host-testable -- see
+# tests/host and docs/ARCHITECTURE.md "Testing Architecture". This
+# manifest exists so ESP-IDF projects (OrcSDR included) can depend on
+# OrcMaps the same way OrcSDR already depends on hardcoreerik/esp-rtl-sdr:
+# a version-pinned external component, not in-tree code.
+dependencies:
+  idf: ">=5.0"

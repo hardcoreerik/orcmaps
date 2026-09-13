@@ -1,0 +1,10 @@
+build/
+build_obj/
+build_host_tests.exe
+*.obj
+*.pdb
+*.ilk
+.vs/
+.vscode/
+CMakeFiles/
+CMakeCache.txt
