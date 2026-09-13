@@ -157,13 +157,13 @@ basemaps migrate off `offline_map.cpp`.
       (`map.SetStyle(orcmap::BuiltinStyle::kOrcSdrDark)`), per
       `docs/STYLING.md`
 
-**Risk:** OrcMaps requires ESP-IDF `>=6.1,<7.0`; OrcSDR's current manifest
-pins `>=5.5.0,<5.6.0` — see `PROJECT_TRUTH.md` "Compatibility Goals" for
-the full note. **Expected resolution: OrcSDR ports to the latest ESP-IDF
-itself; OrcMaps' requirement is not expected to move down to meet OrcSDR's
-current pin.** This phase is therefore gated on an OrcSDR-side upgrade —
-confirm that's actually landed before starting Phase 4 work, not after
-hitting a build failure.
+**Note (resolved 2026-09-13, previously recorded here as a risk):**
+OrcMaps' declared ESP-IDF floor is `>=5.0` — deliberately broad, so it
+does not block on OrcSDR's own `>=5.5.0,<5.6.0` pin. See
+`PROJECT_TRUTH.md` "Compatibility Goals" for the distinction between that
+floor and the newer toolchain (latest ESP-IDF 6.x) OrcMaps is actually
+developed/tested against. No ESP-IDF version conflict currently blocks
+this phase on that basis.
 
 ## Phase 5 — Full-screen map application
 

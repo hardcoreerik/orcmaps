@@ -13,12 +13,13 @@ version: "0.1.0"
 # OrcMaps the same way OrcSDR already depends on hardcoreerik/esp-rtl-sdr:
 # a version-pinned external component, not in-tree code.
 #
-# Targets the latest ESP-IDF 6.x line for robustness (newer toolchain,
-# security fixes, longer support window) rather than floating on the
-# oldest still-supported release. This is NEWER than what OrcSDR itself
-# currently builds against (apps/orcsdr-tab5/main/idf_component.yml pins
-# "idf: >=5.5.0,<5.6.0" as of this writing) -- see PROJECT_TRUTH.md
-# "Compatibility Goals" for that tension and what it means for Phase 4
-# (OrcSDR integration) until OrcSDR itself moves to IDF 6.x.
+# This floor is deliberately broad, NOT the version we develop against --
+# see PROJECT_TRUTH.md "Compatibility Goals" for the distinction. We build
+# and test OrcMaps itself against the latest ESP-IDF 6.x (currently 6.1),
+# but the declared minimum here stays as low as the actual code requires,
+# so downstream projects on an older ESP-IDF (OrcSDR currently targets
+# >=5.5.0,<5.6.0) aren't forced to upgrade just to adopt OrcMaps. Raise
+# this floor only when a specific ESP-IDF API OrcMaps actually uses
+# requires it -- not preemptively.
 dependencies:
-  idf: ">=6.1,<7.0"
+  idf: ">=5.0"

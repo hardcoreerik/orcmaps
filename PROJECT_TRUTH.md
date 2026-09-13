@@ -309,27 +309,26 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
 - A properly-licensed `.pmtiles` archive built by any standard tool
   (Planetiler, tippecanoe, `pmtiles` CLI) should be a valid OrcMaps input,
   not just archives built by OrcMaps' own (not-yet-built) pack builder.
-- **ESP-IDF `>=6.1,<7.0`** (`idf_component.yml`) — the latest stable
-  ESP-IDF 6.x line as of 2026-09-13 (v6.1, released 2026-08-27; confirmed
-  via the GitHub releases API, not assumed). Chosen deliberately for
-  robustness — newest toolchain, current security fixes, longest support
-  window — over floating on the oldest still-supported release.
-  **Known tension, recorded rather than hidden:** OrcSDR's own current
-  manifest (`apps/orcsdr-tab5/main/idf_component.yml` in the OrcSDR repo)
-  pins `idf: ">=5.5.0,<5.6.0"` — *older* than what OrcMaps now requires.
-  This means OrcSDR cannot actually consume OrcMaps as a real dependency
-  (`ROADMAP.md` Phase 4) until OrcSDR itself moves to ESP-IDF 6.x, which
-  is not yet scheduled anywhere. This was a deliberate choice, not an
-  oversight — the alternative (targeting IDF 5.5 to match OrcSDR today)
-  would mean re-deciding this the moment OrcSDR upgrades. **Expected
-  resolution direction, confirmed 2026-09-13: OrcSDR is expected to
-  eventually port to the latest ESP-IDF itself — OrcMaps' requirement is
-  not expected to be loosened to chase OrcSDR's current, older pin.**
-  Phase 4 (OrcSDR integration) is therefore understood to be gated on an
-  OrcSDR-side ESP-IDF upgrade, not an OrcMaps-side downgrade. If that
-  expectation ever changes, update this note the same way any other
-  decision here gets updated — don't let Phase 4 work start on the
-  opposite assumption.
+- **Development toolchain vs. declared compatibility floor — two
+  different things, deliberately kept separate (confirmed 2026-09-13).**
+  We build and test OrcMaps itself against the **latest ESP-IDF 6.x**
+  (currently v6.1, released 2026-08-27, confirmed via the GitHub releases
+  API) — that's the toolchain a contributor should have installed, and
+  what CI would use once an ESP-IDF build stage exists (`STATUS.md`
+  blockers — no such CI stage exists yet). It is **not** the same thing as
+  what `idf_component.yml` declares as OrcMaps' minimum required ESP-IDF
+  version for *consumers*.
+- **`idf_component.yml` declares `idf: ">=5.0"`** — deliberately broad, so
+  the widest practical range of ESP-IDF projects can adopt OrcMaps,
+  including OrcSDR's own current manifest
+  (`apps/orcsdr-tab5/main/idf_component.yml` pins `>=5.5.0,<5.6.0`, which
+  already satisfies this floor — there is no version conflict blocking
+  Phase 4 on this basis). **Do not raise this floor to chase the dev
+  toolchain version.** Raise it only when a specific ESP-IDF API OrcMaps'
+  code actually calls requires a newer minimum — a decision made from a
+  real compile error, not preemptively "for robustness." Preferring the
+  highest practical compatibility for downstream projects is itself the
+  robustness goal here, not a newer version number for its own sake.
 
 ## Public API and Versioning
 
