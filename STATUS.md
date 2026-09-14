@@ -296,11 +296,19 @@ python -m unittest discover -s tests -p 'test_data_provenance.py'
 ```
 
 Results as of this writing: both checkers report `0 errors` against the
-real repository; 19 documentation-truth unit tests pass, 28
-data-provenance unit tests pass. (These Python counts are **not** verified
-by Documentation Truth — its count check only covers host C++ `void Test*`
-functions, so a stale Python count can drift silently. It did: this line
-said 20 until 2026-09-14.)
+real repository; 24 documentation-truth unit tests pass, 28
+data-provenance unit tests pass. These Python counts **are** now verified
+by Documentation Truth (`_check_python_test_count`), which recounts every
+`tests/test_*.py` suite and fails on a stale number. That check exists
+because this line silently said 20 against an actual 28 until
+2026-09-14 — the host C++ count check did not cover Python suites.
+
+Two further Python suites exist — `tests/test_regional_pack_builder.py`
+(4 tests) and `tests/test_world_overview_acquisition.py` (5 tests). Their
+counts are verified whenever a doc cites them, but **neither suite is run
+by any CI workflow**: `documentation-truth.yml` and `data-provenance.yml`
+each discover only their own single `-p` pattern. Those 9 tests are
+local-only today.
 
 ## Integration status
 

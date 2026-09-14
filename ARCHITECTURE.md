@@ -492,7 +492,7 @@ Development Conventions" for why both exist as project rules, not optional
 tooling:
 
 - **`tools/check_documentation_truth.py`** (tested by
-  `tests/test_documentation_truth.py`, 17 unit tests, run via
+  `tests/test_documentation_truth.py`, 24 unit tests, run via
   `python -m unittest discover -s tests -p 'test_documentation_truth.py'`).
   Runs in CI (`.github/workflows/documentation-truth.yml`, on every PR,
   push to `main`, and weekly). Checks: local Markdown links resolve,
@@ -502,15 +502,20 @@ tooling:
   filesystem, documented host-test-function counts match the actual count
   of `void TestXxx(...)` definitions in `tests/host/test_*.cpp` (masking
   fenced code blocks first, so an example value in a `docs/*.md` sample
-  JSON block can't be misread as a real claim), documented component
-  version strings match `idf_component.yml` (same code-fence masking), an
+  JSON block can't be misread as a real claim), **documented Python
+  unit-test counts match each `tests/test_*.py` suite's actual
+  `def test_*` methods** (suites discovered by filename, so a new suite
+  needs no checker edit; both doc phrasings are recognized — STATUS.md's
+  "28 data-provenance unit tests" slug form and this file's
+  "`tests/test_data_provenance.py`, 28 unit tests" filename form), documented
+  component version strings match `idf_component.yml` (same code-fence masking), an
   unqualified claim that this project lacks CI never survives alongside an
   existing workflow file, no AI-prompt residue leaks into committed docs,
   any future historical/superseded doc carries a visible marker, and the
   provenance policy documents below actually exist and `PROJECT_TRUTH.md`
   still states the IP-safety principle.
 - **`tools/check_data_provenance.py`** (tested by
-  `tests/test_data_provenance.py`, 20 unit tests) is the sibling checker
+  `tests/test_data_provenance.py`, 28 unit tests) is the sibling checker
   for map-data licensing policy rather than documentation consistency —
   see "Data provenance and attribution" above for what it validates. It
   does not decide what a license means; it enforces decisions already

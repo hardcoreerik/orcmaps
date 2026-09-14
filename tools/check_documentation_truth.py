@@ -252,6 +252,75 @@ def _check_test_function_count(root: Path, report: Report) -> None:
         report.passes.append(f"Documented host test-function count matches actual ({actual})")
 
 
+_PYTHON_TEST_METHOD_PATTERN = re.compile(r"^[ \t]+def (test_\w+)\s*\(", re.M)
+
+
+def _python_suite_claim_patterns(stem: str) -> tuple[re.Pattern, ...]:
+    """Builds the doc-claim patterns for one Python suite from its filename.
+
+    Both phrasings actually used in this repo's docs are recognized:
+
+    1. slug form -- STATUS.md's "28 data-provenance unit tests". Either
+       separator is accepted ("data provenance" too), so a harmless
+       rewording cannot silently disable the check.
+    2. filename form -- ARCHITECTURE.md's "`tests/test_data_provenance.py`,
+       28 unit tests". Two stale counts hid in this phrasing until
+       2026-09-14 because the slug form alone did not match it.
+    """
+    words = stem[len("test_"):].split("_") if stem.startswith("test_") else [stem]
+    slug = r"[-\s]".join(re.escape(word) for word in words)
+    return (
+        re.compile(rf"(\d+)\s+{slug}\s+unit\s+tests?", re.I),
+        re.compile(rf"{re.escape(stem)}\.py[^\n]{{0,40}}?(\d+)\s+unit\s+tests?", re.I),
+    )
+
+
+def _check_python_test_count(root: Path, report: Report) -> None:
+    """Recounts each `tests/test_*.py` suite and verifies documented sizes.
+
+    The Python CI checkers have their own unittest suites, and STATUS.md
+    cites their sizes ("19 documentation-truth unit tests pass, 28
+    data-provenance unit tests pass"). Those numbers were previously
+    unverified -- `_check_test_function_count` above only covers host C++
+    `void Test*` functions -- and one drifted silently (STATUS.md claimed
+    20 against an actual 28) until a manual HEAD inspection caught it on
+    2026-09-14. This closes that gap.
+
+    Suites are discovered by filename rather than hardcoded, so adding a
+    new `tests/test_*.py` is covered without editing this checker. Code
+    fences are masked first, for the same reason the component-version
+    check masks them: an example count inside a ```-block is not a claim
+    about this repository.
+    """
+    tests_dir = root / "tests"
+    if not tests_dir.is_dir():
+        return
+    checked_any = False
+    counted: list[str] = []
+    for py in sorted(tests_dir.glob("test_*.py")):
+        actual = len(_PYTHON_TEST_METHOD_PATTERN.findall(py.read_text(encoding="utf-8")))
+        counted.append(f"{py.stem}={actual}")
+        patterns = _python_suite_claim_patterns(py.stem)
+        for path in _current_markdown(root):
+            text = path.read_text(encoding="utf-8")
+            masked = _mask_code_fences(text)
+            for pattern in patterns:
+                for match in pattern.finditer(masked):
+                    checked_any = True
+                    documented = int(match.group(1))
+                    if documented != actual:
+                        report.add(
+                            "ERROR", "python-test-count", path.relative_to(root).as_posix(),
+                            _line(text, match.start()),
+                            f"documented {py.stem} unit-test count ({documented}) does not "
+                            f"match actual count in tests/{py.name} ({actual})",
+                        )
+    if checked_any and not any(item.code == "python-test-count" for item in report.errors):
+        report.passes.append(
+            f"Documented Python unit-test counts match actual ({', '.join(counted)})"
+        )
+
+
 _COMPONENT_VERSION_PATTERN = re.compile(r"^\s*version\s*:\s*[\"']?([0-9][\w.\-]*)", re.M)
 
 
@@ -392,6 +461,7 @@ def run_checks(root: Path) -> Report:
         _check_file_references,
         _check_component_table_dirs,
         _check_test_function_count,
+        _check_python_test_count,
         _check_component_version,
         _check_provenance_docs_exist,
         _check_resolved_claims,

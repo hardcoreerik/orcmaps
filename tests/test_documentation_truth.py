@@ -16,6 +16,18 @@ class DocumentationTruthTests(unittest.TestCase):
             "void TestOne() {}\nvoid TestTwo() {}\n",
         )
         self.write("src/core/geo.cpp", "// stub for file-reference resolution\n")
+        # A Python suite with 3 test methods -> slug "demo-suite". The
+        # fixture STATUS.md deliberately does not cite its count, so the
+        # check stays silent unless a test opts in by claiming a number.
+        self.write(
+            "tests/test_demo_suite.py",
+            "import unittest\n\n\n"
+            "class DemoTests(unittest.TestCase):\n"
+            "    def helper_not_a_test(self):\n        pass\n\n"
+            "    def test_alpha(self):\n        pass\n\n"
+            "    def test_beta(self):\n        pass\n\n"
+            "    def test_gamma(self):\n        pass\n",
+        )
         self.write("README.md", "OrcMaps.\n")
         self.write(
             "STATUS.md",
@@ -95,6 +107,65 @@ class DocumentationTruthTests(unittest.TestCase):
 
     def test_correct_test_count_claim_passes(self):
         self.assertEqual([], self.report().errors)
+
+    def test_correct_python_test_count_claim_passes(self):
+        self.write(
+            "STATUS.md",
+            "Host test suite: 2 test functions, all passing.\n"
+            "Declares version 0.1.0.\n"
+            "3 demo-suite unit tests pass.\n",
+        )
+        self.assertEqual([], self.report().errors)
+
+    def test_stale_python_test_count_claim_fails(self):
+        self.write(
+            "STATUS.md",
+            "Host test suite: 2 test functions, all passing.\n"
+            "Declares version 0.1.0.\n"
+            "99 demo-suite unit tests pass.\n",
+        )
+        self.assertTrue(
+            any(item.code == "python-test-count" for item in self.report().errors)
+        )
+
+    def test_python_test_count_claim_accepts_space_separator(self):
+        # "demo suite" instead of "demo-suite" must still be checked, so a
+        # harmless phrasing change cannot silently disable the check.
+        self.write(
+            "STATUS.md",
+            "Host test suite: 2 test functions, all passing.\n"
+            "Declares version 0.1.0.\n"
+            "99 demo suite unit tests pass.\n",
+        )
+        self.assertTrue(
+            any(item.code == "python-test-count" for item in self.report().errors)
+        )
+
+    def test_python_test_count_inside_code_fence_is_not_a_claim(self):
+        self.write(
+            "STATUS.md",
+            "Host test suite: 2 test functions, all passing.\n"
+            "Declares version 0.1.0.\n"
+            "```\n99 demo-suite unit tests pass.\n```\n",
+        )
+        self.assertFalse(
+            any(item.code == "python-test-count" for item in self.report().errors)
+        )
+
+    def test_python_test_count_ignores_non_test_methods(self):
+        # The fixture suite has a `helper_not_a_test` method; counting it
+        # would make the correct claim of 3 fail.
+        self.write(
+            "STATUS.md",
+            "Host test suite: 2 test functions, all passing.\n"
+            "Declares version 0.1.0.\n"
+            "3 demo-suite unit tests pass.\n",
+        )
+        report = self.report()
+        self.assertFalse(any(item.code == "python-test-count" for item in report.errors))
+        self.assertTrue(
+            any("test_demo_suite=3" in message for message in report.passes)
+        )
 
     def test_stale_component_version_claim_fails(self):
         self.write(
