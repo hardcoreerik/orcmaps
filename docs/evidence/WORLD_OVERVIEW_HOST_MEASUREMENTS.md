@@ -78,3 +78,46 @@ Recommended, but not yet frozen product policy:
 
 Natural Earth boundary geometry is reproduced as supplied; this build does not
 independently assert geopolitical positions.
+
+## Firmware-embedded fallback experiment
+
+The verified z8 master was not rebuilt. Official go-pmtiles v1.28.2 derived
+z4 and z5 directly from that master. Each local candidate has the same
+manifest/checksum triplet as z6/z7/z8 and records z8 as its source artifact.
+
+| Candidate | Exact bytes | MiB | SHA-256 | Addressed tiles | Entries | Contents |
+|---|---:|---:|---|---:|---:|---:|
+| z0-z4 | 871,343 | 0.83 | `9aea08772bacf1f024d1da90cc52aa8fcf0b0e37405415dc7c91e75e56596f0f` | 341 | 312 | 265 |
+| z0-z5 | 1,492,862 | 1.42 | `6f5c37f6cb505315e4c8a1d74efcf634fdb547b59128422ebf71c8ecf99addcc` | 1,365 | 1,007 | 787 |
+| z0-z6 | 4,833,728 | 4.61 | `ae653cd1f422681a0fe4a401b1e7a914208983ff4822304aaad03dffd1b22241` | 5,461 | 3,054 | 2,411 |
+
+Archive-wide decompressed tile distributions:
+
+| Candidate | Mean | Median | p95 | Maximum | Representative Oregon tile |
+|---|---:|---:|---:|---:|---:|
+| z4 | 3,256 B | 1,076 B | 12,631 B | 38,817 B | 9,782 B / 95 features |
+| z5 | 1,355 B | 249 B | 5,808 B | 38,817 B | 4,074 B / 54 features |
+| z6 | 1,103 B | 55 B | 5,502 B | 38,817 B | 2,440 B / 30 features |
+
+Seven measured runs after one warm-up, 320x170 `standard-light`, Oregon center,
+at each candidate's maximum zoom:
+
+| Candidate | Frame | Lookup | Inflate | Decode | Translate | Classify | Render |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| z4 | 2.246 ms | 0.021 ms | 0.141 ms | 0.420 ms | 0.096 ms | 0.001 ms | 0.376 ms |
+| z5 | 1.402 ms | 0.009 ms | 0.028 ms | 0.103 ms | 0.019 ms | <0.001 ms | 0.146 ms |
+| z6 | 1.832 ms | 0.021 ms | 0.099 ms | 0.241 ms | 0.038 ms | 0.001 ms | 0.276 ms |
+
+Twelve local generic-framebuffer renders cover world, North America, Pacific
+Northwest, and Oregon for z4/z5/z6. z4 retains recognizable coastlines, major
+water, country/state boundaries, and useful continental context. z5 costs
+621,519 additional bytes (71% more) but does not materially improve a fallback
+whose job is orientation rather than local navigation. z6 is useful as the
+small downloadable overview but is unnecessarily large for firmware fallback.
+
+**Recommendation: designate z0-z4, exactly 871,343 bytes, as the candidate
+`OrcMaps Embedded World`.** Its data size is suitable for pursuing firmware
+integration. Actual firmware-partition fit, boot access, and hardware render
+remain separate unverified gates; this experiment did not modify firmware or
+flash a device. The normal-user recommendation remains z7 with regional detail
+beginning around z8.
