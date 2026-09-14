@@ -305,7 +305,9 @@ bool DecodeFeature(const uint8_t* data, size_t length,
 
 // --- Layer -------------------------------------------------------------
 
-bool DecodeLayer(const uint8_t* data, size_t length, MvtLayer* out) {
+bool DecodeLayer(const uint8_t* data, size_t length,
+                 const MvtDecodeOptions& options, MvtLayer* out,
+                 bool* keep) {
   Reader r{data, length};
   std::vector<std::string> keys;
   std::vector<MvtValue> values;
@@ -366,6 +368,13 @@ bool DecodeLayer(const uint8_t* data, size_t length, MvtLayer* out) {
     }
   }
   if (!has_name) return false;
+  if (options.include_layer != nullptr &&
+      !options.include_layer(out->name.c_str(), out->name.size(),
+                             options.include_layer_ctx)) {
+    *keep = false;
+    return true;
+  }
+  *keep = true;
 
   out->features.reserve(feature_blobs.size());
   for (const auto& [feature_data, feature_len] : feature_blobs) {
@@ -379,7 +388,12 @@ bool DecodeLayer(const uint8_t* data, size_t length, MvtLayer* out) {
 }  // namespace
 
 bool DecodeMvtTile(const uint8_t* data, size_t length, MvtTile* out) {
-  if (data == nullptr) return false;
+  return DecodeMvtTile(data, length, MvtDecodeOptions{}, out);
+}
+
+bool DecodeMvtTile(const uint8_t* data, size_t length,
+                   const MvtDecodeOptions& options, MvtTile* out) {
+  if (data == nullptr || out == nullptr) return false;
   out->layers.clear();
 
   Reader r{data, length};
@@ -389,10 +403,15 @@ bool DecodeMvtTile(const uint8_t* data, size_t length, MvtTile* out) {
     if (field_number == 3) {  // Tile.layers
       const uint8_t* layer_data;
       size_t layer_len;
-      if (wire_type != 2 || !r.ReadLengthDelimited(&layer_data, &layer_len)) return false;
+      if (wire_type != 2 || !r.ReadLengthDelimited(&layer_data, &layer_len)) {
+        return false;
+      }
       MvtLayer layer;
-      if (!DecodeLayer(layer_data, layer_len, &layer)) return false;
-      out->layers.push_back(std::move(layer));
+      bool keep = true;
+      if (!DecodeLayer(layer_data, layer_len, options, &layer, &keep)) {
+        return false;
+      }
+      if (keep) out->layers.push_back(std::move(layer));
     } else {
       if (!r.SkipField(wire_type)) return false;
     }

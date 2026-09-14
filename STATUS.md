@@ -111,7 +111,7 @@ extract.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **101 test functions, all passing**.
+- Host test suite: **104 test functions, all passing**.
 - `EnumerateVisibleTiles` (unique TileIds, X wrap, Y clamp).
   `TileScreenMap` uses shortest wrapped X delta. Overzoom still rejected.
 - `RenderTarget::DrawLine` takes `width_px` from `MapPaint`. Shared
@@ -147,8 +147,8 @@ extract.
 
 ## What is being worked on
 
-Nothing — Tab5 Springfield hardware PASS published. Next is decoder
-speed. Not OrcSDR.
+Nothing — no-text MVT layer filter on Tab5 (cold frame 11.3 s → 4.4 s).
+Not OrcSDR.
 
 ## Current blockers
 
@@ -198,7 +198,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 101 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 104 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`

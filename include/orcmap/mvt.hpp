@@ -82,11 +82,22 @@ struct MvtTile {
   std::vector<MvtLayer> layers;
 };
 
+// Optional decode policy. `include_layer` is a non-owning function pointer
+// (no std::function). Null include_layer decodes every layer (legacy).
+// The callback must not assume OpenMapTiles names; callers supply policy.
+// Skipped layers are omitted from `out` (no partial features).
+struct MvtDecodeOptions {
+  bool (*include_layer)(const char* name, size_t name_len, void* ctx) = nullptr;
+  void* include_layer_ctx = nullptr;
+};
+
 // Decodes one MVT tile's raw bytes (after DecompressPayload if the
 // archive stored gzip/etc.). Returns false on any
 // structural problem (truncated data, invalid varint, malformed geometry
 // command stream, tag index out of range) -- never throws, never reads
 // past `length`.
 bool DecodeMvtTile(const uint8_t* data, size_t length, MvtTile* out);
+bool DecodeMvtTile(const uint8_t* data, size_t length,
+                   const MvtDecodeOptions& options, MvtTile* out);
 
 }  // namespace orcmap

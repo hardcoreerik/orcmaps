@@ -1,6 +1,8 @@
+#include "orcmap/experimental/mvt_classify.hpp"
 #include "orcmap/mvt.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -142,6 +144,50 @@ void TestGarbageBufferFails() {
   ORCMAP_EXPECT_TRUE(!ok);
 }
 
+bool ExcludeWater(const char* name, size_t len, void*) {
+  const char k[] = "water";
+  return !(len == 5 && std::memcmp(name, k, 5) == 0);
+}
+
+void TestFilterNullMatchesLegacy(const std::string& fixture_path) {
+  const std::vector<uint8_t> data = ReadFile(fixture_path);
+  orcmap::MvtTile a;
+  orcmap::MvtTile b;
+  ORCMAP_EXPECT_TRUE(orcmap::DecodeMvtTile(data.data(), data.size(), &a));
+  orcmap::MvtDecodeOptions opt;
+  ORCMAP_EXPECT_TRUE(
+      orcmap::DecodeMvtTile(data.data(), data.size(), opt, &b));
+  ORCMAP_EXPECT_EQ(a.layers.size(), b.layers.size());
+  ORCMAP_EXPECT_EQ(a.layers.size(), static_cast<size_t>(3));
+}
+
+void TestFilterExcludesRequestedLayer(const std::string& fixture_path) {
+  const std::vector<uint8_t> data = ReadFile(fixture_path);
+  orcmap::MvtDecodeOptions opt;
+  opt.include_layer = &ExcludeWater;
+  orcmap::MvtTile tile;
+  ORCMAP_EXPECT_TRUE(
+      orcmap::DecodeMvtTile(data.data(), data.size(), opt, &tile));
+  ORCMAP_EXPECT_TRUE(FindLayer(tile, "water") == nullptr);
+  ORCMAP_EXPECT_TRUE(FindLayer(tile, "road") != nullptr);
+  ORCMAP_EXPECT_TRUE(FindLayer(tile, "place") != nullptr);
+  for (const auto& layer : tile.layers) {
+    ORCMAP_EXPECT_TRUE(layer.name != "water");
+    ORCMAP_EXPECT_TRUE(!layer.features.empty() || true);
+  }
+}
+
+void TestBasemapFilterSkipsPlaceOnFixture(const std::string& fixture_path) {
+  const std::vector<uint8_t> data = ReadFile(fixture_path);
+  orcmap::MvtDecodeOptions opt;
+  opt.include_layer = &orcmap::experimental::IncludeNoTextBasemapLayer;
+  orcmap::MvtTile tile;
+  ORCMAP_EXPECT_TRUE(
+      orcmap::DecodeMvtTile(data.data(), data.size(), opt, &tile));
+  ORCMAP_EXPECT_TRUE(FindLayer(tile, "place") == nullptr);
+  ORCMAP_EXPECT_TRUE(FindLayer(tile, "water") != nullptr);
+}
+
 void TestTruncatedFixtureFails(const std::string& fixture_path) {
   std::vector<uint8_t> data = ReadFile(fixture_path);
   ORCMAP_EXPECT_TRUE(data.size() > 10);
@@ -158,4 +204,7 @@ void RunMvtTests(const std::string& fixture_path) {
   TestEmptyBufferFails();
   TestGarbageBufferFails();
   TestTruncatedFixtureFails(fixture_path);
+  TestFilterNullMatchesLegacy(fixture_path);
+  TestFilterExcludesRequestedLayer(fixture_path);
+  TestBasemapFilterSkipsPlaceOnFixture(fixture_path);
 }

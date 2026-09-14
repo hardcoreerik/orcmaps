@@ -26,5 +26,10 @@ bool TryClassifyFeature(const Feature& feature, FeatureKind* kind);
 // recognizes. Returns false if `tile` is null; empty tiles succeed.
 bool AssignFeatureKinds(FeatureTile* tile);
 
+// MVT layer include callback for the current no-text basemap. Skips
+// layers that only feed kLabel* (not drawn) or unused name plates.
+// Not a schema freeze. Safe as DecodeMvtTile's include_layer.
+bool IncludeNoTextBasemapLayer(const char* name, size_t name_len, void* ctx);
+
 }  // namespace experimental
 }  // namespace orcmap

@@ -290,7 +290,9 @@ extern "C" void app_main() {
 
     orcmap::MvtTile mvt;
     t = NowUs();
-    if (!orcmap::DecodeMvtTile(raw.data(), raw.size(), &mvt)) {
+    orcmap::MvtDecodeOptions decode_opt;
+    decode_opt.include_layer = &orcmap::experimental::IncludeNoTextBasemapLayer;
+    if (!orcmap::DecodeMvtTile(raw.data(), raw.size(), decode_opt, &mvt)) {
       ESP_LOGE(kTag, "mvt decode failed z=%u x=%u y=%u", tile.z, tile.x,
                tile.y);
       continue;
@@ -299,9 +301,13 @@ extern "C" void app_main() {
     raw.clear();
     raw.shrink_to_fit();
     if (!sampled) {
-      ESP_LOGI(kTag, "after MvtTile layers=%zu internal=%u psram=%u",
+      ESP_LOGI(kTag, "after MvtTile layers=%zu (filtered) internal=%u psram=%u",
                mvt.layers.size(), static_cast<unsigned>(InternalFree()),
                static_cast<unsigned>(PsramFree()));
+      for (const auto& layer : mvt.layers) {
+        ESP_LOGI(kTag, "  keep layer %s features=%zu", layer.name.c_str(),
+                 layer.features.size());
+      }
     }
 
     orcmap::FeatureTile features;

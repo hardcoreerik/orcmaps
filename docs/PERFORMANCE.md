@@ -110,6 +110,24 @@ translate 2693 ms, render 1246 ms, GetTile 610 ms, gzip 170 ms. Sequential
 SD read ~1.73 MB/s at 40 MHz 4-bit. Internal heap min ~40 KiB during
 MvtTile decode. Full table: `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`.
 
+## Tab5 after no-text layer filter (same viewport)
+
+Skip housenumber / poi / place / transportation_name / water_name /
+mountain_peak at decode (generic `include_layer` callback; names live in
+experimental policy, not the MVT parser).
+
+| Stage | Before ms | After ms | Δ |
+|---|---|---|---|
+| MVT decode | 5612 | **1296** | −77% |
+| translate | 2693 | **707** | −74% |
+| classify | 66 | 9 | |
+| render | 1246 | 1239 | ~0 |
+| **cold frame** | 11302 | **4421** | **−61%** |
+
+Visible 24 / present 20 / missing 4 unchanged. First busy tile kept 8
+layers / 202 features (was 12 layers / 2071). Internal heap after that
+MvtTile: ~140 KiB vs ~40 KiB. Render time unchanged.
+
 ## Still unmeasured
 
-Pan/zoom latency. Cache hit rates. Decoder layer-by-layer split (next).
+Pan/zoom latency. Cache hit rates. Direct MVT→FeatureTile path.

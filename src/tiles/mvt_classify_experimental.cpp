@@ -153,5 +153,20 @@ bool AssignFeatureKinds(FeatureTile* tile) {
   return true;
 }
 
+bool IncludeNoTextBasemapLayer(const char* name, size_t name_len, void*) {
+  if (name == nullptr) return false;
+  auto is = [name, name_len](const char* lit) {
+    const size_t n = std::strlen(lit);
+    return name_len == n && std::memcmp(name, lit, n) == 0;
+  };
+  // Measured Springfield OpenMapTiles 3.16: these layers only produce
+  // skipped label kinds or unused name plates under the current renderer.
+  if (is("housenumber") || is("transportation_name") || is("water_name") ||
+      is("mountain_peak") || is("poi") || is("place")) {
+    return false;
+  }
+  return true;
+}
+
 }  // namespace experimental
 }  // namespace orcmap
