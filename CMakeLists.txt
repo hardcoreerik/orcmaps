@@ -4,7 +4,9 @@
 # renderer). Host framebuffer is adapters/host, not here.
 # No M5GFX/M5Unified runtime dependency. adapters/m5gfx/include is exported
 # so consumers can #include "orcmap/m5gfx/display_target.hpp" and supply
-# their own M5GFX component. Core .cpp files never include M5GFX.h.
+# their own M5GFX component. adapters/esp_idf/include is exported for
+# FileByteSource (FILE* only; the app mounts SD). Core never includes
+# M5GFX.h or M5Unified.h.
 # Host-side tests do NOT build through this file -- they are a separate
 # standalone CMake project at tests/host/CMakeLists.txt, matching the
 # pattern already used by hardcoreerik/esp-rtl-sdr, so host tests never
@@ -21,9 +23,10 @@ idf_component_register(
          "src/render/style.cpp"
          "src/render/renderer.cpp"
          "src/render/clip.cpp"
+         "adapters/esp_idf/file_byte_source.cpp"
          "third_party/miniz/miniz.c"
          "third_party/miniz/miniz_tinfl.c"
-    INCLUDE_DIRS "include" "adapters/m5gfx/include"
+    INCLUDE_DIRS "include" "adapters/m5gfx/include" "adapters/esp_idf/include"
     PRIV_INCLUDE_DIRS "third_party/miniz"
     REQUIRES ""
 )

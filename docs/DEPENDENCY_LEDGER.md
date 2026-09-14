@@ -10,6 +10,8 @@ recorded here before it is added, per [`../LICENSING.md`](../LICENSING.md).
 | `pmtiles` Python package (protomaps) | 3.7.0, BSD-3-Clause | Build tool only, used by `tests/fixtures/generate_fixture.py` to produce the committed test fixture via the official reference implementation | No — not vendored, not a runtime or build dependency of OrcMaps itself; a dev-only tool invoked to generate one committed binary fixture. Not part of the shipped product. |
 | `mapbox-vector-tile` Python package | 2.2.0, MIT | Build tool only, used by `tests/fixtures/generate_mvt_fixture.py` to produce the committed MVT test fixture (`tests/fixtures/tiny.mvt`) via a widely-used reference encoder | No — not vendored, not a runtime or build dependency; a dev-only tool invoked to generate one committed binary fixture. Not part of the shipped product. |
 | Planetiler | 0.10.2 (`onthegomap/planetiler`, git `0e5588c4a6e8c29a270a33afe8df62027d889604`), Apache-2.0 | Host pack production only: Geofabrik Oregon OSM PBF → PMTiles v3 / OpenMapTiles 3.16 MVT for the Springfield preview. Invoked via `tools/pack-builder/build_springfield_pack.ps1`. Requires Java 21. | No — not vendored, not linked, not an OrcMaps runtime or ESP-IDF dependency. |
+| M5Unified | 0.2.20, MIT (via `m5stack/m5unified`) | **Tab5 example only** (`examples/m5stack-tab5`). Board bring-up matching OrcSDR. Not an OrcMaps core or M5GFX-adapter dependency. | No — fetched by ESP-IDF component manager for that example. |
+| M5GFX | 0.2.27, MIT (via `m5stack/m5gfx`) | Optional display adapter + Tab5/M5GFX examples. Core `REQUIRES ""`. | No — not vendored. |
 
 ## Resolved: MVT decoding
 

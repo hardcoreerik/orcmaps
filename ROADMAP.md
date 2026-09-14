@@ -95,8 +95,10 @@ paths the current tests don't. Flagged, not yet mitigated.
       renderer rather than the decoder itself
 - [x] Bounded tile-payload decompression (`DecompressPayload`, kNone/kGzip).
       Brotli/zstd return false. GetTile remains raw stored bytes.
-- [ ] `adapters/esp_idf` `ByteSource` (wraps OrcSDR's
-      `orcsdr::storage::FileSystem` or raw ESP-IDF VFS)
+- [x] `adapters/esp_idf` `FileByteSource` (FILE* on a mounted VFS path;
+      buffered; no SD mount, no Tab5, no `_IONBF`)
+- [x] `examples/m5stack-tab5` standalone hardware demo (compile/link).
+      On-device render is a separate evidence milestone.
 - [x] OrcMaps-owned Feature / Geometry model, and an explicit MVT →
       OrcMaps translation boundary (`feature.hpp`, `TranslateMvtToFeatureTile`).
       MVT types must not become the renderer architecture. **EXPERIMENTAL**
@@ -129,7 +131,7 @@ feeds the renderer once it exists.
 
 **Exit criteria:** host-side real-tile render + measured times: **met**
 (Springfield / 97477, 1280×720, `docs/PERFORMANCE.md`). Tab5 / SD path
-is **not** met.
+is **not** met until `examples/m5stack-tab5` is flashed and measured.
 
 ## Phase 3 — Lane County / Eugene proof
 

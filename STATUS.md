@@ -15,7 +15,8 @@ MVT→FeatureTile translation, style system, immediate `RenderTarget`,
 framebuffer, M5GFX `DisplayTarget` (exported `orcmap/m5gfx/` headers),
 host + consumer tests, provenance registry,
 `examples/generic-esp32` (no graphics framework), `examples/m5gfx`
-compile proof, host pack-inspect.
+compile proof, `examples/m5stack-tab5` (Tab5 + SD, BUILD only until
+flashed), host pack-inspect, `orcmap::esp_idf::FileByteSource`.
 
 **PARTIAL:** Viewport overzoom is not implemented. Zoom 0..31.
 `tools/pack-builder` Springfield script only.
@@ -26,10 +27,10 @@ schema).
 
 **MEASURED (HOST-ONLY):** real Springfield / 97477 gzip PMTiles →
 1280×720 `orcsdr-dark` PPM. See `docs/PERFORMANCE.md`. NOT ESP32-
-validated. No on-device map exists.
+validated until the Tab5 demo is flashed.
 
-**PLANNED:** `adapters/esp_idf` ByteSource, text labels, polygon holes,
-overzoom. Brotli/zstd stay unsupported.
+**PLANNED:** text labels, polygon holes, overzoom, on-device Tab5
+evidence. Brotli/zstd stay unsupported.
 
 **NOT FROZEN:** tile-content schema / stable FeatureKind mapping. Do not
 finalize OpenMapTiles, Shortbread, or a custom schema from this one
@@ -144,7 +145,8 @@ extract.
 
 ## What is being worked on
 
-Nothing — visible-tile enumeration at a stopping point. Not OrcSDR.
+Nothing — Tab5 standalone demo at a stopping point (BUILD, not yet
+flashed). Not OrcSDR.
 
 ## Current blockers
 
@@ -306,8 +308,8 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. `adapters/esp_idf` ByteSource and the same Springfield PMTiles archive
-   from SD (enumeration + renderer are host-proven).
+1. Flash `examples/m5stack-tab5` and capture ESP32-P4 / Tab5 serial
+   numbers (SD read MB/s, GetTile, gzip, decode, render, heap/PSRAM).
 2. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,
@@ -320,7 +322,8 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — visible-tile enumeration at a stopping point. OrcSDR not started.
+None — Tab5 demo BUILD-ready. On-device evidence waits on a flash.
+OrcSDR not started.
 
 ## Notes for the next development session
 

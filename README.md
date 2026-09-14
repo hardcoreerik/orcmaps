@@ -58,11 +58,11 @@ src/overlays/          Planned marker/polyline/polygon overlay primitives
 src/cache/             Planned bounded LRU tile caches
 adapters/host/         stdio ByteSource for host tests/tools
 adapters/m5gfx/include/orcmap/m5gfx/  Optional DisplayTarget headers (consumer supplies M5GFX)
-adapters/esp_idf/      Planned ESP-IDF filesystem ByteSource adapter
-tools/pack-builder/    Planned host-side: OSM extract -> map pack
-tools/pack-inspect/    Planned host-side pack inspector
+adapters/esp_idf/      ESP-IDF FILE* ByteSource (app mounts SD)
+tools/pack-builder/    Springfield host pack script (Planetiler)
+tools/pack-inspect/    Host inspect + real-geography preview
 tools/pack-verify/     Planned host-side pack verifier
-examples/m5stack-tab5/ Planned Tab5 graphics example
+examples/m5stack-tab5/ Tab5 + SD hardware demo (M5Unified)
 examples/generic-esp32/ESP-IDF compile smoke test (no graphics framework)
 examples/m5gfx/        ESP-IDF + M5GFX DisplayTarget compile proof
 examples/host-render/  Host 1280x720 PPM preview (synthetic tiles)

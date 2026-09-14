@@ -56,7 +56,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 |---|---|---|
 | `orcmap::ByteSource` | `include/orcmap/byte_source.hpp` | Implemented |
 | `orcmap::host::FileByteSource` | `adapters/host/file_byte_source.{hpp,cpp}` | Implemented (host only) |
-| ESP-IDF `ByteSource` adapter | `adapters/esp_idf/` | Not implemented (empty dir) |
+| ESP-IDF `ByteSource` adapter | `adapters/esp_idf/` | Implemented: `orcmap::esp_idf::FileByteSource` (FILE*, buffered, no SD mount) |
 | Geo/tile math | `include/orcmap/geo.hpp`, `src/core/geo.cpp` | Implemented |
 | `orcmap::PmTilesReader` | `include/orcmap/pmtiles.hpp`, `src/tiles/pmtiles_reader.cpp` | Implemented (container layer only; GetTile returns stored bytes) |
 | Payload decompression | `include/orcmap/compression.hpp`, `src/tiles/compression.cpp` | Implemented (kNone/kGzip bounded; Brotli/zstd fail) |
@@ -80,7 +80,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | M5GFX example | `examples/m5gfx/` | PARTIAL: ESP-IDF compile proof of DisplayTarget + synthetic FeatureTile (M5GFX, no M5Unified) |
 | Host render preview | `examples/host-render/` | PARTIAL: synthetic 1280x720 PPM |
 | Springfield host preview | `tools/pack-inspect/` | HOST-ONLY MEASURED: real OSM → gzip PMTiles → 1280×720. Pack/PPM gitignored under data/local. |
-| Tab5 example | `examples/m5stack-tab5/` | Not implemented (empty dir) |
+| Tab5 example | `examples/m5stack-tab5/` | Standalone hardware demo (M5Unified + SDMMC Slot 0). BUILD-proven in-repo; on-device render is a separate milestone. |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles`, `tiny.mvt`, `tiny-gzip.pmtiles` | Implemented (synthetic; gzip tile fixture for the decompress→pixels path) |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |
@@ -117,7 +117,8 @@ adapters/host/        file_byte_source.{hpp,cpp} -- stdio ByteSource;
 adapters/m5gfx/include/orcmap/m5gfx/  Exported optional headers
                       (`#include "orcmap/m5gfx/display_target.hpp"`).
                       Not compiled into core. Consumer supplies M5GFX.
-adapters/esp_idf/     Empty -- ESP-IDF filesystem ByteSource, planned.
+adapters/esp_idf/     file_byte_source -- FILE* ByteSource (buffered).
+                      App mounts SD. No Tab5/M5GFX/PMTiles knowledge.
 tools/pack-builder/   Springfield pack script (Planetiler). Not runtime.
 tools/pack-inspect/   Host inspect + real-geography preview.
 tools/pack-verify/    Empty -- validate a pack against its manifest, planned.
@@ -125,7 +126,7 @@ examples/generic-esp32/  ESP-IDF compile/link smoke test of the portable
                       core. No M5GFX/M5Unified. Not a map demo.
 examples/m5gfx/          ESP-IDF + M5GFX compile proof (DisplayTarget).
 examples/host-render/    Host PPM preview (synthetic tiles).
-examples/m5stack-tab5/   Empty -- Tab5 board example, planned.
+examples/m5stack-tab5/   Tab5 + SD + OrcMaps hardware demo (M5Unified).
 tests/host/           Host-buildable unit tests (no ESP-IDF needed).
 tests/consumer/       External-consumer build gate -- public headers only,
                       see "Consumer integration test" below.
