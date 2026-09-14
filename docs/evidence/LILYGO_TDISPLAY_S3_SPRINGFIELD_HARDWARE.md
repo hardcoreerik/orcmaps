@@ -41,7 +41,8 @@ numeric benchmark and must not be compared directly with the Tab5 timing.
 ## SD report follow-up
 
 A follow-up firmware was built and flashed through COM13 with verified image
-hashes. After rendering, it overwrites
-`/sd/orcmaps/orcmaps-report.txt` and displays `REPORT SAVED`. The user
-physically confirmed that message, proving the write was flushed and closed
-successfully. The exact values have not yet been transcribed from the card.
+hashes. After rendering, it creates the first unused numbered file from
+`/sd/orcmaps/orcmaps-report-0001.txt` through `-9999.txt`, preserving prior
+runs. The display shows `Result: <total> ms  Report saved`. The earlier fixed-
+name report write was physically confirmed; physical confirmation of this
+numbered-report revision is pending.

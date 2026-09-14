@@ -152,8 +152,9 @@ extract.
 The Springfield demo is running on a physical LilyGO T-Display-S3 Touch
 with SD Shield. It was flashed through COM13, and the corrected 320x170
 landscape view renders `/orcmaps/springfield.pmtiles`. Exact serial timing
-was not captured; the user observed power-to-map as very fast. A follow-up
-firmware writes the next result to `/orcmaps/orcmaps-report.txt`.
+was not captured; the user observed power-to-map as very fast. The current
+firmware preserves each result as `/orcmaps/orcmaps-report-NNNN.txt` and
+shows the frame total on screen.
 
 ## Current blockers
 
@@ -333,8 +334,8 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Read `/orcmaps/orcmaps-report.txt` after the LilyGO shows `REPORT SAVED`
-   and record the exact stage timings.
+1. Read a numbered `/orcmaps/orcmaps-report-NNNN.txt` file and record the
+   exact stage timings.
 2. Continue the ESP32-P4 decode path after the LilyGO baseline exists.
 3. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 

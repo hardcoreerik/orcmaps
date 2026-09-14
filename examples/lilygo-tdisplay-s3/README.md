@@ -3,7 +3,7 @@
 Standalone Springfield map test for the LilyGO T-Display-S3 Touch with
 the SD Shield fitted. It opens `/sd/orcmaps/springfield.pmtiles`, renders
 the OrcSDR Dark style at zoom 14, and writes timing and memory measurements
-to `/sd/orcmaps/orcmaps-report.txt` as well as USB serial.
+to numbered `/sd/orcmaps/orcmaps-report-NNNN.txt` files as well as USB serial.
 
 ## Status
 
@@ -41,8 +41,9 @@ examples/m5stack-tab5/test-pack/springfield-97477.pmtiles
 ```
 
 Copy it to `/orcmaps/springfield.pmtiles` on a FAT32 microSD card. The
-firmware never formats or modifies the map. After each successful render it
-overwrites `/orcmaps/orcmaps-report.txt` with the latest measurements.
+firmware never formats or modifies the map. Each successful render creates
+the first unused `/orcmaps/orcmaps-report-NNNN.txt` file (`0001` through
+`9999`), preserving earlier runs.
 
 ## Build, flash, and monitor
 
@@ -70,8 +71,8 @@ The build alone proves only ESP32-S3 compilation. Physical PASS requires:
 2. PSRAM initializes.
 3. The SD Shield mounts and prints card information.
 4. The Springfield archive opens and renders.
-5. The display shows `REPORT SAVED`.
-6. `/orcmaps/orcmaps-report.txt` ends with `RESULT=PASS`.
+5. The display shows `Result: <total> ms  Report saved`.
+6. The new numbered report ends with `RESULT=PASS`.
 
 The map remains on screen. Touch gestures, pan, and zoom are deliberately
 outside this first static test.

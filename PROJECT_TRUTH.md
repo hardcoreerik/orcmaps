@@ -200,8 +200,8 @@ treated as a correctness rule, not a preference.
 - Secondary feasibility target: ESP32-S3, kept realistic by not letting
   core code assume Tab5-specific resources (PSRAM size, display size).
   `examples/lilygo-tdisplay-s3` runs the real Springfield pipeline on a
-  physical ESP32-S3R8 T-Display-S3 Touch + SD Shield and records the latest
-  successful run in `/orcmaps/orcmaps-report.txt` on the card.
+  physical ESP32-S3R8 T-Display-S3 Touch + SD Shield and records each
+  successful run in `/orcmaps/orcmaps-report-NNNN.txt` on the card.
 - The core (`include/orcmap`, `src/core`, `src/tiles`, `src/render`)
   has **zero** ESP-IDF, M5Stack, M5GFX, LovyanGFX, or other graphics-
   framework dependency today, and must stay that way — this is enforced

@@ -59,4 +59,28 @@ inline bool WriteReport(const char* path, const Report& report) {
   return std::fclose(file) == 0 && ok;
 }
 
+inline bool WriteNextReport(const char* directory, const Report& report,
+                            char* saved_path, size_t saved_path_size) {
+  for (unsigned number = 1; number <= 9999; ++number) {
+    const int length = std::snprintf(saved_path, saved_path_size,
+                                     "%s/orcmaps-report-%04u.txt", directory,
+                                     number);
+    if (length < 0 || static_cast<size_t>(length) >= saved_path_size) {
+      return false;
+    }
+    FILE* existing = std::fopen(saved_path, "rb");
+    if (existing == nullptr) return WriteReport(saved_path, report);
+    std::fclose(existing);
+  }
+  return false;
+}
+
+inline void FormatResultLine(char* output, size_t output_size,
+                             double total_ms, bool report_saved) {
+  std::snprintf(output, output_size,
+                report_saved ? "Result: %.0f ms  Report saved"
+                             : "Result: %.0f ms  SAVE FAILED",
+                total_ms);
+}
+
 }  // namespace orcmap_demo

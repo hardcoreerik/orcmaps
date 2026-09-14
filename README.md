@@ -34,8 +34,8 @@ A second Springfield hardware demo for the LilyGO T-Display-S3 Touch +
 SD Shield is physically verified under ESP-IDF 5.5.4
 ([`examples/lilygo-tdisplay-s3`](examples/lilygo-tdisplay-s3); evidence
 [`docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md`](docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md)).
-That demo writes its latest timing report to the SD card, avoiding a USB
-serial dependency.
+That demo writes a new numbered timing report to the SD card after every
+successful render, avoiding a USB serial dependency.
 Not production-ready: no pan/zoom, no labels. FeatureKind mapping is
 experimental. See [`STATUS.md`](STATUS.md).
 

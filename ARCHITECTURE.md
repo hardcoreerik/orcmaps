@@ -82,7 +82,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Springfield host preview | `tools/pack-inspect/` | HOST-ONLY MEASURED: real OSM → gzip PMTiles → 1280×720. |
 | Springfield demo pack | `examples/m5stack-tab5/test-pack/` | Public OSM-derived PMTiles used on Tab5 (ODbL). |
 | Tab5 example | `examples/m5stack-tab5/` | Hardware-verified static Springfield render (M5Unified + SDMMC Slot 0). See `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. |
-| LilyGO T-Display-S3 example | `examples/lilygo-tdisplay-s3/` | Hardware-verified static Springfield demo (M5GFX + 1-bit SDMMC Shield); writes the latest run report to the card. See `docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md`. |
+| LilyGO T-Display-S3 example | `examples/lilygo-tdisplay-s3/` | Hardware-verified static Springfield demo (M5GFX + 1-bit SDMMC Shield); writes a new numbered run report to the card. See `docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md`. |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles`, `tiny.mvt`, `tiny-gzip.pmtiles` | Implemented (synthetic; gzip tile fixture for the decompress→pixels path) |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |

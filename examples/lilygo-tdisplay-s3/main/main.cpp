@@ -36,7 +36,7 @@ namespace {
 
 constexpr char kTag[] = "orcmap_tdisplay_s3";
 constexpr char kMapPath[] = "/sd/orcmaps/springfield.pmtiles";
-constexpr char kReportPath[] = "/sd/orcmaps/orcmaps-report.txt";
+constexpr char kReportDirectory[] = "/sd/orcmaps";
 constexpr double kCenterLat = 44.0500;
 constexpr double kCenterLon = -123.0220;
 constexpr uint8_t kZoom = 14;
@@ -418,12 +418,15 @@ extern "C" void app_main() {
       PsramMin(),
       esp_psram_get_size(),
   };
-  const bool report_saved = orcmap_demo::WriteReport(kReportPath, report);
-  ESP_LOGI(kTag, "report: %s %s", kReportPath,
+  char report_path[64];
+  const bool report_saved = orcmap_demo::WriteNextReport(
+      kReportDirectory, report, report_path, sizeof(report_path));
+  ESP_LOGI(kTag, "report: %s %s", report_path,
            report_saved ? "SAVED" : "WRITE FAILED");
   g_display.fillRect(0, display_height - 12, display_width, 12, TFT_BLACK);
+  orcmap_demo::FormatResultLine(line, sizeof(line), total_ms, report_saved);
   StatusLine(display_height - 11, report_saved ? TFT_GREEN : TFT_RED,
-             report_saved ? "REPORT SAVED" : "REPORT WRITE FAILED");
+             line);
 
   for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
 }
