@@ -10,7 +10,8 @@ to `/sd/orcmaps/orcmaps-report.txt` as well as USB serial.
 - ESP-IDF 5.5.4 build: **PASS** (2026-09-14)
 - Host OrcMaps regression test: **PASS**
 - Flash / display / SD / map render: **PASS** (2026-09-14)
-- SD timing report firmware: **flashed**; report-file retrieval pending
+- SD timing report write: **PASS** (`REPORT SAVED` physically confirmed)
+- Exact values: **not transcribed from the card yet**
 - Touch input: **not used by this static render test**
 
 ## Hardware

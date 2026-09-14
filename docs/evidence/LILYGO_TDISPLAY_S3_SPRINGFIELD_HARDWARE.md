@@ -42,5 +42,6 @@ numeric benchmark and must not be compared directly with the Tab5 timing.
 
 A follow-up firmware was built and flashed through COM13 with verified image
 hashes. After rendering, it overwrites
-`/sd/orcmaps/orcmaps-report.txt` and displays `REPORT SAVED`. Retrieval of
-that file remains the open timing-evidence gate.
+`/sd/orcmaps/orcmaps-report.txt` and displays `REPORT SAVED`. The user
+physically confirmed that message, proving the write was flushed and closed
+successfully. The exact values have not yet been transcribed from the card.

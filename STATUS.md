@@ -224,7 +224,8 @@ idf.py build
 Result: build PASS; `orcmap_lilygo_tdisplay_s3.bin` is 380,432 bytes.
 COM13 flash hashes verified. Physical display/SD/render: PASS after the
 landscape rotation correction. The SD-report firmware also flashed with
-verified hashes; report-file retrieval is pending.
+verified hashes, and `REPORT SAVED` was physically confirmed. Exact values
+have not been transcribed from the card.
 
 Consumer smoke test (separate CMake project):
 
