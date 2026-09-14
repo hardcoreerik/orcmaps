@@ -42,6 +42,41 @@ void TestTileFarCornerMapsToExtent() {
   ORCMAP_EXPECT_EQ(sy, 64);
 }
 
+void TestPreparedTransformMatchesSimpleCases() {
+  const orcmap::Viewport v = Z0Frame(64);
+  const orcmap::TileId tile{0, 0, 0};
+  orcmap::TileScreenMap map;
+  ORCMAP_EXPECT_TRUE(orcmap::MakeTileScreenMap(v, tile, 4096, &map));
+  ORCMAP_EXPECT_TRUE(map.valid);
+  int sx = -1, sy = -1;
+  orcmap::ProjectLocal(map, 0, 0, &sx, &sy);
+  ORCMAP_EXPECT_EQ(sx, 0);
+  ORCMAP_EXPECT_EQ(sy, 0);
+  orcmap::ProjectLocal(map, 2048, 2048, &sx, &sy);
+  ORCMAP_EXPECT_EQ(sx, 32);
+  ORCMAP_EXPECT_EQ(sy, 32);
+  orcmap::ProjectLocal(map, 4096, 4096, &sx, &sy);
+  ORCMAP_EXPECT_EQ(sx, 64);
+  ORCMAP_EXPECT_EQ(sy, 64);
+}
+
+void TestPreparedTransformRejectsZoomMismatch() {
+  const orcmap::Viewport v = Z0Frame(32);
+  orcmap::TileScreenMap map;
+  ORCMAP_EXPECT_TRUE(
+      !orcmap::MakeTileScreenMap(v, orcmap::TileId{1, 0, 0}, 4096, &map));
+  ORCMAP_EXPECT_TRUE(!map.valid);
+}
+
+void TestPreparedTransformRejectsInvalidZoom() {
+  orcmap::Viewport v = Z0Frame(32);
+  v.zoom = 32;
+  orcmap::TileScreenMap map;
+  ORCMAP_EXPECT_TRUE(
+      !orcmap::MakeTileScreenMap(v, orcmap::TileId{32, 0, 0}, 4096, &map));
+  ORCMAP_EXPECT_TRUE(!map.valid);
+}
+
 void TestNullScreenPointersAreSafe() {
   const orcmap::Viewport v = Z0Frame(32);
   orcmap::TileLocalToScreen(v, orcmap::TileId{0, 0, 0}, 4096, 0, 0, nullptr,
@@ -58,5 +93,8 @@ void RunViewportTests() {
   TestTileOriginMapsToTopLeft();
   TestTileCenterMapsToScreenCenter();
   TestTileFarCornerMapsToExtent();
+  TestPreparedTransformMatchesSimpleCases();
+  TestPreparedTransformRejectsZoomMismatch();
+  TestPreparedTransformRejectsInvalidZoom();
   TestNullScreenPointersAreSafe();
 }

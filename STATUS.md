@@ -15,7 +15,8 @@ MVT→FeatureTile translation, style system, immediate `RenderTarget`,
 provenance registry, `examples/generic-esp32` ESP-IDF compile/link
 (ESP-IDF 6.0.2 / `esp32p4`, no graphics framework).
 
-**PARTIAL:** Viewport (center/zoom/size + tile-local→screen; no overzoom).
+**PARTIAL:** Viewport (prepared TileScreenMap; no overzoom, no
+antimeridian wrap, no visible-tile enumerator). Zoom 0..31.
 
 **EXPERIMENTAL / SKETCH:** `orcmap::experimental::AssignFeatureKinds`.
 `adapters/m5gfx/` still MVT-typed, not retargeted.
@@ -97,7 +98,7 @@ finalize schema from `tiny.mvt`.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **50 test functions, all passing**.
+- Host test suite: **65 test functions, all passing**.
 
 ## What is partially working
 
@@ -130,7 +131,8 @@ finalize schema from `tiny.mvt`.
 
 ## What is being worked on
 
-Host render proof slice. Next: retarget M5GFX onto `RenderTarget`/`Feature`.
+Renderer hardening (frame clear, prepared transform, clip, zoom contract).
+Next candidate after review: retarget M5GFX onto `RenderTarget`/`Feature`.
 Not OrcSDR.
 
 ## Current blockers
@@ -138,8 +140,9 @@ Not OrcSDR.
 - M5GFX adapter still consumes MVT types, not `Feature`/`RenderTarget`.
 - No public generic tile-payload decompression seam (`GetTile()` returns
   stored bytes; `DecodeMvtTile()` wants decompressed MVT).
-- Viewport is PARTIAL (no overzoom / visible-tile set). Polygon holes
-  are not subtracted. Line `width_px` is not rasterized.
+- Viewport is PARTIAL (no overzoom, no antimeridian wrap, no visible-tile
+  set). Polygon holes are not subtracted. Line `width_px` is not
+  rasterized.
 - No real OSM extract pipeline exists yet (Geofabrik download + osmium/
   Planetiler) — needed before Phase 3 can start, and before the tile
   content schema can be decided from evidence.
@@ -168,7 +171,9 @@ function again.
 
 ## Current performance measurements
 
-None yet. No renderer core, no real pack, no on-device map draw.
+None yet. A host renderer exists, but there is no real map pack and no
+on-device map rendering measurement. Host framebuffer tests are
+correctness checks, not embedded performance numbers.
 `docs/PERFORMANCE.md` is a placeholder. The generic-esp32 smoke test
 proves the component *links*; it is not a performance result. The only
 real numbers in the repo are cited third-party numbers from the yuiseki
@@ -186,10 +191,10 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 50 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 65 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
-translation, Viewport, and host render — see `ARCHITECTURE.md` "Testing
-architecture").
+translation, Viewport, clip, and host render — see `ARCHITECTURE.md`
+"Testing architecture").
 
 Consumer smoke test (separate CMake project):
 
@@ -313,7 +318,7 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — host render proof at a stopping point. M5GFX retarget not started.
+None — renderer hardening at a stopping point. M5GFX retarget not started.
 
 ## Notes for the next development session
 

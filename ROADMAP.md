@@ -102,8 +102,8 @@ paths the current tests don't. Flagged, not yet mitigated.
 - [x] Graphics-independent renderer seam: immediate `RenderTarget` +
       `RenderFeatureTile` + host framebuffer proof. M5GFX is **not**
       retargeted yet and must consume this seam, not MVT.
-- [x] Minimal Viewport (center/zoom/size + tile-local→screen). PARTIAL:
-      no overzoom, no visible-tile enumerator.
+- [x] Minimal Viewport (prepared `TileScreenMap`). PARTIAL: no overzoom,
+      no visible-tile enumerator, no antimeridian wrap. Zoom 0..31.
 - [ ] `adapters/m5gfx` finished integration (Color → RGB565, draw calls
       against `lgfx::v1::LovyanGFX&`). **A header-only EXPERIMENTAL sketch
       exists** (`adapters/m5gfx/color.hpp`, `renderer.hpp`) but is still
@@ -117,8 +117,8 @@ paths the current tests don't. Flagged, not yet mitigated.
 - [x] Renderer core (`src/render/renderer.cpp`) that walks OrcMaps
       features (not `MvtFeature`), calls `ResolveFeatureStyle()`, issues
       generic draw operations. Host proof only; not a full map engine.
-- [x] Minimal framework-independent Viewport (center lat/lon, zoom,
-      screen size + tile_size_px). PARTIAL.
+- [x] Minimal framework-independent Viewport (prepared TileScreenMap).
+      PARTIAL: no overzoom / wrap / visible-tile set.
 - [x] First ESP-IDF *compile/link* of the OrcMaps component:
       `examples/generic-esp32` built against ESP-IDF 6.0.2, target
       `esp32p4`. Smoke test only (geo + style log lines). Not on-device

@@ -62,9 +62,9 @@ EXPERIMENTAL, not the tile-content schema.
 | MVT → Feature translation | `include/orcmap/mvt_translate.hpp`, `src/tiles/mvt_translate.cpp` | Implemented (deep copy; does not assign FeatureKind) |
 | Experimental FeatureKind heuristic | `include/orcmap/experimental/mvt_classify.hpp`, `src/tiles/mvt_classify_experimental.cpp` | EXPERIMENTAL (not the tile-content schema; not stable API) |
 | `orcmap::MapStyle` / style system | `include/orcmap/style.hpp`, `include/orcmap/color.hpp`, `include/orcmap/cache_key.hpp`, `src/render/style.cpp` | Implemented |
-| Viewport | `include/orcmap/viewport.hpp`, `src/core/viewport.cpp` | PARTIAL (center/zoom/size + tile-local→screen; no overzoom, no visible-tile enumerator) |
+| Viewport | `include/orcmap/viewport.hpp`, `src/core/viewport.cpp` | PARTIAL (prepared `TileScreenMap`; no overzoom, no visible-tile enumerator, no antimeridian wrap) |
 | `RenderTarget` | `include/orcmap/render_target.hpp` | Implemented (immediate primitives; no command buffer) |
-| Renderer core | `include/orcmap/renderer.hpp`, `src/render/renderer.cpp` | Implemented (host-proof: FeatureTile → style → Viewport → RenderTarget). Not a complete map engine. |
+| Renderer core | `include/orcmap/renderer.hpp`, `src/render/renderer.cpp`, `src/render/clip.cpp` | Implemented (host-proof: ClearMapBackground + per-tile RenderFeatureTile). Not a complete map engine. |
 | Host framebuffer | `adapters/host/framebuffer_target.{hpp,cpp}` | Implemented (host only; RGBA8 + optional PPM) |
 | M5GFX adapter | `adapters/m5gfx/` | EXPERIMENTAL sketch (header-only Color→RGB565 + LovyanGFX helpers; not a CMake component; not compiled into core; currently takes MVT types — not yet retargeted onto Feature/RenderTarget) |
 | Overlay primitives | `src/overlays/` | Not implemented (empty dir) |
@@ -87,7 +87,7 @@ include/orcmap/      Public headers: byte_source.hpp, geo.hpp, pmtiles.hpp,
                       color.hpp, feature_kind.hpp, style.hpp, cache_key.hpp,
                       attribution.hpp, map_source.hpp, mvt.hpp, feature.hpp,
                       mvt_translate.hpp, viewport.hpp, render_target.hpp,
-                      renderer.hpp
+                      renderer.hpp, clip.hpp
 include/orcmap/experimental/  EXPERIMENTAL FeatureKind heuristic
                       (mvt_classify.hpp) -- not stable API
 src/core/             geo.cpp (Web Mercator tile math), viewport.cpp
@@ -95,7 +95,7 @@ src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader),
                       mvt_decoder.cpp (schema-agnostic MVT geometry decoder),
                       mvt_translate.cpp (MVT → FeatureTile),
                       mvt_classify_experimental.cpp (EXPERIMENTAL)
-src/render/           style.cpp, renderer.cpp
+src/render/           style.cpp, renderer.cpp, clip.cpp
 src/storage/          Empty -- reserved for any storage-layer logic beyond
                       the ByteSource interface itself (interface lives in
                       include/, not here).
@@ -153,10 +153,12 @@ docs/                 Architecture/decision/porting/licensing documents.
 6. **EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds()` may
    attach a `FeatureKind` using a layer-name heuristic. Not the schema
    decision.
-7. **Implemented (host proof):** `RenderFeatureTile` → `RenderTarget`
-   (host framebuffer). Viewport is PARTIAL. M5GFX not on this seam.
-8. **Not yet implemented:** overzoom, polygon holes, line width, tile
-   cache, pack discovery, M5GFX retarget, tile-payload decompression.
+7. **Implemented (host proof):** `ClearMapBackground` once per frame,
+   then `RenderFeatureTile` per source tile → `RenderTarget` (host
+   framebuffer). Viewport is PARTIAL. M5GFX not on this seam.
+8. **Not yet implemented:** overzoom, antimeridian wrap, visible-tile
+   enumeration, polygon holes, line width, tile cache, pack discovery,
+   M5GFX retarget, tile-payload decompression.
 
 ## Map pack / archive layer
 
@@ -259,21 +261,29 @@ storage (per-feature layer string + extent) is provisional.
 ## Renderer
 
 **IMPLEMENTED** for a host proof, not a complete map engine.
-`RenderFeatureTile()` (`include/orcmap/renderer.hpp`) walks a `FeatureTile`,
-calls `ResolveFeatureStyle()`, and issues primitives to a `RenderTarget`.
-It accepts no MVT types. Unclassified features (`kind_assigned == false`)
-are skipped. Polygon fill uses the **first path only** as a simple outer
-ring; additional paths (holes) are not subtracted — locked by
-`tests/host/test_render.cpp`. Strokes are 1px (`width_px` not rasterized).
-Overzoom (source tile z != viewport zoom) is not handled.
+`ClearMapBackground()` fills the target once per frame via
+`ResolveFeatureStyle(kBackground)`. `RenderFeatureTile()` then draws one
+source tile **without** clearing. Returns false on null target, invalid
+zoom, or `source_tile.z != viewport.zoom` (overzoom is not guessed).
+Unclassified features (`kind_assigned == false`) are skipped. Polygon fill
+uses the **first path only** as a simple outer ring; additional paths
+(holes) are not subtracted — locked by `tests/host/test_render.cpp`.
+Strokes are 1px (`width_px` not rasterized).
+
+Projection uses `TileScreenMap` (`MakeTileScreenMap` once per source tile /
+extent, then `ProjectLocal` multiply-add per vertex). Mercator center math
+does not run per vertex. Screen coords saturate to `int` range. Line
+rasterization clips with Liang-Barsky (`ClipLineToPixels`) before
+Bresenham. Polygon scanline intercepts use `int64_t`.
 
 `RenderTarget` (`include/orcmap/render_target.hpp`) is an immediate
 interface: `FillRect`, `DrawPoint`, `DrawLine`, `FillPolygon`. No command
 buffer. Color is `orcmap::Color` (RGBA8).
 
 `Viewport` (`include/orcmap/viewport.hpp`) is **PARTIAL**: center lat/lon,
-zoom, output size, `tile_size_px`, and `TileLocalToScreen()`. No visible-tile
-enumerator, no overzoom.
+zoom, output size, `tile_size_px`, and a prepared `TileScreenMap`. No
+visible-tile enumerator, no overzoom, no antimeridian wrap
+(`tile.x - center.x` is a raw subtract). Zoom is 0..31.
 
 `orcmap::host::FramebufferTarget` is the first target (RGBA8 buffer, optional
 P6 PPM). It is host-only (`adapters/host/`), not part of the ESP-IDF
@@ -523,7 +533,7 @@ shipped.
 
 ## Performance architecture
 
-Not yet measurable — no renderer core, no real pack, no on-device map
+Not yet measurable — a host renderer exists, but there is no real pack and no on-device map
 draw. `examples/generic-esp32` proves the component links; it is not a
 performance result. See `docs/PERFORMANCE.md` (placeholder) and
 `ROADMAP.md`.

@@ -10,6 +10,7 @@ void RunAttributionTests();
 void RunMvtTests(const std::string& fixture_path);
 void RunFeatureTests(const std::string& mvt_fixture_path);
 void RunViewportTests();
+void RunClipTests();
 void RunRenderTests(const std::string& mvt_fixture_path);
 
 int main(int argc, char** argv) {
@@ -25,6 +26,7 @@ int main(int argc, char** argv) {
   RunMvtTests(mvt_fixture_path);
   RunFeatureTests(mvt_fixture_path);
   RunViewportTests();
+  RunClipTests();
   RunRenderTests(mvt_fixture_path);
 
   if (orcmap::test::g_failures == 0) {

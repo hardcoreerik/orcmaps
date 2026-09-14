@@ -90,8 +90,13 @@ bool CheckHostRender() {
   v.width_px = 8;
   v.height_px = 8;
   v.tile_size_px = 8;
-  orcmap::RenderFeatureTile(empty, orcmap::TileId{0, 0, 0}, v,
-                            orcmap::styles::OrcSdrDark(), &fb);
+  if (!orcmap::ClearMapBackground(v, orcmap::styles::OrcSdrDark(), &fb)) {
+    return false;
+  }
+  if (!orcmap::RenderFeatureTile(empty, orcmap::TileId{0, 0, 0}, v,
+                                 orcmap::styles::OrcSdrDark(), &fb)) {
+    return false;
+  }
   return fb.At(0, 0) == orcmap::Color::Rgb(8, 10, 12);
 }
 

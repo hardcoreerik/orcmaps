@@ -20,6 +20,7 @@ idf_component_register(
          "src/tiles/mvt_classify_experimental.cpp"
          "src/render/style.cpp"
          "src/render/renderer.cpp"
+         "src/render/clip.cpp"
          "third_party/miniz/miniz.c"
          "third_party/miniz/miniz_tinfl.c"
     INCLUDE_DIRS "include"

@@ -1,8 +1,12 @@
 #include "framebuffer_target.hpp"
 
+#include "orcmap/clip.hpp"
+
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 
 namespace orcmap {
 namespace host {
@@ -47,6 +51,7 @@ void FramebufferTarget::FillRect(int x, int y, int w, int h, Color color) {
 }
 
 void FramebufferTarget::DrawLine(int x0, int y0, int x1, int y1, Color color) {
+  if (!ClipLineToPixels(&x0, &y0, &x1, &y1, width_, height_)) return;
   int dx = Iabs(x1 - x0);
   int sx = x0 < x1 ? 1 : -1;
   int dy = -Iabs(y1 - y0);
@@ -70,13 +75,20 @@ void FramebufferTarget::DrawLine(int x0, int y0, int x1, int y1, Color color) {
 void FramebufferTarget::FillPolygon(const int* xy_pairs, size_t n_points,
                                     Color color) {
   if (xy_pairs == nullptr || n_points < 3) return;
+  if (width_ <= 0 || height_ <= 0) return;
   int min_y = xy_pairs[1];
   int max_y = xy_pairs[1];
+  int min_x = xy_pairs[0];
+  int max_x = xy_pairs[0];
   for (size_t i = 0; i < n_points; ++i) {
+    const int x = xy_pairs[i * 2];
     const int y = xy_pairs[i * 2 + 1];
     if (y < min_y) min_y = y;
     if (y > max_y) max_y = y;
+    if (x < min_x) min_x = x;
+    if (x > max_x) max_x = x;
   }
+  if (max_y < 0 || min_y >= height_ || max_x < 0 || min_x >= width_) return;
   if (min_y < 0) min_y = 0;
   if (max_y >= height_) max_y = height_ - 1;
   std::vector<int> crossings;
@@ -93,8 +105,17 @@ void FramebufferTarget::FillPolygon(const int* xy_pairs, size_t n_points,
       const int lo = y0 < y1 ? y0 : y1;
       const int hi = y0 < y1 ? y1 : y0;
       if (y < lo || y >= hi) continue;
-      const int x = x0 + (y - y0) * (x1 - x0) / (y1 - y0);
-      crossings.push_back(x);
+      const int64_t num =
+          static_cast<int64_t>(y - y0) * static_cast<int64_t>(x1 - x0);
+      const int64_t den = static_cast<int64_t>(y1 - y0);
+      const int64_t x = static_cast<int64_t>(x0) + num / den;
+      if (x > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+        crossings.push_back(std::numeric_limits<int>::max());
+      } else if (x < static_cast<int64_t>(std::numeric_limits<int>::min())) {
+        crossings.push_back(std::numeric_limits<int>::min());
+      } else {
+        crossings.push_back(static_cast<int>(x));
+      }
     }
     std::sort(crossings.begin(), crossings.end());
     for (size_t k = 0; k + 1 < crossings.size(); k += 2) {

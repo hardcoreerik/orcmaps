@@ -22,6 +22,7 @@ double ClampLatitudeDeg(double lat_deg) {
 }
 
 TileCoord LatLonToTileCoord(double lat_deg, double lon_deg, uint8_t zoom) {
+  if (!ZoomIsValid(zoom)) return TileCoord{0.0, 0.0};
   const double n = static_cast<double>(TilesPerAxis(zoom));
   const double lon_wrapped = WrapLongitudeDeg(lon_deg);
   const double lat_clamped = ClampLatitudeDeg(lat_deg);
@@ -34,6 +35,7 @@ TileCoord LatLonToTileCoord(double lat_deg, double lon_deg, uint8_t zoom) {
 }
 
 TileId LatLonToTile(double lat_deg, double lon_deg, uint8_t zoom) {
+  if (!ZoomIsValid(zoom)) return TileId{zoom, 0, 0};
   const TileCoord coord = LatLonToTileCoord(lat_deg, lon_deg, zoom);
   const double n = static_cast<double>(TilesPerAxis(zoom));
   // Clamp in floating point *before* casting to unsigned: floating-point
@@ -47,6 +49,7 @@ TileId LatLonToTile(double lat_deg, double lon_deg, uint8_t zoom) {
 }
 
 LatLon TileToLatLon(TileId tile) {
+  if (!ZoomIsValid(tile.z)) return LatLon{0.0, 0.0};
   const double n = static_cast<double>(TilesPerAxis(tile.z));
   const double lon_deg = static_cast<double>(tile.x) / n * 360.0 - 180.0;
   const double y_frac = static_cast<double>(tile.y) / n;
@@ -55,7 +58,8 @@ LatLon TileToLatLon(TileId tile) {
 }
 
 uint32_t TilesPerAxis(uint8_t zoom) {
-  return zoom >= 32 ? 0u : (1u << zoom);
+  if (!ZoomIsValid(zoom)) return 0u;
+  return 1u << zoom;
 }
 
 }  // namespace orcmap

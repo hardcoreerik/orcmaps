@@ -222,12 +222,13 @@ Implemented adapters: `orcmap::host::FileByteSource`
 
 ## Rendering Model
 
-Host-proof renderer exists: `RenderFeatureTile` consumes `FeatureTile` +
-`Viewport` + `MapStyle` and issues primitives to `RenderTarget`. Paint
-comes only from `ResolveFeatureStyle()`. `orcmap::Color` is plain RGBA8;
-conversion to a display's native pixel format is the target's job.
-Unclassified features are skipped. This is not a complete map engine
-(no overzoom, no holes, 1px strokes).
+Host-proof renderer exists: `ClearMapBackground` once per frame, then
+`RenderFeatureTile` per source tile onto `RenderTarget`. Paint comes only
+from `ResolveFeatureStyle()`. Projection uses a prepared `TileScreenMap`
+(Mercator once per tile, multiply-add per vertex). `orcmap::Color` is
+plain RGBA8. Unclassified features are skipped. Zoom mismatch returns
+false. This is not a complete map engine (no overzoom, no antimeridian
+wrap, no holes, 1px strokes).
 
 `adapters/m5gfx/` is an **EXPERIMENTAL sketch** still taking MVT types.
 Do not grow it; retarget onto `Feature` + `RenderTarget`.

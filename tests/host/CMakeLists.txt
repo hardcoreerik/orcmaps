@@ -19,6 +19,7 @@ add_executable(orcmap_host_tests
     test_mvt.cpp
     test_feature.cpp
     test_viewport.cpp
+    test_clip.cpp
     test_render.cpp
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/core/viewport.cpp
@@ -28,6 +29,7 @@ add_executable(orcmap_host_tests
     ${ORCMAP_ROOT}/src/tiles/mvt_classify_experimental.cpp
     ${ORCMAP_ROOT}/src/render/style.cpp
     ${ORCMAP_ROOT}/src/render/renderer.cpp
+    ${ORCMAP_ROOT}/src/render/clip.cpp
     ${ORCMAP_ROOT}/adapters/host/file_byte_source.cpp
     ${ORCMAP_ROOT}/adapters/host/framebuffer_target.cpp
     ${ORCMAP_ROOT}/third_party/miniz/miniz.c

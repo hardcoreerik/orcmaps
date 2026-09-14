@@ -1,10 +1,9 @@
 # Performance
 
 Status: **placeholder.** No OrcMaps-specific performance measurements exist
-yet — there is no renderer, no real map pack, and no on-device (ESP-IDF)
-build has been exercised in this repository. Do not treat anything below as
-measured OrcMaps behavior; it is context for what to measure once there is
-something to measure.
+yet — a host renderer exists, but there is no real map pack and no
+on-device map rendering measurement. Do not treat host framebuffer tests
+as embedded performance numbers.
 
 ## Why this is empty
 

@@ -52,7 +52,16 @@ TileId LatLonToTile(double lat_deg, double lon_deg, uint8_t zoom);
 // (top-left) corner.
 LatLon TileToLatLon(TileId tile);
 
-// Number of tiles per axis at a zoom level (2^zoom). zoom must be <= 31.
+// Web Mercator zoom is defined for 0..31 inclusive (2^31 tiles per axis
+// still fits in uint32). zoom >= 32 is invalid: TilesPerAxis returns 0
+// and the other helpers return deterministic zeros rather than dividing
+// by zero.
+inline constexpr uint8_t kMaxZoom = 31;
+
+inline bool ZoomIsValid(uint8_t zoom) { return zoom <= kMaxZoom; }
+
+// Number of tiles per axis at a zoom level (2^zoom). Returns 0 if zoom
+// is not valid (zoom > 31).
 uint32_t TilesPerAxis(uint8_t zoom);
 
 }  // namespace orcmap

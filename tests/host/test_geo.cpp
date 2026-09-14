@@ -28,6 +28,25 @@ void TestTilesPerAxis() {
   ORCMAP_EXPECT_EQ(orcmap::TilesPerAxis(0), 1u);
   ORCMAP_EXPECT_EQ(orcmap::TilesPerAxis(1), 2u);
   ORCMAP_EXPECT_EQ(orcmap::TilesPerAxis(10), 1024u);
+  ORCMAP_EXPECT_EQ(orcmap::TilesPerAxis(31), 1u << 31);
+  ORCMAP_EXPECT_EQ(orcmap::TilesPerAxis(32), 0u);
+  ORCMAP_EXPECT_EQ(orcmap::TilesPerAxis(255), 0u);
+  ORCMAP_EXPECT_TRUE(orcmap::ZoomIsValid(0));
+  ORCMAP_EXPECT_TRUE(orcmap::ZoomIsValid(31));
+  ORCMAP_EXPECT_TRUE(!orcmap::ZoomIsValid(32));
+}
+
+void TestInvalidZoomIsDeterministic() {
+  const orcmap::TileCoord c = orcmap::LatLonToTileCoord(44.0, -123.0, 32);
+  ORCMAP_EXPECT_NEAR(c.x, 0.0, 1e-12);
+  ORCMAP_EXPECT_NEAR(c.y, 0.0, 1e-12);
+  const orcmap::TileId t = orcmap::LatLonToTile(44.0, -123.0, 32);
+  ORCMAP_EXPECT_EQ(t.z, 32);
+  ORCMAP_EXPECT_EQ(t.x, 0u);
+  ORCMAP_EXPECT_EQ(t.y, 0u);
+  const orcmap::LatLon ll = orcmap::TileToLatLon(orcmap::TileId{32, 1, 1});
+  ORCMAP_EXPECT_NEAR(ll.lat_deg, 0.0, 1e-12);
+  ORCMAP_EXPECT_NEAR(ll.lon_deg, 0.0, 1e-12);
 }
 
 void TestKnownTiles() {
@@ -82,6 +101,7 @@ void RunGeoTests() {
   TestWrapLongitude();
   TestClampLatitude();
   TestTilesPerAxis();
+  TestInvalidZoomIsDeterministic();
   TestKnownTiles();
   TestAntimeridianWrap();
   TestHighLatitudeClamp();
