@@ -7,22 +7,21 @@
 
 #include <M5GFX.h>
 
-#include "color.hpp"
 #include "orcmap/clip.hpp"
+#include "orcmap/m5gfx/color.hpp"
 #include "orcmap/render_target.hpp"
 
 namespace orcmap {
 namespace m5gfx_adapter {
 
-// M5GFX/LovyanGFX RenderTarget. Map semantics (style, viewport, FeatureKind,
-// MVT) stay in OrcMaps core. This class only converts Color to RGB565 and
-// issues LovyanGFX primitives. Takes lgfx::v1::LovyanGFX& so it works with
-// a hardware panel, an M5Canvas/LGFX_Sprite, or any LovyanGFX surface.
+// M5GFX/LovyanGFX RenderTarget. Map semantics stay in OrcMaps core.
+// Optional: consumers include this header and supply their own M5GFX
+// dependency. Core sources never include M5GFX.h.
 //
-// Line visibility uses OrcMaps ClipLineToPixels, not LovyanGFX's clip, so
-// host and M5GFX agree. FillPolygon is even-odd scanline of the given
-// vertices (the renderer already passes first path only). 1px strokes;
-// width_px is not this adapter's job.
+// Alpha: ToRgb565 ignores Color.a (opaque RGB565).
+// Lines: ClipLineToPixels then drawLine (same contract as host).
+// FillPolygon: even-odd scanline of the given vertices (renderer already
+// passes first path only). 1px strokes; width_px is not this adapter's job.
 
 class DisplayTarget : public RenderTarget {
  public:
@@ -48,6 +47,7 @@ class DisplayTarget : public RenderTarget {
   }
 
   void DrawPoint(int x, int y, Color color) override {
+    if (x < 0 || y < 0 || x >= Width() || y >= Height()) return;
     display_.drawPixel(x, y, ToRgb565(color));
   }
 
@@ -77,11 +77,11 @@ class DisplayTarget : public RenderTarget {
     if (min_y < 0) min_y = 0;
     if (max_y >= height) max_y = height - 1;
     const uint16_t rgb = ToRgb565(color);
-    std::vector<int> crossings;
-    crossings.reserve(n_points);
+    crossings_.clear();
+    crossings_.reserve(n_points);
     display_.startWrite();
     for (int y = min_y; y <= max_y; ++y) {
-      crossings.clear();
+      crossings_.clear();
       for (size_t i = 0; i < n_points; ++i) {
         const size_t j = (i + 1) % n_points;
         const int y0 = xy_pairs[i * 2 + 1];
@@ -99,17 +99,17 @@ class DisplayTarget : public RenderTarget {
             static_cast<int64_t>(y1) - static_cast<int64_t>(y0);
         const int64_t x = static_cast<int64_t>(x0) + num / den;
         if (x > static_cast<int64_t>(std::numeric_limits<int>::max())) {
-          crossings.push_back(std::numeric_limits<int>::max());
+          crossings_.push_back(std::numeric_limits<int>::max());
         } else if (x < static_cast<int64_t>(std::numeric_limits<int>::min())) {
-          crossings.push_back(std::numeric_limits<int>::min());
+          crossings_.push_back(std::numeric_limits<int>::min());
         } else {
-          crossings.push_back(static_cast<int>(x));
+          crossings_.push_back(static_cast<int>(x));
         }
       }
-      std::sort(crossings.begin(), crossings.end());
-      for (size_t k = 0; k + 1 < crossings.size(); k += 2) {
-        int xa = crossings[k];
-        int xb = crossings[k + 1];
+      std::sort(crossings_.begin(), crossings_.end());
+      for (size_t k = 0; k + 1 < crossings_.size(); k += 2) {
+        int xa = crossings_[k];
+        int xb = crossings_[k + 1];
         if (xb < xa) {
           const int t = xa;
           xa = xb;
@@ -126,6 +126,7 @@ class DisplayTarget : public RenderTarget {
 
  private:
   lgfx::v1::LovyanGFX& display_;
+  std::vector<int> crossings_;
 };
 
 }  // namespace m5gfx_adapter

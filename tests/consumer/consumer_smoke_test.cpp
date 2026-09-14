@@ -25,6 +25,7 @@
 #include "orcmap/attribution.hpp"     // include/orcmap -- public API.
 #include "orcmap/feature.hpp"
 #include "orcmap/feature_kind.hpp"
+#include "orcmap/compression.hpp"
 #include "orcmap/geo.hpp"
 #include "orcmap/map_source.hpp"
 #include "orcmap/mvt.hpp"
@@ -80,6 +81,24 @@ bool CheckMvtDecode(const std::string& mvt_fixture_path) {
   return tile.layers.size() == 3;
 }
 
+bool CheckGzipTilePipeline(const std::string& gzip_pmtiles) {
+  orcmap::host::FileByteSource source(gzip_pmtiles);
+  if (!source.Valid()) return false;
+  orcmap::PmTilesReader reader(&source);
+  if (!reader.Open()) return false;
+  if (reader.Header().tile_compression != orcmap::Compression::kGzip) return false;
+  std::vector<uint8_t> stored;
+  if (!reader.GetTile(0, 0, 0, &stored) || stored.empty()) return false;
+  std::vector<uint8_t> raw;
+  if (!orcmap::DecompressPayload(orcmap::Compression::kGzip, stored.data(),
+                                 stored.size(), 65536, &raw)) {
+    return false;
+  }
+  orcmap::MvtTile mvt;
+  return orcmap::DecodeMvtTile(raw.data(), raw.size(), &mvt) &&
+         mvt.layers.size() == 3;
+}
+
 bool CheckHostRender() {
   orcmap::host::FramebufferTarget fb(8, 8);
   orcmap::FeatureTile empty;
@@ -120,6 +139,8 @@ int main(int argc, char** argv) {
       argc > 1 ? argv[1] : "tests/fixtures/tiny.pmtiles";
   const std::string mvt_fixture_path =
       argc > 2 ? argv[2] : "tests/fixtures/tiny.mvt";
+  const std::string gzip_pmtiles =
+      argc > 3 ? argv[3] : "tests/fixtures/tiny-gzip.pmtiles";
 
   bool ok = true;
   ok &= CheckTileMath();
@@ -127,6 +148,7 @@ int main(int argc, char** argv) {
   ok &= CheckStyleAndAttribution();
   ok &= CheckMvtDecode(mvt_fixture_path);
   ok &= CheckMvtTranslate(mvt_fixture_path);
+  ok &= CheckGzipTilePipeline(gzip_pmtiles);
   ok &= CheckHostRender();
 
   if (ok) {

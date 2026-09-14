@@ -180,7 +180,7 @@ Geographic map data (.pmtiles)
         |
 Base map style (orcmap::MapStyle)
         |
-Rendered map (renderer -- not yet implemented)
+Rendered map (host-proof renderer; optional M5GFX DisplayTarget)
         |
 Generic OrcMaps overlays (marker/icon/text/polyline/polygon/circle/route/
         |                  track/waypoint -- src/overlays, not yet implemented)

@@ -21,6 +21,7 @@ add_library(orcmap_engine STATIC
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_translate.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_classify_experimental.cpp
+    ${ORCMAP_ROOT}/src/tiles/compression.cpp
     ${ORCMAP_ROOT}/src/render/style.cpp
     ${ORCMAP_ROOT}/src/render/renderer.cpp
     ${ORCMAP_ROOT}/src/render/clip.cpp
@@ -59,4 +60,5 @@ add_test(
     NAME orcmap_consumer_smoke_test
     COMMAND orcmap_consumer_smoke_test ${ORCMAP_ROOT}/tests/fixtures/tiny.pmtiles
             ${ORCMAP_ROOT}/tests/fixtures/tiny.mvt
+            ${ORCMAP_ROOT}/tests/fixtures/tiny-gzip.pmtiles
 )

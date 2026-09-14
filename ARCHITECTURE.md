@@ -13,6 +13,7 @@ flowchart TD
     Pack["Map Pack (.pmtiles)"]
     Source["orcmap::ByteSource"]
     Reader["orcmap::PmTilesReader"]
+    Inflate["DecompressPayload -- IMPLEMENTED (None/Gzip)"]
     Tile["MVT decoder -- IMPLEMENTED, schema-agnostic"]
     Features["OrcMaps Feature / Geometry -- IMPLEMENTED"]
     Style["orcmap::MapStyle / ResolveFeatureStyle -- IMPLEMENTED"]
@@ -20,13 +21,14 @@ flowchart TD
     Cache["Rendered Tile Cache -- NOT IMPLEMENTED"]
     Core["Renderer core -- IMPLEMENTED (host proof)"]
     Host["Host framebuffer -- IMPLEMENTED"]
-    M5["M5GFX adapter -- EXPERIMENTAL sketch, still MVT-typed"]
+    M5["M5GFX DisplayTarget -- optional RenderTarget"]
     Overlay["Overlay Layer -- NOT IMPLEMENTED"]
     Display["Display"]
 
     Pack --> Source
     Source --> Reader
-    Reader --> Tile
+    Reader --> Inflate
+    Inflate --> Tile
     Tile --> Features
     Features --> Core
     Style --> Core
@@ -39,13 +41,13 @@ flowchart TD
     Overlay --> Core
 ```
 
-Implemented today: `Pack -> Source -> Reader` (host-tested), schema-agnostic
+Implemented today: `Pack -> Source -> Reader` (host-tested), bounded
+`DecompressPayload` for kNone/kGzip (host-tested), schema-agnostic
 `MVT decode` (host-tested), MVT → OrcMaps `FeatureTile` translation
 (host-tested), `Style` (host-tested), a PARTIAL Viewport, a generic
-`RenderTarget` + renderer core, and a host framebuffer proof. An
-`adapters/m5gfx` sketch exists but still draws MVT types directly —
-retarget onto `Feature`/`RenderTarget` is later. FeatureKind mapping is
-EXPERIMENTAL, not the tile-content schema.
+`RenderTarget` + renderer core, a host framebuffer proof, and an optional
+M5GFX `DisplayTarget` (no MVT types, no map semantics). FeatureKind
+mapping is EXPERIMENTAL, not the tile-content schema.
 
 ## Major components
 
@@ -55,7 +57,8 @@ EXPERIMENTAL, not the tile-content schema.
 | `orcmap::host::FileByteSource` | `adapters/host/file_byte_source.{hpp,cpp}` | Implemented (host only) |
 | ESP-IDF `ByteSource` adapter | `adapters/esp_idf/` | Not implemented (empty dir) |
 | Geo/tile math | `include/orcmap/geo.hpp`, `src/core/geo.cpp` | Implemented |
-| `orcmap::PmTilesReader` | `include/orcmap/pmtiles.hpp`, `src/tiles/pmtiles_reader.cpp` | Implemented (container layer only) |
+| `orcmap::PmTilesReader` | `include/orcmap/pmtiles.hpp`, `src/tiles/pmtiles_reader.cpp` | Implemented (container layer only; GetTile returns stored bytes) |
+| Payload decompression | `include/orcmap/compression.hpp`, `src/tiles/compression.cpp` | Implemented (kNone/kGzip bounded; Brotli/zstd fail) |
 | Vector tile (MVT) decoder | `include/orcmap/mvt.hpp`, `src/tiles/mvt_decoder.cpp` | Implemented (schema-agnostic container decode only) |
 | `FeatureKind` | `include/orcmap/feature_kind.hpp` | Implemented (shared by Feature and Style; Feature does not include style.hpp) |
 | OrcMaps Feature / Geometry | `include/orcmap/feature.hpp` | Implemented (format-independent; tile-local integer coords; storage layout provisional) |
@@ -66,7 +69,7 @@ EXPERIMENTAL, not the tile-content schema.
 | `RenderTarget` | `include/orcmap/render_target.hpp` | Implemented (immediate primitives; no command buffer) |
 | Renderer core | `include/orcmap/renderer.hpp`, `src/render/renderer.cpp`, `src/render/clip.cpp` | Implemented (host-proof: ClearMapBackground + per-tile RenderFeatureTile). Not a complete map engine. |
 | Host framebuffer | `adapters/host/framebuffer_target.{hpp,cpp}` | Implemented (host only; RGBA8 + optional PPM) |
-| M5GFX adapter | `adapters/m5gfx/` | Implemented as `DisplayTarget` (`RenderTarget` over `lgfx::v1::LovyanGFX&`). Not compiled into core. No MVT types. |
+| M5GFX adapter | `adapters/m5gfx/include/orcmap/m5gfx/` | Implemented as `DisplayTarget`. Exported include path; no M5GFX link in core. |
 | Overlay primitives | `src/overlays/` | Not implemented (empty dir) |
 | Tile/rendered-tile cache | `src/cache/` | Not implemented (empty dir); `RenderedTileCacheKey` shape exists in `include/orcmap/cache_key.hpp` |
 | Pack builder | `tools/pack-builder/` | Not implemented (empty dir) |
@@ -76,7 +79,7 @@ EXPERIMENTAL, not the tile-content schema.
 | Host render preview | `examples/host-render/` | PARTIAL: writes a 1280x720 PPM from synthetic FeatureTiles |
 | Tab5 example | `examples/m5stack-tab5/` | Not implemented (empty dir) |
 | Host tests | `tests/host/` | Implemented, 100% passing |
-| Test fixture | `tests/fixtures/tiny.pmtiles` (+ `generate_fixture.py`) | Implemented |
+| Test fixture | `tests/fixtures/tiny.pmtiles`, `tiny.mvt`, `tiny-gzip.pmtiles` | Implemented (synthetic; gzip tile fixture for the decompress→pixels path) |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |
 | Consumer build gate | `tests/consumer/` | Implemented, passing |
 | Data provenance registry | `data/sources/*.json` | Implemented, 9 records (4 `CONFIRMED`: Natural Earth, OpenStreetMap, geoBoundaries gbOpen, Google Open Buildings; 5 `REVIEW_REQUIRED` -- see `docs/DATA_PROVENANCE_REGISTRY.md`) |
@@ -87,7 +90,8 @@ EXPERIMENTAL, not the tile-content schema.
 ```
 include/orcmap/      Public headers: byte_source.hpp, geo.hpp, pmtiles.hpp,
                       color.hpp, feature_kind.hpp, style.hpp, cache_key.hpp,
-                      attribution.hpp, map_source.hpp, mvt.hpp, feature.hpp,
+                      attribution.hpp, map_source.hpp, mvt.hpp,
+                      compression.hpp, feature.hpp,
                       mvt_translate.hpp, viewport.hpp, render_target.hpp,
                       renderer.hpp, clip.hpp
 include/orcmap/experimental/  EXPERIMENTAL FeatureKind heuristic
@@ -96,6 +100,7 @@ src/core/             geo.cpp (Web Mercator tile math), viewport.cpp
 src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader),
                       mvt_decoder.cpp (schema-agnostic MVT geometry decoder),
                       mvt_translate.cpp (MVT → FeatureTile),
+                      compression.cpp (bounded None/Gzip),
                       mvt_classify_experimental.cpp (EXPERIMENTAL)
 src/render/           style.cpp, renderer.cpp, clip.cpp
 src/storage/          Empty -- reserved for any storage-layer logic beyond
@@ -105,8 +110,9 @@ src/overlays/         Empty -- marker/polyline/polygon primitives, planned.
 src/cache/            Empty -- bounded LRU tile cache, planned.
 adapters/host/        file_byte_source.{hpp,cpp} -- stdio ByteSource;
                       framebuffer_target.{hpp,cpp} -- host RGBA8 RenderTarget.
-adapters/m5gfx/       DisplayTarget (RenderTarget) + ToRgb565. Header-only;
-                      not compiled into core. No MVT.
+adapters/m5gfx/include/orcmap/m5gfx/  Exported optional headers
+                      (`#include "orcmap/m5gfx/display_target.hpp"`).
+                      Not compiled into core. Consumer supplies M5GFX.
 adapters/esp_idf/     Empty -- ESP-IDF filesystem ByteSource, planned.
 tools/pack-builder/   Empty -- OSM extract -> .pmtiles, planned.
 tools/pack-inspect/   Empty -- inspect a pack's metadata/contents, planned.
@@ -142,15 +148,10 @@ docs/                 Architecture/decision/porting/licensing documents.
    fit in the root alone, and reads the tile's bytes directly from the
    archive at the resolved offset/length. Returns `false` (not an error)
    for a sparse/missing tile.
-4. **Implemented, separately:** `orcmap::DecodeMvtTile()` turns
-   *already-decompressed* MVT tile bytes into `MvtTile` / `MvtLayer` /
-   `MvtFeature` structures. `GetTile()` returns bytes **as stored**
-   (still compressed if `Header().tile_compression` is gzip/brotli/zstd).
-   There is not yet a public generic tile-payload decompression seam
-   between those two calls — `Inflate()` is private to
-   `pmtiles_reader.cpp` and is used for directories/metadata. The
-   synthetic fixture's *tile* payloads are uncompressed, so host tests
-   do not yet exercise that gap.
+4. **Implemented:** `GetTile()` returns bytes **as stored**.
+   `DecompressPayload()` (`include/orcmap/compression.hpp`) inflates
+   kNone/kGzip with a caller `max_output_size` bound. kBrotli/kZstd fail.
+   Directories and metadata use the same helper. Then `DecodeMvtTile()`.
 5. **Implemented:** `TranslateMvtToFeatureTile()` copies decoded MVT into
    an owned `FeatureTile` (geometry, properties, layer name, extent).
    `FeatureKind` is not assigned here.
@@ -163,7 +164,7 @@ docs/                 Architecture/decision/porting/licensing documents.
    seam.
 8. **Not yet implemented:** overzoom, antimeridian wrap, visible-tile
    enumeration, polygon holes, line width, tile cache, pack discovery,
-   tile-payload decompression, OrcSDR integration.
+   Brotli/zstd tile compression, OrcSDR integration.
 
 ## Map pack / archive layer
 
@@ -174,12 +175,13 @@ described here. `PmTilesReader` implements: 127-byte header parse, unsigned
 LEB128 varint decoding, delta-decoded/columnar directory entry parsing
 (tile_id delta array, run_length array, length array, offset array with
 the spec's "0 means contiguous with previous entry" convention), gzip
-inflate via vendored miniz (`Inflate()`/`StripGzipWrapper()` in
-`pmtiles_reader.cpp` — PMTiles uses full RFC 1952 gzip framing around the
-directory, not bare zlib/deflate, so the gzip header/trailer are stripped
-before handing the raw deflate stream to `tinfl_decompress_mem_to_heap`),
+inflate via `DecompressPayload()` (`include/orcmap/compression.hpp` —
+PMTiles uses full RFC 1952 gzip framing, not bare zlib/deflate; output is
+bounded by a caller `max_output_size`, never `tinfl_decompress_mem_to_heap`),
 and the standard integer Hilbert curve `xy2d` algorithm stacked per zoom
-level (`HilbertXyToIndex`/`TilesBeforeLevel`/`ZxyToTileId`).
+level (`HilbertXyToIndex`/`TilesBeforeLevel`/`ZxyToTileId`). Root/leaf
+directories and metadata use the same helper. `GetTile()` still returns
+archive bytes as stored.
 
 Corruption handling implemented and tested: bad magic, unsupported version,
 oversized root directory (>16,384 bytes), truncated reads, and a bounded
@@ -209,8 +211,9 @@ test fixture.
 ## Vector tile decode
 
 Implemented: `orcmap::DecodeMvtTile()` (`include/orcmap/mvt.hpp`,
-`src/tiles/mvt_decoder.cpp`) decodes MVT-encoded tile bytes (as returned
-by `PmTilesReader::GetTile()`, already decompressed by the caller) into
+`src/tiles/mvt_decoder.cpp`) decodes raw MVT bytes (after the caller has
+run `DecompressPayload()` on `GetTile()` output when the archive stored
+compressed tiles) into
 `MvtTile` -> `MvtLayer[]` -> `MvtFeature[]`, each feature carrying its
 geometry (as rings of tile-local `MvtPoint{x,y}`, one ring per
 `MoveTo`/polygon-ring), geometry type (point/linestring/polygon), and
@@ -572,9 +575,8 @@ substitutes for the other.
   core. Not the renderer architecture.
 - External `.orcstyle` files: `MapStyle`'s shape doesn't block this (see
   `docs/STYLING.md`), no loader exists.
-- Brotli/zstd tile compression: `Inflate()` currently only implements gzip
-  and none (`Compression::kGzip`/`kNone`); `kBrotli`/`kZstd` are defined in
-  the enum but return `false` (unsupported) if encountered — flagged for
-  whoever builds a pack that uses them.
+- Brotli/zstd tile compression: `DecompressPayload()` implements kNone and
+  kGzip only; `kBrotli`/`kZstd`/`kUnknown` return `false` (unsupported) —
+  flagged for whoever builds a pack that uses them. No extra libraries.
 - HTTP Range `ByteSource`: explicitly anticipated by the `ByteSource`
   interface shape, not implemented.

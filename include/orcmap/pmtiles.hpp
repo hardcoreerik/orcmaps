@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "orcmap/byte_source.hpp"
+#include "orcmap/compression.hpp"
 
 namespace orcmap {
 
@@ -16,14 +17,6 @@ namespace orcmap {
 // spec) in memory. Leaf directories and tile bytes are fetched on demand
 // via the ByteSource and never accumulate -- this class never loads a
 // whole archive into RAM regardless of archive size.
-
-enum class Compression : uint8_t {
-  kUnknown = 0,
-  kNone = 1,
-  kGzip = 2,
-  kBrotli = 3,
-  kZstd = 4,
-};
 
 enum class TileType : uint8_t {
   kUnknown = 0,
@@ -98,8 +91,8 @@ class PmTilesReader {
   // this archive (sparse coverage -- not an error) or on I/O/format error;
   // callers distinguish the two via IsOpen() staying true either way. On
   // success `out` holds the tile bytes exactly as stored -- still
-  // compressed per Header().tile_compression, since decompression belongs
-  // to the render layer, which owns its own reusable scratch buffer.
+  // compressed per Header().tile_compression. Call DecompressPayload()
+  // (include/orcmap/compression.hpp) before DecodeMvtTile().
   bool GetTile(uint8_t z, uint32_t x, uint32_t y,
                std::vector<uint8_t>* out) const;
 

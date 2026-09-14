@@ -8,7 +8,7 @@
 //   RenderFeatureTile(...)
 
 #include <M5GFX.h>
-#include "display_target.hpp"
+#include "orcmap/m5gfx/display_target.hpp"
 #include "esp_log.h"
 #include "orcmap/feature.hpp"
 #include "orcmap/renderer.hpp"

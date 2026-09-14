@@ -132,6 +132,21 @@ class DocumentationTruthTests(unittest.TestCase):
             any(item.code == "provenance-principle-missing" for item in self.report().errors)
         )
 
+    def test_resolved_m5gfx_retarget_claim_fails(self):
+        self.write("README.md", "The M5GFX retarget is not yet built.\n")
+        self.assertTrue(
+            any(item.code == "resolved-claim" for item in self.report().errors)
+        )
+
+    def test_m5gfx_example_relative_include_hack_fails(self):
+        self.write(
+            "examples/m5gfx/main/CMakeLists.txt",
+            'idf_component_register(INCLUDE_DIRS "../../../adapters/m5gfx")\n',
+        )
+        self.assertTrue(
+            any(item.code == "resolved-claim" for item in self.report().errors)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

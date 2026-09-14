@@ -11,8 +11,9 @@ underway.
 **IMPLEMENTED:** PMTiles reader, Web Mercator math, schema-agnostic MVT
 decode, FeatureKind in `feature_kind.hpp`, Feature / Geometry model,
 MVT→FeatureTile translation, style system, immediate `RenderTarget`,
-`RenderFeatureTile`, host framebuffer, M5GFX `DisplayTarget` (RenderTarget,
-no MVT), host + consumer tests, provenance registry,
+`RenderFeatureTile`, bounded `DecompressPayload` (None/Gzip), host
+framebuffer, M5GFX `DisplayTarget` (exported `orcmap/m5gfx/` headers),
+host + consumer tests, provenance registry,
 `examples/generic-esp32` (no graphics framework), `examples/m5gfx`
 compile proof.
 
@@ -21,9 +22,9 @@ antimeridian wrap, no visible-tile enumerator). Zoom 0..31.
 
 **EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds`.
 
-**PLANNED (Phase 2 remaining):** tile-payload decompression seam,
-`adapters/esp_idf` ByteSource, polygon holes, line width, overzoom,
-real Lane County pack.
+**PLANNED (Phase 2 remaining):** `adapters/esp_idf` ByteSource, polygon
+holes, line width, overzoom, real Lane County pack. Brotli/zstd tile
+compression stay unsupported.
 
 **BLOCKED on real data (later):** tile-content schema / stable
 `FeatureKind` mapping, Lane County pack, performance numbers. Do not
@@ -34,9 +35,9 @@ finalize schema from `tiny.mvt`.
 - `hardcoreerik/orcmaps`, `main` branch.
 - Local working copy: `F:\Ai\OrcMaps`.
 - Treat `git log` / `git status` as authoritative over this paragraph.
-  MVT decoder, `examples/generic-esp32`, and the `adapters/m5gfx` sketch
-  are already on `origin/main` as of `be2b8fb`. This file's job is to
-  describe that HEAD honestly, not to recap one session.
+  MVT decoder, `examples/generic-esp32`, and `adapters/m5gfx` are already
+  on `origin/main`. This file's job is to describe HEAD honestly, not to
+  recap one session.
 - OrcSDR's own branch (`grok/orcmap1-readable-map`, worktree
   `F:\Ai\OrcSDR-Temp\OrcSDR-orcmap1-readable-map`) is **untouched** by this
   work — no integration has started, per `ROADMAP.md` Phase 4 not begun.
@@ -44,11 +45,15 @@ finalize schema from `tiny.mvt`.
 ## What works today
 
 - `orcmap::PmTilesReader` opens a PMTiles v3 archive, parses its header and
-  root directory (gzip-compressed, via vendored miniz), and looks up
-  individual tiles by z/x/y via Hilbert tile-ID addressing, including
-  leaf-directory indirection and sparse/missing-tile handling — verified
-  byte-exact against a fixture built with the official reference
-  implementation.
+  root directory (via `DecompressPayload`), and looks up individual tiles
+  by z/x/y via Hilbert tile-ID addressing, including leaf-directory
+  indirection and sparse/missing-tile handling — verified byte-exact
+  against a fixture built with the official reference implementation.
+  `GetTile()` returns archive bytes as stored. `DecompressPayload()`
+  (`include/orcmap/compression.hpp`) inflates kNone/kGzip with a caller
+  output budget; kBrotli/kZstd/kUnknown fail. Directories and metadata
+  use the same helper. Host-tested through a gzip-compressed MVT fixture
+  all the way to host framebuffer pixels.
 - `orcmap::LatLonToTile`/`TileToLatLon`/etc. — standard Web Mercator tile
   math, antimeridian-safe, Mercator-latitude-clamp-safe.
 - `orcmap::MapStyle` + 4 built-in styles (`orcsdr-dark`, `standard-light`,
@@ -98,7 +103,7 @@ finalize schema from `tiny.mvt`.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **67 test functions, all passing**.
+- Host test suite: **78 test functions, all passing**.
 
 ## What is partially working
 
@@ -106,19 +111,17 @@ finalize schema from `tiny.mvt`.
   + `class` heuristic for tests. Not the production tile schema. Unrecognized
   layers stay `kind_assigned == false`. Replace after a real Lane County
   tile is measured.
-- **`adapters/m5gfx/` — EXPERIMENTAL sketch, not a renderer.** Header-only
-  `ToRgb565` and `DrawFeature` against `lgfx::v1::LovyanGFX&`. Not a CMake
-  component, not compiled into core, not used by `examples/generic-esp32`,
-  no tests. It currently includes `orcmap/mvt.hpp` and draws `MvtFeature`
-  geometry — that coupling is a defect of the sketch now that `Feature`
-  exists. Retarget onto `Feature`; do not grow the MVT-typed path.
-- The PMTiles reader has only been exercised against a synthetic fixture
-  whose directory fits in the root (no leaf-directory fetch exercised
-  end-to-end against real data) and whose tile payloads are uncompressed
-  (gzip inflate is only exercised on the directory, not on tile bytes) —
-  see `ROADMAP.md` Phase 1 risks. `GetTile()` returns bytes as stored;
-  `DecodeMvtTile()` wants decompressed MVT; there is no public generic
-  tile-payload decompression seam yet.
+- **`adapters/m5gfx/` — optional exported DisplayTarget.** Header-only
+  `orcmap/m5gfx/display_target.hpp` implements `RenderTarget` over
+  `lgfx::v1::LovyanGFX&`. Core `REQUIRES ""`; consumers that want the
+  adapter supply their own M5GFX. No MVT types, no map semantics. Opaque
+  RGB565 (`Color.a` ignored). `examples/generic-esp32` still does not
+  depend on M5GFX/M5Unified. Compile proof only — no on-device visual
+  verification in this repo.
+- The PMTiles reader has only been exercised against synthetic fixtures
+  whose directories fit in the root (no leaf-directory fetch exercised
+  end-to-end against real data). Tile gzip is proven on
+  `tests/fixtures/tiny-gzip.pmtiles`, not on a real OSM extract.
 - The MVT decoder has likewise only been exercised against a small
   synthetic fixture (3 layers, 1 feature each) built by a reference
   encoder, not a real-world tile with hundreds of features, deeply
@@ -131,15 +134,15 @@ finalize schema from `tiny.mvt`.
 
 ## What is being worked on
 
-M5GFX DisplayTarget retarget. Next: tile-payload decompression, then a
-real Lane County pack. Not OrcSDR.
+Nothing in this slice. Next: a real OSM-derived Springfield / Lane County
+(97477) pack through PMTiles → OrcMaps → 1280×720 host render. Not OrcSDR.
+Do not freeze the tile schema from synthetic fixtures.
 
 ## Current blockers
 
 - M5GFX `DisplayTarget` exists; there is no on-device visual verification
   in this repo yet (compile proof + host pixels only).
-- No public generic tile-payload decompression seam (`GetTile()` returns
-  stored bytes; `DecodeMvtTile()` wants decompressed MVT).
+- Brotli/zstd tile compression is unsupported (`DecompressPayload` fails).
 - Viewport is PARTIAL (no overzoom, no antimeridian wrap, no visible-tile
   set). Polygon holes are not subtracted. Line `width_px` is not
   rasterized.
@@ -156,7 +159,7 @@ real Lane County pack. Not OrcSDR.
 No longer blockers (corrected 2026-09-13): ESP-IDF 6.0.2 is present and
 `examples/generic-esp32` has compiled/linked the portable core for
 `esp32p4`. M5GFX headers are not required for core work; the m5gfx
-adapter is an optional sketch.
+adapter is an optional exported include surface.
 
 ## Known bugs
 
@@ -191,9 +194,10 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 67 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 78 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
-translation, Viewport, clip, and host render — see `ARCHITECTURE.md`
+translation, Viewport, clip, host render, and compression — see
+`ARCHITECTURE.md`
 "Testing architecture").
 
 Consumer smoke test (separate CMake project):
@@ -216,7 +220,7 @@ python -m unittest discover -s tests -p 'test_data_provenance.py'
 ```
 
 Results as of this writing: both checkers report `0 errors` against the
-real repository; 17 documentation-truth unit tests pass, 20
+real repository; 19 documentation-truth unit tests pass, 20
 data-provenance unit tests pass.
 
 ## Integration status
@@ -299,12 +303,11 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Public generic tile-payload decompression path (`GetTile` → decompress
-   → format decoder). Unsupported Brotli/Zstd stay clean failures.
-2. `adapters/esp_idf` ByteSource.
-3. Then a real Lane County/Eugene pack from the already-`CONFIRMED`
-   `openstreetmap` record — schema, leaf directories, compressed tiles,
-   and performance numbers come from that evidence, not `tiny.mvt`.
+1. Real OSM-derived Springfield / Lane County (97477) geography as a
+   PMTiles archive, rendered 1280×720 on the host. Schema, leaf
+   directories, and performance numbers come from that evidence, not
+   `tiny.mvt`.
+2. `adapters/esp_idf` ByteSource (needed before on-device pack open).
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,
 overlay application features, pack marketplace UI.
@@ -316,7 +319,8 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — M5GFX DisplayTarget at a stopping point. OrcSDR not started.
+None — adapter packaging + bounded gzip decompression at a stopping
+point. OrcSDR not started.
 
 ## Notes for the next development session
 

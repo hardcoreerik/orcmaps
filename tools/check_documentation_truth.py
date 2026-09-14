@@ -43,10 +43,13 @@ PROMPT_PATTERNS = (
 )
 
 # Known-obsolete current-state claims that must never resurface once fixed.
-# Empty today (nothing has been fixed-then-regressed yet) -- populate this
-# the same way OrcSDR does, the first time a documentation fix needs a
-# permanent regression guard.
-RESOLVED_CLAIM_GUARDS: dict[str, tuple[str, ...]] = {}
+RESOLVED_CLAIM_GUARDS: dict[str, tuple[str, ...]] = {
+    # README used to say the M5GFX retarget was "not yet built".
+    "README.md": (r"M5GFX retarget",),
+    # examples/m5gfx must consume the adapter via OrcMaps' exported include
+    # path, not an in-repo relative INCLUDE_DIRS shortcut.
+    "examples/m5gfx/main/CMakeLists.txt": (r"\.\./\.\./\.\./adapters",),
+}
 
 
 @dataclasses.dataclass(frozen=True)

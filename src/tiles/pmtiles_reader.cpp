@@ -1,10 +1,7 @@
 #include "orcmap/pmtiles.hpp"
 
 #include <algorithm>
-#include <cstdlib>
 #include <cstring>
-
-#include "miniz_tinfl.h"
 
 namespace orcmap {
 
@@ -47,62 +44,6 @@ uint64_t ReadVarint(const uint8_t* data, size_t len, size_t* pos, bool* ok) {
   }
   *ok = false;
   return 0;
-}
-
-// Strips an RFC 1952 gzip wrapper (header + trailer) around a raw DEFLATE
-// stream, returning the DEFLATE payload bounds. PMTiles' "gzip" internal/
-// tile compression is full gzip, not bare zlib, so tinfl (which only
-// speaks raw-deflate or zlib-wrapped-deflate) needs this stripped first.
-bool StripGzipWrapper(const uint8_t* data, size_t len, const uint8_t** deflate_start,
-                       size_t* deflate_len) {
-  if (len < 18 || data[0] != 0x1f || data[1] != 0x8b || data[2] != 0x08) {
-    return false;  // Not gzip, or too short to contain header+trailer.
-  }
-  uint8_t flg = data[3];
-  size_t pos = 10;
-  if (flg & 0x04) {  // FEXTRA
-    if (pos + 2 > len) return false;
-    uint16_t xlen = static_cast<uint16_t>(data[pos]) | (static_cast<uint16_t>(data[pos + 1]) << 8);
-    pos += 2 + xlen;
-  }
-  if (flg & 0x08) {  // FNAME
-    while (pos < len && data[pos] != 0) ++pos;
-    ++pos;
-  }
-  if (flg & 0x10) {  // FCOMMENT
-    while (pos < len && data[pos] != 0) ++pos;
-    ++pos;
-  }
-  if (flg & 0x02) pos += 2;  // FHCRC
-  if (pos + 8 > len) return false;  // No room for the 8-byte trailer.
-  *deflate_start = data + pos;
-  *deflate_len = len - pos - 8;  // Exclude CRC32 + ISIZE trailer.
-  return true;
-}
-
-bool Inflate(const uint8_t* data, size_t len, Compression compression,
-             std::vector<uint8_t>* out) {
-  if (compression == Compression::kNone) {
-    out->assign(data, data + len);
-    return true;
-  }
-  if (compression != Compression::kGzip) {
-    return false;  // Brotli/zstd not implemented -- see docs/DEPENDENCY_LEDGER.md.
-  }
-  const uint8_t* deflate_start = nullptr;
-  size_t deflate_len = 0;
-  if (!StripGzipWrapper(data, len, &deflate_start, &deflate_len)) return false;
-
-  size_t out_len = 0;
-  void* decompressed =
-      tinfl_decompress_mem_to_heap(deflate_start, deflate_len, &out_len, 0);
-  if (decompressed == nullptr) return false;
-  out->assign(static_cast<uint8_t*>(decompressed),
-              static_cast<uint8_t*>(decompressed) + out_len);
-  // tinfl_decompress_mem_to_heap allocates via MZ_MALLOC, which maps to
-  // the standard `malloc` unless overridden -- see miniz_common.h.
-  std::free(decompressed);
-  return true;
 }
 
 }  // namespace
@@ -218,8 +159,8 @@ bool PmTilesReader::ReadDirectory(uint64_t offset, uint64_t length,
   if (source_->Read(offset, raw.data(), length) != length) return false;
 
   std::vector<uint8_t> decompressed;
-  if (!Inflate(raw.data(), raw.size(), header_.internal_compression,
-               &decompressed)) {
+  if (!DecompressPayload(header_.internal_compression, raw.data(), raw.size(),
+                         kMaxDirectoryReadBytes, &decompressed)) {
     return false;
   }
 
@@ -296,12 +237,14 @@ bool PmTilesReader::ReadMetadata(std::vector<uint8_t>* out) const {
     out->clear();
     return true;
   }
+  if (header_.metadata_length > kMaxDirectoryReadBytes) return false;
   std::vector<uint8_t> raw(header_.metadata_length);
   if (source_->Read(header_.metadata_offset, raw.data(), raw.size()) !=
       raw.size()) {
     return false;
   }
-  return Inflate(raw.data(), raw.size(), header_.internal_compression, out);
+  return DecompressPayload(header_.internal_compression, raw.data(), raw.size(),
+                           kMaxDirectoryReadBytes, out);
 }
 
 bool PmTilesReader::GetTile(uint8_t z, uint32_t x, uint32_t y,

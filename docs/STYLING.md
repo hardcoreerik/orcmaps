@@ -92,6 +92,9 @@ no dependency on M5GFX, LovyanGFX, LVGL, or any display API. Converting to
 a display's native pixel format (e.g. RGB565 for M5GFX/LovyanGFX) is an
 **target's** job, not the style system's. The host framebuffer target
 proves this; `adapters/m5gfx` converts Color to RGB565 at draw time.
+`Color.a` is stored on the generic type; the M5GFX adapter currently
+renders opaque RGB565 and does not blend. Overlay compositing is future
+engine work.
 This keeps the same
 `MapStyle`/`ResolveFeatureStyle()` API usable by a future LVGL or host-side
 test renderer without change.

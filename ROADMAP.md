@@ -93,6 +93,8 @@ paths the current tests don't. Flagged, not yet mitigated.
       the tile-content-schema decision (`docs/FORMAT_DECISION.md`
       "Deferred"), still open, and now the actual next blocker for a
       renderer rather than the decoder itself
+- [x] Bounded tile-payload decompression (`DecompressPayload`, kNone/kGzip).
+      Brotli/zstd return false. GetTile remains raw stored bytes.
 - [ ] `adapters/esp_idf` `ByteSource` (wraps OrcSDR's
       `orcsdr::storage::FileSystem` or raw ESP-IDF VFS)
 - [x] OrcMaps-owned Feature / Geometry model, and an explicit MVT →
@@ -260,7 +262,7 @@ this phase on that basis.
 - Tile content schema decision (general MVT vs. narrower custom) —
   deferred to Phase 3 measurement, see `docs/FORMAT_DECISION.md`.
 - External `.orcstyle` style files — not blocked, not started.
-- Brotli/zstd tile compression support in `PmTilesReader::Inflate()`.
+- Brotli/zstd tile compression support in `DecompressPayload()`.
 - HTTP Range `ByteSource` (remote streaming).
 - Label collision avoidance / priority rendering.
 - Payment/commercial-license enforcement — explicit non-goal for now, see

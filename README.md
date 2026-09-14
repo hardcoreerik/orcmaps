@@ -23,10 +23,12 @@ host-tested: PMTiles archive reader, Web Mercator tile math, MVT container
 decode (schema-agnostic), OrcMaps Feature / Geometry model, MVT→Feature
 translation, and the style system. An ESP-IDF compile/link smoke test
 exists at [`examples/generic-esp32`](examples/generic-esp32) and does
-**not** require M5GFX. A host framebuffer render proof exists (no M5GFX). Viewport is PARTIAL.
-Not yet built: overlays, cache, M5GFX retarget, and a real on-device map
-draw. FeatureKind mapping is experimental, not a finalized tile schema.
-`adapters/m5gfx` is a `RenderTarget` (DisplayTarget), not compiled into core. See [`STATUS.md`](STATUS.md) for the live
+**not** require M5GFX. A host framebuffer render proof exists (no M5GFX).
+M5GFX `DisplayTarget` is an optional exported adapter
+(`#include "orcmap/m5gfx/display_target.hpp"`). Viewport is PARTIAL.
+Not yet built: overlays, cache, and a real on-device map draw with
+production packs. FeatureKind mapping is experimental, not a finalized
+tile schema. See [`STATUS.md`](STATUS.md) for the live
 snapshot and [`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the
 OrcSDR prototype this project supersedes.
 
@@ -49,12 +51,12 @@ OrcSDR prototype this project supersedes.
 include/orcmap/        Public headers — the portable API
 src/core/              Geo math, tile addressing, PARTIAL Viewport
 src/storage/           Reserved; ByteSource interface lives in include/orcmap/
-src/tiles/             PMTiles reader, MVT decoder, MVT→Feature translation
+src/tiles/             PMTiles reader, MVT decoder, bounded gzip decompress, MVT→Feature translation
 src/render/            Style system + FeatureTile renderer (host proof)
 src/overlays/          Planned marker/polyline/polygon overlay primitives
 src/cache/             Planned bounded LRU tile caches
 adapters/host/         stdio ByteSource for host tests/tools
-adapters/m5gfx/        DisplayTarget RenderTarget (not compiled into core)
+adapters/m5gfx/include/orcmap/m5gfx/  Optional DisplayTarget headers (consumer supplies M5GFX)
 adapters/esp_idf/      Planned ESP-IDF filesystem ByteSource adapter
 tools/pack-builder/    Planned host-side: OSM extract -> map pack
 tools/pack-inspect/    Planned host-side pack inspector

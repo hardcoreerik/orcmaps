@@ -82,9 +82,8 @@ struct MvtTile {
   std::vector<MvtLayer> layers;
 };
 
-// Decodes one MVT tile's raw bytes (as returned by
-// orcmap::PmTilesReader::GetTile(), already decompressed by the caller --
-// see docs/ARCHITECTURE.md "Vector tile decode"). Returns false on any
+// Decodes one MVT tile's raw bytes (after DecompressPayload if the
+// archive stored gzip/etc.). Returns false on any
 // structural problem (truncated data, invalid varint, malformed geometry
 // command stream, tag index out of range) -- never throws, never reads
 // past `length`.
