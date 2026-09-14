@@ -297,6 +297,9 @@ for the machine-readable classification schema. Key rules:
 - Every pack must carry local source, version, license, attribution, builder,
   compatibility, size, and hash metadata. The schema and first real manifest
   are implemented; runtime JSON loading and file hashing remain partial.
+- Host-only regional tooling can extract bbox/GeoJSON subsets from an existing
+  PMTiles archive and emit the immutable archive/manifest/checksum triplet.
+  The separate Springfield builder retains the OSM PBF → Planetiler path.
 - Engine license and map-data license are independent. OSM-derived data
   carries ODbL obligations (attribution, share-alike on the *data*) that
   apply regardless of the engine's own license.

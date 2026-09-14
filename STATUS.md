@@ -155,8 +155,10 @@ extract.
   hop on this pack). Synthetic fixtures remain the CI path.
 - The MVT decoder has now decoded real urban tiles (thousands of
   features, mixed geom types). Hole rings are still not subtracted.
-- Pack production exists as a host script (`tools/pack-builder`), not
-  a product pack builder / manifest pipeline.
+- Host-only regional pack production can extract bbox/GeoJSON regions from an
+  existing PMTiles archive and emit an immutable archive/manifest/checksum
+  triplet. Springfield can also be regenerated from OSM PBF via Planetiler.
+  This is provisioning tooling, not runtime discovery or a remote service.
 
 ## What is being worked on
 

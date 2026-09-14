@@ -1,4 +1,44 @@
-# Springfield / 97477 pack builder (host-only)
+# Regional pack builders (host-only)
+
+`build_regional_pack.py` extracts a bbox or GeoJSON region from an existing
+PMTiles archive using the official `go-pmtiles` CLI, then writes the immutable
+OrcMaps triplet:
+
+```
+<name>.pmtiles
+<name>.manifest.json
+<name>.sha256
+```
+
+It requires all identity, provenance, compatibility, and attribution inputs;
+it never guesses them or contacts a metadata service. `--dry-run` prints the
+exact command and deterministic pack ID without creating files. Existing
+artifacts are refused unless `--force` is explicit. The content profile is
+manifest metadata: extraction preserves the source archive's layers and does
+not pretend to transform one schema/profile into another.
+
+Run `python tools/pack-builder/build_regional_pack.py --help` for the complete
+noninteractive interface. Example:
+
+```
+python tools/pack-builder/build_regional_pack.py \
+  --source D:/maps/planet.pmtiles \
+  --bbox=-124.7,41.9,-116.4,46.3 --min-zoom 0 --max-zoom 14 \
+  --content-profile standard --output D:/maps/oregon.pmtiles \
+  --region-id US-OR --region-name "Oregon, USA" --display-name Oregon \
+  --source-snapshot 2026-09 --source-version 2026-09 --source-label planet.pmtiles \
+  --source-sha256 <verified-source-sha256> --provenance-id openstreetmap \
+  --acquired 2026-09-14 --pack-version 2026.09.1 --pack-class open \
+  --attribution "© OpenStreetMap contributors" \
+  --attribution-link https://www.openstreetmap.org/copyright \
+  --builder-version 1.28.2 --builder-commit <orcmaps-commit>
+```
+
+The `go-pmtiles` executable must be on `PATH`, or supplied with
+`--pmtiles-cli`. It is a host provisioning tool, never a device/runtime
+dependency.
+
+## Springfield / 97477 source build
 
 Reproducible OSM → PMTiles path for the first real-geography host preview.
 This is **pack production**, not an OrcMaps runtime dependency. Planetiler
@@ -70,6 +110,8 @@ Artifacts land in `data/local/` (gitignored):
 ```
 data/local/oregon-latest.osm.pbf
 data/local/springfield-97477.pmtiles
+data/local/springfield-97477.manifest.json
+data/local/springfield-97477.sha256
 data/local/SOURCE.txt
 ```
 

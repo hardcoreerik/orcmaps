@@ -47,7 +47,10 @@ fallback.
 
 - **IMPLEMENTED:** portable manifest model and structural validation,
   deterministic identity, catalog, resolver, provenance-policy checks, and a
-  real Springfield manifest/checksum triplet.
+  real Springfield manifest/checksum triplet. The host-only regional builder
+  can extract a bbox or GeoJSON region from an existing PMTiles archive and
+  emit the same immutable triplet; the Springfield source builder now emits
+  sidecars too.
 - **PARTIAL:** the Springfield demos open the archive directly.
 - **PLANNED:** runtime JSON ingestion, directory discovery, streamed on-device
   SHA-256 verification, and atomic pack installation.

@@ -156,6 +156,9 @@ OrcSDR still builds.
       alongside it, following
       `docs/PACK_MANIFEST_SCHEMA.md`, referencing the `openstreetmap`
       provenance record (already `CONFIRMED`/approved) by id
+- [x] Noninteractive regional PMTiles bbox/GeoJSON extraction emits an
+      immutable archive + manifest + SHA-256 triplet; Springfield OSM/PBF
+      regeneration emits the same sidecars
 - [x] `tools/check_data_provenance.py` extended to validate manifest
       `sources[].provenance_id` references, per `docs/PACK_MANIFEST_SCHEMA.md`
       references and official/Clean pack eligibility

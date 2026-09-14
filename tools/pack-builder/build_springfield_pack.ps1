@@ -74,4 +74,34 @@ try {
 if (-not (Test-Path $OutPath)) {
     throw "Planetiler did not write $OutPath"
 }
+
+$BuilderCommit = (git -C $Root rev-parse HEAD).Trim()
+& python (Join-Path $PSScriptRoot "build_regional_pack.py") `
+    --source=$OsmPath `
+    --bbox=$Bounds `
+    --min-zoom=0 `
+    --max-zoom=15 `
+    --content-profile=standard `
+    --output=$OutPath `
+    --region-id=springfield-97477 `
+    --region-name="Springfield, Oregon, USA" `
+    --display-name="Springfield / 97477" `
+    --source-snapshot="geofabrik-oregon-$When" `
+    --source-version="geofabrik-oregon-latest-$When" `
+    --source-label=geofabrik-oregon.osm.pbf `
+    --source-sha256=$Hash `
+    --provenance-id=openstreetmap `
+    --acquired=$When `
+    --pack-version="$($When.Replace('-', '.')).1" `
+    --pack-class=open `
+    --attribution="© OpenStreetMap contributors" `
+    --attribution-link=https://www.openstreetmap.org/copyright `
+    --priority=100 `
+    --builder="Planetiler OpenMapTiles profile" `
+    --builder-version=$PlanetilerVersion `
+    --builder-commit=$BuilderCommit `
+    --build-date=$When `
+    --existing-output `
+    --force
+if ($LASTEXITCODE -ne 0) { throw "Pack finalization exited $LASTEXITCODE" }
 Write-Host "wrote $OutPath ($((Get-Item $OutPath).Length) bytes)"
