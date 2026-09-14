@@ -15,11 +15,12 @@ namespace orcmap {
 // This decoder is deliberately SCHEMA-AGNOSTIC: it turns MVT bytes into
 // layers/features/geometry/attributes exactly as encoded, with no opinion
 // about what a layer named "water" or an attribute named "class" means.
-// Mapping decoded features to orcmap::FeatureKind (include/orcmap/style.hpp)
-// is a separate step, still undecided -- see docs/FORMAT_DECISION.md
-// "Deferred: tile content schema". Keeping this decoder schema-agnostic
-// means that decision can still go either way (general OpenMapTiles-style
-// schema vs. a narrower OrcMaps-specific one) without rewriting this file.
+// Mapping decoded features into the OrcMaps Feature / Geometry model is
+// orcmap::TranslateMvtToFeatureTile() (include/orcmap/mvt_translate.hpp).
+// Mapping those features to orcmap::FeatureKind is a separate, still
+// experimental step -- see docs/FORMAT_DECISION.md "Deferred: tile content
+// schema". Keeping this decoder schema-agnostic means that decision can
+// still go either way without rewriting this file.
 //
 // Bounded-memory by construction: decoding one tile allocates only what
 // that tile's own layers/features/geometry require (typically a few KB to

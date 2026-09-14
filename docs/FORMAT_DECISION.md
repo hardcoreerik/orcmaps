@@ -158,7 +158,12 @@ This is deferred to the Lane County vertical slice: build one real Lane
 County `.pmtiles` archive with a standard schema (Planetiler + OpenMapTiles
 profile) first, measure actual on-device MVT decode time/complexity against
 ORCMAP1's baseline, and only invest in a narrower custom schema if that
-measurement shows a real, not hypothetical, cost worth avoiding. This
+measurement shows a real, not hypothetical, cost worth avoiding.
+
+An **EXPERIMENTAL** layer-name heuristic (`orcmap::experimental::AssignFeatureKinds`,
+`include/orcmap/experimental/mvt_classify.hpp`) exists so tests can attach
+`FeatureKind` without making this decision. It is not the OrcMaps schema
+and must be replaced from real-tile evidence. This
 follows the project's own instruction not to reject a standard approach
 without measurements, and not to build a narrower format "because it's
 easier" without evidence.

@@ -8,6 +8,7 @@ void RunPmTilesTests(const std::string& fixture_path);
 void RunStyleTests();
 void RunAttributionTests();
 void RunMvtTests(const std::string& fixture_path);
+void RunFeatureTests(const std::string& mvt_fixture_path);
 
 int main(int argc, char** argv) {
   const std::string fixture_path =
@@ -20,6 +21,7 @@ int main(int argc, char** argv) {
   RunStyleTests();
   RunAttributionTests();
   RunMvtTests(mvt_fixture_path);
+  RunFeatureTests(mvt_fixture_path);
 
   if (orcmap::test::g_failures == 0) {
     std::printf("PASS: all OrcMaps host tests passed\n");

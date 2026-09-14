@@ -18,6 +18,8 @@ add_library(orcmap_engine STATIC
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
+    ${ORCMAP_ROOT}/src/tiles/mvt_translate.cpp
+    ${ORCMAP_ROOT}/src/tiles/mvt_classify_experimental.cpp
     ${ORCMAP_ROOT}/src/render/style.cpp
     ${ORCMAP_ROOT}/adapters/host/file_byte_source.cpp
     ${ORCMAP_ROOT}/third_party/miniz/miniz.c

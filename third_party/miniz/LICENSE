@@ -20,11 +20,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
----
-
-Vendored into OrcMaps (https://github.com/hardcoreerik/orcmaps) from
-https://github.com/richgel999/miniz (miniz_tinfl.h/.c, miniz_common.h only
--- the decompression-only subset, used to inflate gzip/deflate-compressed
-PMTiles directories and tiles). Unmodified from upstream. See
-../../docs/DEPENDENCY_LEDGER.md for the OrcMaps dependency record.

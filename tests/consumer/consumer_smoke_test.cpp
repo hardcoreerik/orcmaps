@@ -10,11 +10,10 @@
 //
 // This exercises what's real today (docs/STATUS.md): tile-coordinate math,
 // opening a real PMTiles archive and reading a tile by z/x/y, decoding a
-// real MVT vector tile, resolving a built-in style, and the runtime
-// attribution API. It deliberately does NOT exercise
-// MapEngine/Viewport/rendering/overlays, because none of those exist yet
-// -- see docs/ARCHITECTURE.md. Extend this file as real API surface is
-// added, rather than stubbing out functionality that isn't there.
+// real MVT vector tile, translating it into the OrcMaps Feature model,
+// resolving a built-in style, and the runtime attribution API. It
+// deliberately does NOT exercise MapEngine/Viewport/rendering/overlays,
+// because none of those exist yet -- see docs/ARCHITECTURE.md.
 
 #include <cstdio>
 #include <cstdlib>
@@ -26,7 +25,9 @@
 #include "orcmap/attribution.hpp"     // include/orcmap -- public API.
 #include "orcmap/geo.hpp"
 #include "orcmap/map_source.hpp"
+#include "orcmap/feature.hpp"
 #include "orcmap/mvt.hpp"
+#include "orcmap/mvt_translate.hpp"
 #include "orcmap/pmtiles.hpp"
 #include "orcmap/style.hpp"
 
@@ -76,6 +77,19 @@ bool CheckMvtDecode(const std::string& mvt_fixture_path) {
   return tile.layers.size() == 3;
 }
 
+bool CheckMvtTranslate(const std::string& mvt_fixture_path) {
+  std::ifstream f(mvt_fixture_path, std::ios::binary);
+  const std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)),
+                                   std::istreambuf_iterator<char>());
+  if (data.empty()) return false;
+  orcmap::MvtTile mvt;
+  if (!orcmap::DecodeMvtTile(data.data(), data.size(), &mvt)) return false;
+  orcmap::FeatureTile features;
+  if (!orcmap::TranslateMvtToFeatureTile(mvt, &features)) return false;
+  if (features.features.size() != 3) return false;
+  return !features.features[0].kind_assigned;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -89,6 +103,7 @@ int main(int argc, char** argv) {
   ok &= CheckPmTilesOpenAndRead(fixture_path);
   ok &= CheckStyleAndAttribution();
   ok &= CheckMvtDecode(mvt_fixture_path);
+  ok &= CheckMvtTranslate(mvt_fixture_path);
 
   if (ok) {
     std::printf("PASS: OrcMaps consumer smoke test (public headers only)\n");

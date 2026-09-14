@@ -20,14 +20,15 @@ so unrelated ESP32 projects can use it too.
 Early development. The map-pack container format is decided (PMTiles v3 —
 see [`docs/FORMAT_DECISION.md`](docs/FORMAT_DECISION.md)). Implemented and
 host-tested: PMTiles archive reader, Web Mercator tile math, MVT container
-decode (schema-agnostic), and the style system. An ESP-IDF compile/link
-smoke test exists at [`examples/generic-esp32`](examples/generic-esp32)
-and does **not** require M5GFX. Not yet built: the OrcMaps-owned feature
-model, viewport, renderer core, overlays, cache, and a real on-device map
-draw. `adapters/m5gfx` is an experimental sketch, not a finished
-integration. See [`STATUS.md`](STATUS.md) for the live snapshot and
-[`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the OrcSDR prototype
-this project supersedes.
+decode (schema-agnostic), OrcMaps Feature / Geometry model, MVT→Feature
+translation, and the style system. An ESP-IDF compile/link smoke test
+exists at [`examples/generic-esp32`](examples/generic-esp32) and does
+**not** require M5GFX. Not yet built: viewport, renderer core, overlays,
+cache, and a real on-device map draw. FeatureKind mapping is experimental,
+not a finalized tile schema. `adapters/m5gfx` is an experimental sketch,
+not a finished integration. See [`STATUS.md`](STATUS.md) for the live
+snapshot and [`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the
+OrcSDR prototype this project supersedes.
 
 ## Design principles
 
@@ -48,7 +49,7 @@ this project supersedes.
 include/orcmap/        Public headers — the portable API
 src/core/              Geo math, tile addressing (viewport not yet implemented)
 src/storage/           Reserved; ByteSource interface lives in include/orcmap/
-src/tiles/             PMTiles reader + MVT decoder
+src/tiles/             PMTiles reader, MVT decoder, MVT→Feature translation
 src/render/            Style system today; renderer core not yet implemented
 src/overlays/          Planned marker/polyline/polygon overlay primitives
 src/cache/             Planned bounded LRU tile caches

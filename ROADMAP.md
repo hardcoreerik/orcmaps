@@ -95,9 +95,10 @@ paths the current tests don't. Flagged, not yet mitigated.
       renderer rather than the decoder itself
 - [ ] `adapters/esp_idf` `ByteSource` (wraps OrcSDR's
       `orcsdr::storage::FileSystem` or raw ESP-IDF VFS)
-- [ ] OrcMaps-owned Feature / Geometry model, and an explicit MVT →
-      OrcMaps translation boundary. MVT types must not become the
-      renderer architecture.
+- [x] OrcMaps-owned Feature / Geometry model, and an explicit MVT →
+      OrcMaps translation boundary (`feature.hpp`, `TranslateMvtToFeatureTile`).
+      MVT types must not become the renderer architecture. **EXPERIMENTAL**
+      FeatureKind heuristic exists; the real schema is still deferred.
 - [ ] Graphics-independent renderer seam (`RenderTarget` or a
       render-command stream — evaluate before locking in) plus a
       host-testable render proof. M5GFX must consume that seam, not MVT.

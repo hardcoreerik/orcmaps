@@ -17,9 +17,12 @@ add_executable(orcmap_host_tests
     test_style.cpp
     test_attribution.cpp
     test_mvt.cpp
+    test_feature.cpp
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
+    ${ORCMAP_ROOT}/src/tiles/mvt_translate.cpp
+    ${ORCMAP_ROOT}/src/tiles/mvt_classify_experimental.cpp
     ${ORCMAP_ROOT}/src/render/style.cpp
     ${ORCMAP_ROOT}/adapters/host/file_byte_source.cpp
     ${ORCMAP_ROOT}/third_party/miniz/miniz.c

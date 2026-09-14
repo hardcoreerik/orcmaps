@@ -14,7 +14,7 @@ flowchart TD
     Source["orcmap::ByteSource"]
     Reader["orcmap::PmTilesReader"]
     Tile["MVT decoder -- IMPLEMENTED, schema-agnostic"]
-    Features["OrcMaps Feature / Geometry -- NOT IMPLEMENTED"]
+    Features["OrcMaps Feature / Geometry -- IMPLEMENTED"]
     Style["orcmap::MapStyle / ResolveFeatureStyle -- IMPLEMENTED"]
     Viewport["Viewport -- NOT IMPLEMENTED"]
     Cache["Rendered Tile Cache -- NOT IMPLEMENTED"]
@@ -37,10 +37,10 @@ flowchart TD
 ```
 
 Implemented today: `Pack -> Source -> Reader` (host-tested), schema-agnostic
-`MVT decode` (host-tested), and `Style` (host-tested). An `adapters/m5gfx`
-sketch exists but draws MVT types directly — that is the wrong long-term
-shape and is not a finished renderer. Everything marked "NOT IMPLEMENTED"
-is real, scoped, and described below — see `ROADMAP.md` for sequencing.
+`MVT decode` (host-tested), MVT → OrcMaps `FeatureTile` translation
+(host-tested), and `Style` (host-tested). An `adapters/m5gfx` sketch exists
+but still draws MVT types directly — retarget onto `Feature` is later.
+FeatureKind mapping is EXPERIMENTAL, not the tile-content schema.
 
 ## Major components
 
@@ -51,7 +51,10 @@ is real, scoped, and described below — see `ROADMAP.md` for sequencing.
 | ESP-IDF `ByteSource` adapter | `adapters/esp_idf/` | Not implemented (empty dir) |
 | Geo/tile math | `include/orcmap/geo.hpp`, `src/core/geo.cpp` | Implemented |
 | `orcmap::PmTilesReader` | `include/orcmap/pmtiles.hpp`, `src/tiles/pmtiles_reader.cpp` | Implemented (container layer only) |
-| Vector tile (MVT) decoder | `include/orcmap/mvt.hpp`, `src/tiles/mvt_decoder.cpp` | Implemented (schema-agnostic container decode only; no FeatureKind mapping) |
+| Vector tile (MVT) decoder | `include/orcmap/mvt.hpp`, `src/tiles/mvt_decoder.cpp` | Implemented (schema-agnostic container decode only) |
+| OrcMaps Feature / Geometry | `include/orcmap/feature.hpp` | Implemented (format-independent; tile-local integer coords) |
+| MVT → Feature translation | `include/orcmap/mvt_translate.hpp`, `src/tiles/mvt_translate.cpp` | Implemented (deep copy; does not assign FeatureKind) |
+| Experimental FeatureKind heuristic | `include/orcmap/experimental/mvt_classify.hpp`, `src/tiles/mvt_classify_experimental.cpp` | EXPERIMENTAL (not the tile-content schema; not stable API) |
 | `orcmap::MapStyle` / style system | `include/orcmap/style.hpp`, `include/orcmap/color.hpp`, `include/orcmap/cache_key.hpp`, `src/render/style.cpp` | Implemented |
 | Renderer core | `src/render/` | PLANNED (only `style.cpp` exists in this dir so far) |
 | M5GFX adapter | `adapters/m5gfx/` | EXPERIMENTAL sketch (header-only Color→RGB565 + LovyanGFX helpers; not a CMake component; not compiled into core; currently takes MVT types — to be retargeted onto an OrcMaps feature/render seam) |
@@ -73,10 +76,14 @@ is real, scoped, and described below — see `ROADMAP.md` for sequencing.
 ```
 include/orcmap/      Public headers: byte_source.hpp, geo.hpp, pmtiles.hpp,
                       color.hpp, style.hpp, cache_key.hpp, attribution.hpp,
-                      map_source.hpp, mvt.hpp
+                      map_source.hpp, mvt.hpp, feature.hpp, mvt_translate.hpp
+include/orcmap/experimental/  EXPERIMENTAL FeatureKind heuristic
+                      (mvt_classify.hpp) -- not stable API
 src/core/             geo.cpp (Web Mercator tile math)
 src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader),
-                      mvt_decoder.cpp (schema-agnostic MVT geometry decoder)
+                      mvt_decoder.cpp (schema-agnostic MVT geometry decoder),
+                      mvt_translate.cpp (MVT → FeatureTile),
+                      mvt_classify_experimental.cpp (EXPERIMENTAL)
 src/render/           style.cpp (built-in styles + resolver). Renderer
                       core itself not yet added here.
 src/storage/          Empty -- reserved for any storage-layer logic beyond
@@ -130,9 +137,13 @@ docs/                 Architecture/decision/porting/licensing documents.
    `pmtiles_reader.cpp` and is used for directories/metadata. The
    synthetic fixture's *tile* payloads are uncompressed, so host tests
    do not yet exercise that gap.
-5. **Not yet implemented:** translating MVT structures into an
-   OrcMaps-owned Feature / Geometry model, mapping features to
-   `orcmap::FeatureKind`, a graphics-independent renderer core +
+5. **Implemented:** `TranslateMvtToFeatureTile()` copies decoded MVT into
+   an owned `FeatureTile` (geometry, properties, layer name, extent).
+   `FeatureKind` is not assigned here.
+6. **EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds()` may
+   attach a `FeatureKind` using a layer-name heuristic. Not the schema
+   decision.
+7. **Not yet implemented:** a graphics-independent renderer core +
    viewport, drawing through a graphics integration, and caching the
    rendered result.
 
@@ -197,10 +208,10 @@ coordinates) follows the public MVT spec directly.
 
 **Deliberately schema-agnostic**: this decoder has no opinion about what a
 layer named `"road"` or an attribute named `"class"` means — it decodes
-exactly what's encoded, nothing more. Mapping decoded features to
-`orcmap::FeatureKind` (`include/orcmap/style.hpp`) for rendering is a
-separate, still-unbuilt step — see `docs/FORMAT_DECISION.md` "Deferred:
-tile content schema", which this work does not resolve, by design.
+exactly what's encoded, nothing more. Turning those bytes into OrcMaps
+`Feature`s is `TranslateMvtToFeatureTile()`. Assigning `FeatureKind` is
+still EXPERIMENTAL / deferred — see `docs/FORMAT_DECISION.md` "Deferred:
+tile content schema".
 
 Host-tested (`tests/host/test_mvt.cpp`) against `tests/fixtures/tiny.mvt`,
 a fixture built with the widely-used `mapbox-vector-tile` reference
@@ -209,11 +220,30 @@ geometry types, all four attribute value representations actually
 exercised (string/double/int64/bool), and corruption handling (empty
 buffer, garbage bytes, truncated tile).
 
-Not yet built: an OrcMaps-owned Feature / Geometry model (MVT types must
-not become the renderer architecture), a `FeatureKind` mapper (blocked on
-the tile-content-schema decision), and a renderer core that walks *those*
-generic features and issues graphics-independent draw operations — see
-"Renderer" below.
+## Feature / geometry model
+
+Implemented: `include/orcmap/feature.hpp`. OrcMaps-owned types:
+
+- `Point` — tile-local `int32_t` x/y
+- `Path` — `std::vector<Point>` (linestring or one polygon ring)
+- `Geometry` — `GeomType` + list of paths
+- `Feature` — id, geom type, optional `FeatureKind`, layer name, extent,
+  geometry, parallel property key/value arrays
+- `FeatureTile` — owned list of `Feature`
+
+`GeomType` (shape) is not `FeatureKind` (semantic class). A polygon is not
+automatically water or a building. `kind_assigned` is false until a
+classifier runs.
+
+`TranslateMvtToFeatureTile()` (`src/tiles/mvt_translate.cpp`) is the
+format boundary: it deep-copies MVT into FeatureTile so the `MvtTile` can
+be destroyed. It does not assign `FeatureKind`.
+
+`orcmap::experimental::AssignFeatureKinds()` is a replaceable layer-name
+heuristic for tests. It is not the production schema.
+
+A renderer core that walks generic features is not built — see "Renderer"
+below.
 
 ## Projection / coordinates
 
@@ -375,10 +405,13 @@ tiles, corrupt-file handling, Hilbert ID uniqueness/monotonicity), the
 style system (built-in ids, default style, runtime switching with graceful
 fallback, zoom visibility, Night style's no-blue-light constraint, style
 distinctness, cache-key behavior), the runtime attribution helpers
-(no-sources/excluded/included/mixed/deduplicated cases), and MVT decode
+(no-sources/excluded/included/mixed/deduplicated cases), MVT decode
 (all three geometry types, all four exercised attribute value
-representations, corrupt/truncated/empty-buffer handling). All passing as
-of this writing — see `STATUS.md` for how to reproduce.
+representations, corrupt/truncated/empty-buffer handling), and Feature /
+MVT translation (empty tile, owned copy after `MvtTile` destruction,
+fixture point/line/polygon, experimental classifier, unrecognized layer
+left unassigned). All passing as of this writing — see `STATUS.md` for
+how to reproduce.
 
 ## Consumer integration test
 
@@ -391,9 +424,10 @@ compiled the normal way. Its own include path never adds `src/` or
 internals is a build failure, not a lint warning — see "OrcSDR integration
 boundary" above and `PROJECT_TRUTH.md` "Public API and Versioning". It
 exercises what's real today: tile-coordinate math, opening the fixture
-archive and reading a tile, resolving a built-in style, and the runtime
-attribution API. Extend it as real API surface is added; do not let it
-silently stop reflecting what a real consumer would need.
+archive and reading a tile, decoding MVT, translating to `FeatureTile`,
+resolving a built-in style, and the runtime attribution API. Extend it as
+real API surface is added; do not let it silently stop reflecting what a
+real consumer would need.
 
 ## Documentation and provenance tooling
 
@@ -438,8 +472,10 @@ tooling:
   pattern exactly (repo root = component root). Currently registers only
   the portable-core sources that exist (`src/core/geo.cpp`,
   `src/tiles/pmtiles_reader.cpp`, `src/tiles/mvt_decoder.cpp`,
-  `src/render/style.cpp`, vendored miniz). `REQUIRES ""` — core has no
-  M5GFX/M5Unified/ESP-IDF component dependency.
+  `src/tiles/mvt_translate.cpp`,
+  `src/tiles/mvt_classify_experimental.cpp`, `src/render/style.cpp`,
+  vendored miniz). `REQUIRES ""` — core has no M5GFX/M5Unified/ESP-IDF
+  component dependency.
 - `tests/host/CMakeLists.txt`: separate, standalone CMake project (its own
   `project()` call), building `orcmap_host_tests` directly from source —
   no ESP-IDF toolchain involved. This is deliberate, again matching

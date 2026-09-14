@@ -146,12 +146,22 @@ distribution under the documented source terms").
   (`orcmap::DecodeMvtTile()`, `include/orcmap/mvt.hpp`,
   `src/tiles/mvt_decoder.cpp`, hand-rolled minimal protobuf reader — no
   protobuf library dependency, see `docs/DEPENDENCY_LEDGER.md` "Resolved:
-  MVT decoding"). **Tile content schema itself: still not decided**
+  MVT decoding").
+- **OrcMaps Feature / Geometry model: implemented**
+  (`include/orcmap/feature.hpp` — `Point`, `Path`, `Geometry`, `Feature`,
+  `FeatureTile`, `GeomType`). Format-independent; no MVT/PMTiles/M5GFX
+  types. Coordinates are tile-local integers. `FeatureKind` is optional
+  (`kind_assigned`) and is not implied by geometry type.
+- **MVT → OrcMaps translation: implemented**
+  (`orcmap::TranslateMvtToFeatureTile()`, `include/orcmap/mvt_translate.hpp`).
+  Deep-copies decoded MVT into owned FeatureTile data. Does **not** assign
+  `FeatureKind`.
+- **Tile content schema / FeatureKind mapping: still not decided**
   (general OpenMapTiles-style MVT vs. a narrower OrcMaps-specific schema).
-  The decoder works either way — it decodes layers/features/geometry/
-  attributes exactly as encoded with no opinion about what they mean.
-  Deferred to measurement against the Lane County vertical slice — see
-  `docs/FORMAT_DECISION.md` "Deferred: tile content schema".
+  An **EXPERIMENTAL** heuristic lives in
+  `include/orcmap/experimental/mvt_classify.hpp` and is not the stable
+  public API. Deferred to measurement against the Lane County vertical
+  slice — see `docs/FORMAT_DECISION.md` "Deferred: tile content schema".
 - **Rendering: vector tiles decoded once, cached as RGB565** (RAM/PSRAM
   first, optional SD-backed cache second) — the hybrid approach, matching
   the yuiseki precedent and ORCMAP1's own informal sprite-cache pattern in
@@ -219,11 +229,10 @@ directly. `orcmap::Color` is plain RGBA8; conversion to a display's native
 pixel format (RGB565 for M5GFX) is an adapter's job, not the core's.
 
 `adapters/m5gfx/` is an **EXPERIMENTAL sketch** (header-only `ToRgb565` and
-LovyanGFX draw helpers). It currently takes MVT decode types (`MvtFeature`
-etc.), which is the wrong long-term shape — MVT structures must stop at
-the MVT boundary; the renderer and graphics integrations consume an
-OrcMaps-owned feature/geometry model (not yet implemented). Do not grow
-that sketch until the generic seam exists.
+LovyanGFX draw helpers). It currently still takes MVT decode types
+(`MvtFeature` etc.) — that coupling is now a known defect of the sketch,
+because the OrcMaps Feature / Geometry model exists. Do not grow that
+sketch; retarget it onto `Feature` in a later slice.
 
 ## Styling Model
 
@@ -357,9 +366,11 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   sketch, `adapters/esp_idf` is not yet implemented) — nothing under
   `src/` or `third_party/` is a consumer-facing contract, ever. Format
   headers `mvt.hpp` / `pmtiles.hpp` are public *today* because they are
-  what a consumer can actually call; they are not the long-term
-  application API (`MapEngine` / `Viewport` / generic features, none of
-  which exist yet). This is enforced structurally, not just by convention:
+  still usable low-level APIs; they are not the long-term application API
+  (`MapEngine` / `Viewport` do not exist yet). `feature.hpp` is the
+  format-independent feature model. `experimental/mvt_classify.hpp` is
+  **not** stable public API. This is enforced structurally, not just by
+  convention:
   `tests/consumer/` builds an external-consumer smoke test whose own
   include path never adds `src/` or `third_party/` — if that target builds,
   a real external project (OrcSDR included) could integrate the same way.

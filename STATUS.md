@@ -9,17 +9,18 @@ slice, synthetic fixture) are complete. Phase 2 (rendering foundation) is
 underway.
 
 **IMPLEMENTED:** PMTiles reader, Web Mercator math, schema-agnostic MVT
-decode, style system, host + consumer tests, provenance registry,
+decode, OrcMaps Feature / Geometry model, MVT→FeatureTile translation,
+style system, host + consumer tests, provenance registry,
 `examples/generic-esp32` ESP-IDF compile/link of the portable core
 (ESP-IDF 6.0.2 / `esp32p4`, no graphics framework).
 
-**EXPERIMENTAL / SKETCH:** `adapters/m5gfx/` (header-only Color→RGB565 +
-LovyanGFX helpers). Currently takes MVT types — the wrong long-term
-shape. Not compiled into core. Not a finished integration.
+**EXPERIMENTAL / SKETCH:** `orcmap::experimental::AssignFeatureKinds`
+(layer-name heuristic, not the tile schema). `adapters/m5gfx/` (header-only
+Color→RGB565 + LovyanGFX helpers). The adapter still takes MVT types —
+retarget onto `Feature` is later. Not compiled into core.
 
-**PLANNED (Phase 2 remaining):** OrcMaps-owned Feature / Geometry model,
-MVT→OrcMaps translation boundary, graphics-independent render seam,
-retarget M5GFX onto that seam, tile-payload decompression seam, minimal
+**PLANNED (Phase 2 remaining):** graphics-independent render seam,
+retarget M5GFX onto Feature, tile-payload decompression seam, minimal
 Viewport, host render proof, `adapters/esp_idf` ByteSource.
 
 **BLOCKED on real data (later):** tile-content schema / stable
@@ -87,16 +88,23 @@ finalize schema from `tiny.mvt`.
   against ESP-IDF 6.0.2, target `esp32p4`. **Does not depend on M5GFX or
   M5Unified.** Does not open a pack, decode MVT at runtime, or draw
   pixels. Not a CI gate.
-- Host test suite: **29 test functions, all passing**.
+- `orcmap::Feature` / `Geometry` / `FeatureTile` (`include/orcmap/feature.hpp`)
+  — format-independent geometry + properties. `TranslateMvtToFeatureTile()`
+  deep-copies MVT into owned Feature data. Does not assign `FeatureKind`.
+- Host test suite: **37 test functions, all passing**.
 
 ## What is partially working
 
+- **`orcmap::experimental::AssignFeatureKinds` — EXPERIMENTAL.** Layer-name
+  + `class` heuristic for tests. Not the production tile schema. Unrecognized
+  layers stay `kind_assigned == false`. Replace after a real Lane County
+  tile is measured.
 - **`adapters/m5gfx/` — EXPERIMENTAL sketch, not a renderer.** Header-only
   `ToRgb565` and `DrawFeature` against `lgfx::v1::LovyanGFX&`. Not a CMake
   component, not compiled into core, not used by `examples/generic-esp32`,
   no tests. It currently includes `orcmap/mvt.hpp` and draws `MvtFeature`
-  geometry — that coupling is a defect of the sketch. Do not extend it
-  until an OrcMaps-owned feature/render seam exists.
+  geometry — that coupling is a defect of the sketch now that `Feature`
+  exists. Retarget onto `Feature`; do not grow the MVT-typed path.
 - The PMTiles reader has only been exercised against a synthetic fixture
   whose directory fits in the root (no leaf-directory fetch exercised
   end-to-end against real data) and whose tile payloads are uncompressed
@@ -116,16 +124,14 @@ finalize schema from `tiny.mvt`.
 
 ## What is being worked on
 
-First approved slice (docs + generic-esp32 M5-dep removal + miniz
-provenance) is complete. Next engine work is the OrcMaps-owned Feature /
-Geometry model and graphics-independent render seam — not more M5GFX
-draw calls, and not OrcSDR integration.
+Feature / Geometry + MVT translation slice is complete. Next is the
+graphics-independent render seam (evaluate RenderTarget vs render-command),
+then retarget M5GFX onto `Feature`. Not OrcSDR.
 
 ## Current blockers
 
-- No OrcMaps-owned Feature / Geometry model, so there is nothing
-  format-independent for a renderer or M5GFX to consume. This is the
-  actual Phase 2 architecture hole.
+- No graphics-independent renderer / Viewport, so nothing yet draws a
+  `FeatureTile`. The Feature model exists; the render seam does not.
 - No public generic tile-payload decompression seam (`GetTile()` returns
   stored bytes; `DecodeMvtTile()` wants decompressed MVT).
 - No real OSM extract pipeline exists yet (Geofabrik download + osmium/
@@ -174,10 +180,10 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 29 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 37 test functions
 covering geo math, PMTiles container parsing, the style system, the
-runtime attribution API, and MVT decode — see `ARCHITECTURE.md` "Testing
-architecture").
+runtime attribution API, MVT decode, and Feature/MVT translation — see
+`ARCHITECTURE.md` "Testing architecture").
 
 Consumer smoke test (separate CMake project):
 
@@ -282,18 +288,15 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. OrcMaps-owned Feature / Geometry model + explicit MVT → OrcMaps
-   translation boundary. Keep any semantic mapper EXPERIMENTAL until a
-   real Lane County tile informs it.
-2. Evaluate RenderTarget vs render-command stream; implement the smallest
+1. Evaluate RenderTarget vs render-command stream; implement the smallest
    graphics-independent seam; add a host-testable render proof.
-3. Retarget `adapters/m5gfx` onto that seam; remove `orcmap/mvt.hpp` from
-   it.
-4. Public generic tile-payload decompression path (`GetTile` → decompress
+2. Retarget `adapters/m5gfx` onto `Feature` / that seam; remove
+   `orcmap/mvt.hpp` from it.
+3. Public generic tile-payload decompression path (`GetTile` → decompress
    → format decoder). Unsupported Brotli/Zstd stay clean failures.
-5. Minimal Viewport (center lat/lon, zoom, screen size).
-6. `adapters/esp_idf` ByteSource.
-7. Then a real Lane County/Eugene pack from the already-`CONFIRMED`
+4. Minimal Viewport (center lat/lon, zoom, screen size).
+5. `adapters/esp_idf` ByteSource.
+6. Then a real Lane County/Eugene pack from the already-`CONFIRMED`
    `openstreetmap` record — schema, leaf directories, compressed tiles,
    and performance numbers come from that evidence, not `tiny.mvt`.
 
@@ -307,8 +310,8 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None for the cleanup slice. Engine Feature / Geometry work has not
-started.
+None — Feature / Geometry slice at a stopping point. Renderer work has
+not started.
 
 ## Notes for the next development session
 
