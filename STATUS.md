@@ -21,7 +21,8 @@ compile proof, `examples/m5stack-tab5` (hardware-verified static
   verified ESP32-S3 Springfield demo), host pack-inspect,
 `orcmap::esp_idf::FileByteSource`.
 
-**PARTIAL:** Viewport overzoom is not implemented. Zoom 0..31.
+**PARTIAL:** Portable camera controls are implemented and host-tested; hardware
+input bindings and viewport overzoom are not. Integer zoom is 0..31.
 `tools/pack-builder` Springfield script only. Runtime manifest JSON discovery
 and on-device SHA-256 verification are not implemented.
 
@@ -68,6 +69,9 @@ extract.
   all the way to host framebuffer pixels.
 - `orcmap::LatLonToTile`/`TileToLatLon`/etc. — standard Web Mercator tile
   math, antimeridian-safe, Mercator-latitude-clamp-safe.
+- `orcmap::Viewport` camera controls — center, integer zoom, geographic pan,
+  viewport size, visible/fit bounds, projection/unprojection, and
+  anchor-preserving zoom. Hardware demos do not bind touch/buttons yet.
 - `orcmap::MapStyle` + 4 built-in styles (`orcsdr-dark`, `standard-light`,
   `high-contrast-field`, `night-red-safe`) + `ResolveFeatureStyle()` +
   `StyleManager` runtime switching + `RenderedTileCacheKey`. The LilyGO demo
@@ -120,7 +124,7 @@ extract.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **115 test functions, all passing**.
+- Host test suite: **121 test functions, all passing**.
 - `EnumerateVisibleTiles` (unique TileIds, X wrap, Y clamp).
   `TileScreenMap` uses shortest wrapped X delta. Overzoom still rejected.
 - `RenderTarget::DrawLine` takes `width_px` from `MapPaint`. Shared
@@ -215,7 +219,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 115 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 121 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`

@@ -31,6 +31,9 @@ exists at [`examples/generic-esp32`](examples/generic-esp32) and does
 M5GFX `DisplayTarget` is an optional exported adapter
 (`#include "orcmap/m5gfx/display_target.hpp"`). Viewport enumerates
 visible tiles (X wrap, no overzoom).
+Portable camera controls now support center, integer zoom, geographic pan,
+fit/visible bounds, coordinate projection, and anchor-preserving zoom; device
+input bindings are not implemented yet.
 The portable pack model, manifest validation, deterministic identity,
 multi-pack catalog, and one-best-local-pack resolver are host-tested. The
 Springfield golden pack now includes its manifest and SHA-256 sidecars.
@@ -45,7 +48,8 @@ SD Shield is physically verified under ESP-IDF 5.5.4
 That demo writes a new numbered timing report to the SD card after every
 successful render, avoiding a USB serial dependency. Its first confirmed
 numbered-report run rendered the Springfield frame in **1,037 ms**.
-Not production-ready: no pan/zoom, no labels. FeatureKind mapping is
+Not production-ready: hardware demos remain static and labels are absent.
+FeatureKind mapping is
 experimental. See [`STATUS.md`](STATUS.md).
 
 ## Design principles

@@ -159,9 +159,10 @@ OrcSDR still builds.
 - [x] `tools/check_data_provenance.py` extended to validate manifest
       `sources[].provenance_id` references, per `docs/PACK_MANIFEST_SCHEMA.md`
       references and official/Clean pack eligibility
-- [ ] Pan works (viewport moves, new tiles load, cache reused where
-      possible)
-- [ ] Zoom works (tile set changes correctly across zoom levels)
+- [x] Portable pan changes geographic viewport state and visible tiles
+- [x] Portable integer zoom, fit bounds, visible bounds, coordinate projection,
+      and anchor-preserving screen-point zoom are host-tested
+- [ ] Hardware touch/button bindings exercise pan and zoom on a real pack
 - [ ] A generic marker overlay draws correctly at a lat/lon
 - [ ] Memory measured and bounded (peak RAM, peak PSRAM logged)
 - [ ] OrcSDR still builds and runs, unmodified, throughout (OrcMaps

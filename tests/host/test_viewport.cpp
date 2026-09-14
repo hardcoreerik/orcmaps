@@ -1,6 +1,7 @@
 #include "orcmap/viewport.hpp"
 
 #include <cmath>
+#include <limits>
 #include <set>
 #include <utility>
 #include <vector>
@@ -286,6 +287,87 @@ void TestMakeTileScreenMapRejectsOutOfRangeXy() {
       !orcmap::MakeTileScreenMap(v, orcmap::TileId{2, 0, 4}, 4096, &map));
 }
 
+void TestCameraCenterAndZoomControls() {
+  orcmap::Viewport v = Z0Frame(320);
+  ORCMAP_EXPECT_TRUE(!orcmap::SetViewportSize(&v, 0, 170));
+  ORCMAP_EXPECT_TRUE(orcmap::SetViewportSize(&v, 320, 170));
+  ORCMAP_EXPECT_EQ(v.width_px, 320);
+  ORCMAP_EXPECT_EQ(v.height_px, 170);
+  ORCMAP_EXPECT_TRUE(orcmap::SetCenter(&v, 100.0, 540.0));
+  const orcmap::LatLon center = orcmap::GetCenter(v);
+  ORCMAP_EXPECT_NEAR(center.lat_deg, orcmap::kMercatorMaxLatDeg, 1e-9);
+  ORCMAP_EXPECT_NEAR(center.lon_deg, -180.0, 1e-9);
+  ORCMAP_EXPECT_TRUE(orcmap::SetZoom(&v, 14));
+  ORCMAP_EXPECT_EQ(orcmap::GetZoom(v), 14);
+  for (int i = 0; i < 40; ++i) orcmap::ZoomIn(&v);
+  ORCMAP_EXPECT_EQ(orcmap::GetZoom(v), orcmap::kMaxZoom);
+  for (int i = 0; i < 40; ++i) orcmap::ZoomOut(&v);
+  ORCMAP_EXPECT_EQ(orcmap::GetZoom(v), 0);
+}
+
+void TestPanMovesCameraAndWrapsAntimeridian() {
+  orcmap::Viewport v = MakeView(0.0, 179.0, 2, 320, 170, 256);
+  ORCMAP_EXPECT_TRUE(orcmap::PanByPixels(&v, 32.0, 32.0));
+  ORCMAP_EXPECT_TRUE(v.center_lon_deg < -160.0);
+  ORCMAP_EXPECT_TRUE(v.center_lat_deg < 0.0);
+}
+
+void TestVisibleBoundsWorldAndTinyViewport() {
+  orcmap::Viewport world = MakeView(0.0, 0.0, 0, 256, 256, 256);
+  orcmap::GeoBounds bounds;
+  ORCMAP_EXPECT_TRUE(orcmap::GetVisibleBounds(world, &bounds));
+  ORCMAP_EXPECT_NEAR(bounds.min_lon_deg, -180.0, 1e-9);
+  ORCMAP_EXPECT_NEAR(bounds.max_lon_deg, 180.0, 1e-9);
+  ORCMAP_EXPECT_NEAR(bounds.min_lat_deg, -orcmap::kMercatorMaxLatDeg, 1e-7);
+  ORCMAP_EXPECT_NEAR(bounds.max_lat_deg, orcmap::kMercatorMaxLatDeg, 1e-7);
+
+  orcmap::Viewport tiny = MakeView(44.05, -123.022, 14, 1, 1, 256);
+  ORCMAP_EXPECT_TRUE(orcmap::GetVisibleBounds(tiny, &bounds));
+  ORCMAP_EXPECT_TRUE(bounds.min_lat_deg <= 44.05 && bounds.max_lat_deg >= 44.05);
+}
+
+void TestFitBoundsWorldOregonAndSpringfield() {
+  orcmap::Viewport v = MakeView(0, 0, 10, 320, 170, 256);
+  ORCMAP_EXPECT_TRUE(!orcmap::FitBounds(
+      &v, {-180.0, -85.0, 180.0, 85.0}, std::numeric_limits<int>::max()));
+  ORCMAP_EXPECT_TRUE(orcmap::FitBounds(
+      &v, {-180.0, -orcmap::kMercatorMaxLatDeg, 180.0,
+           orcmap::kMercatorMaxLatDeg}, 0));
+  ORCMAP_EXPECT_EQ(v.zoom, 0);
+  ORCMAP_EXPECT_TRUE(orcmap::FitBounds(&v, {-124.7, 41.9, -116.4, 46.3}, 8));
+  const uint8_t oregon_zoom = v.zoom;
+  ORCMAP_EXPECT_TRUE(orcmap::FitBounds(
+      &v, {-123.055, 44.030, -122.960, 44.090}, 8));
+  ORCMAP_EXPECT_TRUE(v.zoom > oregon_zoom);
+  ORCMAP_EXPECT_NEAR(v.center_lon_deg, -123.0075, 1e-4);
+}
+
+void TestProjectionRoundTripAfterPanAndZoom() {
+  orcmap::Viewport v = MakeView(44.05, -123.022, 14, 320, 170, 256);
+  ORCMAP_EXPECT_TRUE(orcmap::PanByPixels(&v, 17.0, -9.0));
+  double x = 0.0, y = 0.0;
+  const orcmap::LatLon point{44.051, -123.02};
+  ORCMAP_EXPECT_TRUE(orcmap::ProjectLatLon(v, point, &x, &y));
+  orcmap::LatLon round_trip;
+  ORCMAP_EXPECT_TRUE(orcmap::ScreenToLatLon(v, x, y, &round_trip));
+  ORCMAP_EXPECT_NEAR(round_trip.lat_deg, point.lat_deg, 1e-7);
+  ORCMAP_EXPECT_NEAR(round_trip.lon_deg, point.lon_deg, 1e-7);
+}
+
+void TestZoomAtScreenPointPreservesAnchor() {
+  orcmap::Viewport v = MakeView(44.05, -123.022, 12, 320, 170, 256);
+  orcmap::LatLon before;
+  ORCMAP_EXPECT_TRUE(orcmap::ScreenToLatLon(v, 240.0, 40.0, &before));
+  ORCMAP_EXPECT_TRUE(orcmap::ZoomAtScreenPoint(&v, 240.0, 40.0, 2));
+  orcmap::LatLon after;
+  ORCMAP_EXPECT_TRUE(orcmap::ScreenToLatLon(v, 240.0, 40.0, &after));
+  ORCMAP_EXPECT_NEAR(after.lat_deg, before.lat_deg, 1e-7);
+  ORCMAP_EXPECT_NEAR(after.lon_deg, before.lon_deg, 1e-7);
+  ORCMAP_EXPECT_TRUE(orcmap::ZoomAtScreenPoint(
+      &v, 160.0, 85.0, std::numeric_limits<int>::max()));
+  ORCMAP_EXPECT_EQ(v.zoom, orcmap::kMaxZoom);
+}
+
 }  // namespace
 
 void RunViewportTests() {
@@ -306,4 +388,10 @@ void RunViewportTests() {
   TestEnumeratePolarYClamped();
   TestWrappedXProjectsAdjacent();
   TestMakeTileScreenMapRejectsOutOfRangeXy();
+  TestCameraCenterAndZoomControls();
+  TestPanMovesCameraAndWrapsAntimeridian();
+  TestVisibleBoundsWorldAndTinyViewport();
+  TestFitBoundsWorldOregonAndSpringfield();
+  TestProjectionRoundTripAfterPanAndZoom();
+  TestZoomAtScreenPointPreservesAnchor();
 }

@@ -5,15 +5,9 @@
 #include <vector>
 
 #include "orcmap/attribution.hpp"
+#include "orcmap/geo.hpp"
 
 namespace orcmap {
-
-struct GeoBounds {
-  double min_lon_deg = 0.0;
-  double min_lat_deg = 0.0;
-  double max_lon_deg = 0.0;
-  double max_lat_deg = 0.0;
-};
 
 struct PackManifest {
   std::string pack_id;

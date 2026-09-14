@@ -34,6 +34,21 @@ TileCoord LatLonToTileCoord(double lat_deg, double lon_deg, uint8_t zoom) {
   return TileCoord{x, y};
 }
 
+LatLon TileCoordToLatLon(TileCoord coord, uint8_t zoom) {
+  if (!ZoomIsValid(zoom) || !std::isfinite(coord.x) ||
+      !std::isfinite(coord.y)) {
+    return LatLon{0.0, 0.0};
+  }
+  const double n = static_cast<double>(TilesPerAxis(zoom));
+  double x = std::fmod(coord.x, n);
+  if (x < 0.0) x += n;
+  const double y = std::clamp(coord.y, 0.0, n);
+  const double lon_deg = x / n * 360.0 - 180.0;
+  const double lat_rad =
+      std::atan(std::sinh(kPi * (1.0 - 2.0 * (y / n))));
+  return LatLon{lat_rad * kRadToDeg, lon_deg};
+}
+
 TileId LatLonToTile(double lat_deg, double lon_deg, uint8_t zoom) {
   if (!ZoomIsValid(zoom)) return TileId{zoom, 0, 0};
   const TileCoord coord = LatLonToTileCoord(lat_deg, lon_deg, zoom);
@@ -52,8 +67,9 @@ LatLon TileToLatLon(TileId tile) {
   if (!ZoomIsValid(tile.z)) return LatLon{0.0, 0.0};
   const double n = static_cast<double>(TilesPerAxis(tile.z));
   const double lon_deg = static_cast<double>(tile.x) / n * 360.0 - 180.0;
-  const double y_frac = static_cast<double>(tile.y) / n;
-  const double lat_rad = std::atan(std::sinh(kPi * (1.0 - 2.0 * y_frac)));
+  const double y = std::clamp(static_cast<double>(tile.y), 0.0, n);
+  const double lat_rad =
+      std::atan(std::sinh(kPi * (1.0 - 2.0 * (y / n))));
   return LatLon{lat_rad * kRadToDeg, lon_deg};
 }
 

@@ -29,6 +29,26 @@ struct Viewport {
   int tile_size_px = 256;
 };
 
+bool SetCenter(Viewport* viewport, double lat_deg, double lon_deg);
+LatLon GetCenter(const Viewport& viewport);
+bool SetZoom(Viewport* viewport, int zoom);
+uint8_t GetZoom(const Viewport& viewport);
+bool ZoomIn(Viewport* viewport);
+bool ZoomOut(Viewport* viewport);
+bool SetViewportSize(Viewport* viewport, int width_px, int height_px);
+
+// Positive dx/dy moves the camera east/south. Touch-drag bindings normally
+// pass the negative gesture delta.
+bool PanByPixels(Viewport* viewport, double dx, double dy);
+bool ProjectLatLon(const Viewport& viewport, LatLon point, double* screen_x,
+                   double* screen_y);
+bool ScreenToLatLon(const Viewport& viewport, double screen_x,
+                    double screen_y, LatLon* point);
+bool GetVisibleBounds(const Viewport& viewport, GeoBounds* bounds);
+bool FitBounds(Viewport* viewport, const GeoBounds& bounds, int padding_px);
+bool ZoomAtScreenPoint(Viewport* viewport, double screen_x, double screen_y,
+                       int zoom_delta);
+
 // Prepared per-source-tile map: Mercator center math runs once, then each
 // vertex is origin + local * scale. Invalid when zoom is out of 0..31,
 // source tile z != viewport zoom, or `out` is null.

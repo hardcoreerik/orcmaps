@@ -374,7 +374,8 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   `src/` or `third_party/` is a consumer-facing contract, ever. Format
   headers `mvt.hpp` / `pmtiles.hpp` are public *today* because they are
   still usable low-level APIs; they are not the long-term application API
-  (`MapEngine` does not exist yet; Viewport is PARTIAL). `feature.hpp` is the
+  (`MapEngine` does not exist yet; Viewport provides the portable camera
+  state and controls but is not a full engine). `feature.hpp` is the
   format-independent feature model. `experimental/mvt_classify.hpp` is
   **not** stable public API. This is enforced structurally, not just by
   convention:
@@ -501,8 +502,13 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
 - `include/orcmap/attribution.hpp` and `include/orcmap/map_source.hpp`:
   minimal, header-only runtime attribution API
   (`AttributionInfo`, `MapSourceInfo`, `CollectRequiredAttribution()`),
-  host-tested. No `MapEngine`/`Viewport`/discovery implementation yet —
+  host-tested. No `MapEngine` or source-discovery implementation yet —
   this establishes the shape those will eventually populate.
+- `Viewport` is the sole portable camera state: center, integer zoom,
+  viewport size, pixel pan, visible/fit bounds, projection/unprojection,
+  and anchor-preserving zoom are implemented and host-tested. Hardware
+  touch/button bindings are not implemented yet; adapters must translate
+  input into this API rather than create a second coordinate system.
 
 ## Explicit Non-Goals
 

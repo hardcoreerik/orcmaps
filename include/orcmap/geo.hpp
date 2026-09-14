@@ -19,6 +19,13 @@ struct LatLon {
   double lon_deg;
 };
 
+struct GeoBounds {
+  double min_lon_deg = 0.0;
+  double min_lat_deg = 0.0;
+  double max_lon_deg = 0.0;
+  double max_lat_deg = 0.0;
+};
+
 struct TileId {
   uint8_t z;
   uint32_t x;
@@ -49,6 +56,9 @@ double ClampLatitudeDeg(double lat_deg);
 // Longitude is wrapped and latitude is clamped internally, so this is
 // always well-defined (no NaN/Inf) for any finite input.
 TileCoord LatLonToTileCoord(double lat_deg, double lon_deg, uint8_t zoom);
+
+// Inverse projection for fractional tile coordinates. X wraps and Y clamps.
+LatLon TileCoordToLatLon(TileCoord coord, uint8_t zoom);
 
 // The integer tile (floor of LatLonToTileCoord) containing a point.
 TileId LatLonToTile(double lat_deg, double lon_deg, uint8_t zoom);

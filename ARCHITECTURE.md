@@ -66,7 +66,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | MVT → Feature translation | `include/orcmap/mvt_translate.hpp`, `src/tiles/mvt_translate.cpp` | Implemented (deep copy; does not assign FeatureKind) |
 | Experimental FeatureKind heuristic | `include/orcmap/experimental/mvt_classify.hpp`, `src/tiles/mvt_classify_experimental.cpp` | EXPERIMENTAL (not the tile-content schema; not stable API) |
 | `orcmap::MapStyle` / style system | `include/orcmap/style.hpp`, `include/orcmap/color.hpp`, `include/orcmap/cache_key.hpp`, `src/render/style.cpp` | Implemented |
-| Viewport | `include/orcmap/viewport.hpp`, `src/core/viewport.cpp` | Implemented: `EnumerateVisibleTiles`, wrapped X, clamped Y. No overzoom. |
+| Viewport/camera | `include/orcmap/viewport.hpp`, `src/core/viewport.cpp` | Implemented: center/zoom/pan, fit/visible bounds, projection, anchored zoom, visible-tile enumeration, wrapped X, clamped Y. Integer zoom; no overzoom. |
 | `RenderTarget` | `include/orcmap/render_target.hpp` | Implemented (immediate primitives; no command buffer) |
 | Renderer core | `include/orcmap/renderer.hpp`, `src/render/renderer.cpp`, `src/render/clip.cpp` | Implemented (host-proof: ClearMapBackground + per-tile RenderFeatureTile). Not a complete map engine. |
 | Host framebuffer | `adapters/host/framebuffer_target.{hpp,cpp}` | Implemented (host only; RGBA8 + optional PPM) |
