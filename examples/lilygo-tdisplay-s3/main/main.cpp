@@ -14,6 +14,7 @@
 #include "orcmap/renderer.hpp"
 #include "orcmap/style.hpp"
 #include "orcmap/viewport.hpp"
+#include "report.hpp"
 
 #include <driver/gpio.h>
 #include <driver/sdmmc_host.h>
@@ -35,6 +36,7 @@ namespace {
 
 constexpr char kTag[] = "orcmap_tdisplay_s3";
 constexpr char kMapPath[] = "/sd/orcmaps/springfield.pmtiles";
+constexpr char kReportPath[] = "/sd/orcmaps/orcmaps-report.txt";
 constexpr double kCenterLat = 44.0500;
 constexpr double kCenterLon = -123.0220;
 constexpr uint8_t kZoom = 14;
@@ -195,6 +197,7 @@ void BenchmarkSequentialRead(const char* path, uint64_t file_size) {
 }  // namespace
 
 extern "C" void app_main() {
+  const int64_t power_started = NowUs();
   gpio_set_direction(GPIO_NUM_15, GPIO_MODE_OUTPUT);
   gpio_set_level(GPIO_NUM_15, 1);
 
@@ -202,7 +205,7 @@ extern "C" void app_main() {
     ESP_LOGE(kTag, "display init failed");
     for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
   }
-  g_display.setRotation(1);
+  g_display.setRotation(0);
   g_display.setBrightness(180);
   g_display.fillScreen(TFT_BLACK);
   StatusLine(6, TFT_WHITE, "ORCMAPS");
@@ -368,6 +371,8 @@ extern "C" void app_main() {
 
   const double total_ms =
       static_cast<double>(NowUs() - frame_started) / 1000.0;
+  const double power_to_map_ms =
+      static_cast<double>(NowUs() - power_started) / 1000.0;
   ESP_LOGI(kTag, "ORCMAPS LILYGO T-DISPLAY-S3 HARDWARE DEMO");
   ESP_LOGI(kTag, "display: %dx%d", display_width, display_height);
   ESP_LOGI(kTag, "map: %s", kMapPath);
@@ -390,6 +395,35 @@ extern "C" void app_main() {
            static_cast<unsigned>(PsramMin()),
            static_cast<unsigned>(esp_psram_get_size()));
   ESP_LOGI(kTag, "RESULT: PASS");
+
+  const orcmap_demo::Report report{
+      display_width,
+      display_height,
+      tiles.size(),
+      present,
+      missing,
+      enumerate_ms,
+      lookup_ms,
+      gzip_ms,
+      decode_ms,
+      translate_ms,
+      classify_ms,
+      render_ms,
+      total_ms,
+      power_to_map_ms,
+      source.BytesRead(),
+      internal_before,
+      InternalMin(),
+      psram_before,
+      PsramMin(),
+      esp_psram_get_size(),
+  };
+  const bool report_saved = orcmap_demo::WriteReport(kReportPath, report);
+  ESP_LOGI(kTag, "report: %s %s", kReportPath,
+           report_saved ? "SAVED" : "WRITE FAILED");
+  g_display.fillRect(0, display_height - 12, display_width, 12, TFT_BLACK);
+  StatusLine(display_height - 11, report_saved ? TFT_GREEN : TFT_RED,
+             report_saved ? "REPORT SAVED" : "REPORT WRITE FAILED");
 
   for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
 }

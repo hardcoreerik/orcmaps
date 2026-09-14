@@ -2,14 +2,15 @@
 
 Standalone Springfield map test for the LilyGO T-Display-S3 Touch with
 the SD Shield fitted. It opens `/sd/orcmaps/springfield.pmtiles`, renders
-the OrcSDR Dark style at zoom 14, and prints SD, timing, and memory
-measurements over USB serial.
+the OrcSDR Dark style at zoom 14, and writes timing and memory measurements
+to `/sd/orcmaps/orcmaps-report.txt` as well as USB serial.
 
 ## Status
 
 - ESP-IDF 5.5.4 build: **PASS** (2026-09-14)
 - Host OrcMaps regression test: **PASS**
-- Flash / display / SD / map render: **pending physical verification**
+- Flash / display / SD / map render: **PASS** (2026-09-14)
+- SD timing report firmware: **flashed**; report-file retrieval pending
 - Touch input: **not used by this static render test**
 
 ## Hardware
@@ -39,7 +40,8 @@ examples/m5stack-tab5/test-pack/springfield-97477.pmtiles
 ```
 
 Copy it to `/orcmaps/springfield.pmtiles` on a FAT32 microSD card. The
-firmware never formats or writes the card.
+firmware never formats or modifies the map. After each successful render it
+overwrites `/orcmaps/orcmaps-report.txt` with the latest measurements.
 
 ## Build, flash, and monitor
 
@@ -50,12 +52,14 @@ Use ESP-IDF 5.5.x:
 cd examples/lilygo-tdisplay-s3
 idf.py set-target esp32s3
 idf.py build
-idf.py -p COM32 flash
-idf.py -p COM32 monitor
+idf.py -p <PORT> flash
+idf.py -p <PORT> monitor --no-reset
 ```
 
 If automatic reset cannot enter the ROM downloader, hold BOOT, tap
 RESET, release BOOT, and retry the flash command.
+
+The verified run used COM13. Port numbers can change after reconnecting.
 
 ## Pass boundary
 
@@ -65,8 +69,8 @@ The build alone proves only ESP32-S3 compilation. Physical PASS requires:
 2. PSRAM initializes.
 3. The SD Shield mounts and prints card information.
 4. The Springfield archive opens and renders.
-5. Serial ends with `ORCMAPS LILYGO T-DISPLAY-S3 HARDWARE DEMO` and
-   `RESULT: PASS`.
+5. The display shows `REPORT SAVED`.
+6. `/orcmaps/orcmaps-report.txt` ends with `RESULT=PASS`.
 
 The map remains on screen. Touch gestures, pan, and zoom are deliberately
 outside this first static test.

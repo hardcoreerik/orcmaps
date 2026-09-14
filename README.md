@@ -31,8 +31,11 @@ A hardware-verified static Springfield render exists on M5Stack Tab5
 ([`examples/m5stack-tab5`](examples/m5stack-tab5); evidence
 [`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`](docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md)).
 A second Springfield hardware demo for the LilyGO T-Display-S3 Touch +
-SD Shield builds under ESP-IDF 5.5.4; physical verification is pending
-([`examples/lilygo-tdisplay-s3`](examples/lilygo-tdisplay-s3)).
+SD Shield is physically verified under ESP-IDF 5.5.4
+([`examples/lilygo-tdisplay-s3`](examples/lilygo-tdisplay-s3); evidence
+[`docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md`](docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md)).
+That demo writes its latest timing report to the SD card, avoiding a USB
+serial dependency.
 Not production-ready: no pan/zoom, no labels. FeatureKind mapping is
 experimental. See [`STATUS.md`](STATUS.md).
 

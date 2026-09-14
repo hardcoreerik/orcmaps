@@ -99,9 +99,9 @@ paths the current tests don't. Flagged, not yet mitigated.
       buffered; no SD mount, no Tab5, no `_IONBF`)
 - [x] `examples/m5stack-tab5` hardware-verified static Springfield
       render on physical Tab5 (`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`).
-- [ ] `examples/lilygo-tdisplay-s3` static Springfield render on the
-      T-Display-S3 Touch + SD Shield. ESP-IDF 5.5.4 build passes; physical
-      display/SD/render verification is pending.
+- [x] `examples/lilygo-tdisplay-s3` hardware-verified static Springfield
+      render on the T-Display-S3 Touch + SD Shield
+      (`docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md`).
 - [x] OrcMaps-owned Feature / Geometry model, and an explicit MVT →
       OrcMaps translation boundary (`feature.hpp`, `TranslateMvtToFeatureTile`).
       MVT types must not become the renderer architecture. **EXPERIMENTAL**
@@ -242,7 +242,7 @@ this phase on that basis.
 - [ ] Tile-boundary crossing tested heavily (pan across many tiles)
 - [x] Host performance numbers recorded in `docs/PERFORMANCE.md` (Springfield
       97477) and Tab5 ESP32-P4 hardware numbers recorded. LilyGO ESP32-S3
-      hardware numbers are still missing.
+      render is physically verified, but exact hardware timing is still missing.
 
 ## Phase 8 — Global / planet scale
 
@@ -260,9 +260,8 @@ this phase on that basis.
 - [x] `examples/generic-esp32` — ESP-IDF compile/link smoke test of the
       portable core with **no** M5GFX/M5Unified dependency (proves a
       generic ESP-IDF app can consume OrcMaps). Not a map-rendering demo.
-- [ ] A fuller non-OrcSDR example that actually opens a pack / draws.
-      `examples/lilygo-tdisplay-s3` now builds this path independently of
-      OrcSDR; check this only after physical display/SD/render PASS.
+- [x] A fuller non-OrcSDR example that opens a pack and draws. The physical
+      LilyGO T-Display-S3 demo verifies this path independently of OrcSDR.
 - [ ] Stable, tagged OrcMaps releases (semver, `idf_component.yml` version
       bumps) that OrcSDR (and, ideally, at least one unrelated project)
       pin against

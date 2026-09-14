@@ -82,7 +82,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Springfield host preview | `tools/pack-inspect/` | HOST-ONLY MEASURED: real OSM → gzip PMTiles → 1280×720. |
 | Springfield demo pack | `examples/m5stack-tab5/test-pack/` | Public OSM-derived PMTiles used on Tab5 (ODbL). |
 | Tab5 example | `examples/m5stack-tab5/` | Hardware-verified static Springfield render (M5Unified + SDMMC Slot 0). See `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. |
-| LilyGO T-Display-S3 example | `examples/lilygo-tdisplay-s3/` | ESP32-S3 build-verified static Springfield demo (M5GFX + 1-bit SDMMC Shield); physical verification pending. |
+| LilyGO T-Display-S3 example | `examples/lilygo-tdisplay-s3/` | Hardware-verified static Springfield demo (M5GFX + 1-bit SDMMC Shield); writes the latest run report to the card. See `docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md`. |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles`, `tiny.mvt`, `tiny-gzip.pmtiles` | Implemented (synthetic; gzip tile fixture for the decompress→pixels path) |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |
@@ -559,7 +559,8 @@ Tab5 Springfield current uncached cold frame ~4.4 s (was 11.3 s before
 the no-text layer filter). Decode+translate ~2.0 s, render ~1.24 s.
 Host ~75 ms for the same view. See
 `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. The LilyGO ESP32-S3 demo
-builds but has no physical timing yet. These static renders are not
+also renders the pack on physical hardware, but has no captured timing
+yet. These static renders are not
 production-ready. `examples/generic-esp32` proves the component links;
 it is not a performance result. See `docs/PERFORMANCE.md` and
 `ROADMAP.md`.

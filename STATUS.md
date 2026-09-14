@@ -16,8 +16,8 @@ framebuffer, M5GFX `DisplayTarget` (exported `orcmap/m5gfx/` headers),
 host + consumer tests, provenance registry,
 `examples/generic-esp32` (no graphics framework), `examples/m5gfx`
 compile proof, `examples/m5stack-tab5` (hardware-verified static
-Springfield render on Tab5), `examples/lilygo-tdisplay-s3` (ESP32-S3
-build-verified Springfield demo; physical verification pending), host pack-inspect,
+  Springfield render on Tab5), `examples/lilygo-tdisplay-s3` (hardware-
+  verified ESP32-S3 Springfield demo), host pack-inspect,
 `orcmap::esp_idf::FileByteSource`.
 
 **PARTIAL:** Viewport overzoom is not implemented. Zoom 0..31.
@@ -149,9 +149,11 @@ extract.
 
 ## What is being worked on
 
-Physical bring-up of the Springfield demo on a LilyGO T-Display-S3 Touch
-with SD Shield. The ESP-IDF 5.5.4 build passes. COM32 did not enter the
-ROM downloader automatically; no device bytes have been written yet.
+The Springfield demo is running on a physical LilyGO T-Display-S3 Touch
+with SD Shield. It was flashed through COM13, and the corrected 320x170
+landscape view renders `/orcmaps/springfield.pmtiles`. Exact serial timing
+was not captured; the user observed power-to-map as very fast. A follow-up
+firmware writes the next result to `/orcmaps/orcmaps-report.txt`.
 
 ## Current blockers
 
@@ -189,7 +191,8 @@ HOST-ONLY Springfield / 97477 numbers are in `docs/PERFORMANCE.md`.
 A busy z14 tile: ~0.6 ms gzip decompress, ~2.2 ms MVT decode, ~0.7 ms
 FeatureTile copy, ~0.2 ms render; the current quiet 1280×720 z14 host
 frame is ~75 ms. These are **not** ESP32 numbers. Physical Tab5 results
-are ~4.4 s for the same viewport. LilyGO ESP32-S3 timing is pending.
+are ~4.4 s for the same viewport. LilyGO ESP32-S3 render is physically
+verified, but exact timing is pending.
 
 ## Test status
 
@@ -219,7 +222,9 @@ idf.py build
 ```
 
 Result: build PASS; `orcmap_lilygo_tdisplay_s3.bin` is 380,432 bytes.
-Flash and physical display/SD/render verification are still pending.
+COM13 flash hashes verified. Physical display/SD/render: PASS after the
+landscape rotation correction. The SD-report firmware also flashed with
+verified hashes; report-file retrieval is pending.
 
 Consumer smoke test (separate CMake project):
 
@@ -327,8 +332,8 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Put the LilyGO board in download mode, flash COM32, and capture
-   display/SD/render timing evidence.
+1. Read `/orcmaps/orcmaps-report.txt` after the LilyGO shows `REPORT SAVED`
+   and record the exact stage timings.
 2. Continue the ESP32-P4 decode path after the LilyGO baseline exists.
 3. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 
