@@ -11,6 +11,14 @@ bool LayerIs(const Feature& feature, const char* name) {
   return feature.layer == name;
 }
 
+bool PropIs(const Feature& feature, const char* key, const char* expected) {
+  const PropertyValue* value = FindProperty(feature, key);
+  if (value == nullptr || !std::holds_alternative<std::string>(*value)) {
+    return false;
+  }
+  return std::get<std::string>(*value) == expected;
+}
+
 const char* StringProp(const Feature& feature, const char* key) {
   const PropertyValue* value = FindProperty(feature, key);
   if (value == nullptr || !std::holds_alternative<std::string>(*value)) {
@@ -19,8 +27,16 @@ const char* StringProp(const Feature& feature, const char* key) {
   return std::get<std::string>(*value).c_str();
 }
 
-FeatureKind ClassifyRoad(const Feature& feature) {
+// OpenMapTiles `transportation` (measured Springfield 97477 tiles):
+// class=motorway|primary|secondary|tertiary|minor|service|path|track|rail|
+// busway|bridge. Rail is a class on this layer, not a separate layer.
+FeatureKind ClassifyTransportation(const Feature& feature) {
   const char* cls = StringProp(feature, "class");
+  const char* sub = StringProp(feature, "subclass");
+  if ((cls != nullptr && std::strcmp(cls, "rail") == 0) ||
+      (sub != nullptr && std::strcmp(sub, "rail") == 0)) {
+    return FeatureKind::kRail;
+  }
   if (cls == nullptr) return FeatureKind::kMinorRoad;
   if (std::strcmp(cls, "motorway") == 0 || std::strcmp(cls, "trunk") == 0) {
     return FeatureKind::kMotorway;
@@ -30,6 +46,40 @@ FeatureKind ClassifyRoad(const Feature& feature) {
     return FeatureKind::kSecondaryRoad;
   }
   return FeatureKind::kMinorRoad;
+}
+
+bool ClassifyLandcover(const Feature& feature, FeatureKind* kind) {
+  // subclass=park|recreation_ground|garden observed on landcover polygons.
+  if (PropIs(feature, "subclass", "park") ||
+      PropIs(feature, "subclass", "recreation_ground") ||
+      PropIs(feature, "subclass", "garden")) {
+    *kind = FeatureKind::kPark;
+    return true;
+  }
+  *kind = FeatureKind::kLand;
+  return true;
+}
+
+bool ClassifyLanduse(const Feature& feature, FeatureKind* kind) {
+  const char* cls = StringProp(feature, "class");
+  if (cls == nullptr) return false;
+  if (std::strcmp(cls, "pitch") == 0 || std::strcmp(cls, "playground") == 0 ||
+      std::strcmp(cls, "cemetery") == 0 || std::strcmp(cls, "forest") == 0 ||
+      std::strcmp(cls, "grass") == 0 || std::strcmp(cls, "park") == 0) {
+    *kind = FeatureKind::kPark;
+    return true;
+  }
+  if (std::strcmp(cls, "residential") == 0 ||
+      std::strcmp(cls, "commercial") == 0 ||
+      std::strcmp(cls, "industrial") == 0 || std::strcmp(cls, "retail") == 0 ||
+      std::strcmp(cls, "school") == 0 || std::strcmp(cls, "kindergarten") == 0 ||
+      std::strcmp(cls, "military") == 0 || std::strcmp(cls, "railway") == 0 ||
+      std::strcmp(cls, "stadium") == 0 || std::strcmp(cls, "track") == 0 ||
+      std::strcmp(cls, "bus_station") == 0) {
+    *kind = FeatureKind::kLand;
+    return true;
+  }
+  return false;
 }
 
 }  // namespace
@@ -43,7 +93,7 @@ bool TryClassifyFeature(const Feature& feature, FeatureKind* kind) {
   }
   if (LayerIs(feature, "road") || LayerIs(feature, "roads") ||
       LayerIs(feature, "transportation") || LayerIs(feature, "transport")) {
-    *kind = ClassifyRoad(feature);
+    *kind = ClassifyTransportation(feature);
     return true;
   }
   if (LayerIs(feature, "rail") || LayerIs(feature, "railway")) {
@@ -55,20 +105,31 @@ bool TryClassifyFeature(const Feature& feature, FeatureKind* kind) {
     return true;
   }
   if (LayerIs(feature, "park")) {
-    *kind = FeatureKind::kPark;
+    // OpenMapTiles park is often a point (label) at z14; polygons appear
+    // at higher zoom. Points stay labels; polygons fill as park.
+    if (feature.geometry.type == GeomType::kPolygon) {
+      *kind = FeatureKind::kPark;
+    } else {
+      *kind = FeatureKind::kLabelPrimary;
+    }
     return true;
   }
-  if (LayerIs(feature, "land") || LayerIs(feature, "earth") ||
-      LayerIs(feature, "landcover")) {
+  if (LayerIs(feature, "landcover")) {
+    return ClassifyLandcover(feature, kind);
+  }
+  if (LayerIs(feature, "land") || LayerIs(feature, "earth")) {
     *kind = FeatureKind::kLand;
     return true;
+  }
+  if (LayerIs(feature, "landuse")) {
+    return ClassifyLanduse(feature, kind);
   }
   if (LayerIs(feature, "boundary") || LayerIs(feature, "boundaries")) {
     *kind = FeatureKind::kBoundary;
     return true;
   }
   if (LayerIs(feature, "airport") || LayerIs(feature, "aerodrome") ||
-      LayerIs(feature, "aerodrome_label")) {
+      LayerIs(feature, "aerodrome_label") || LayerIs(feature, "aeroway")) {
     *kind = FeatureKind::kAirport;
     return true;
   }

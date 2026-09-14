@@ -72,11 +72,13 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | M5GFX adapter | `adapters/m5gfx/include/orcmap/m5gfx/` | Implemented as `DisplayTarget`. Exported include path; no M5GFX link in core. |
 | Overlay primitives | `src/overlays/` | Not implemented (empty dir) |
 | Tile/rendered-tile cache | `src/cache/` | Not implemented (empty dir); `RenderedTileCacheKey` shape exists in `include/orcmap/cache_key.hpp` |
-| Pack builder | `tools/pack-builder/` | Not implemented (empty dir) |
-| Pack inspector/verifier | `tools/pack-inspect/`, `tools/pack-verify/` | Not implemented (empty dirs) |
+| Pack builder | `tools/pack-builder/` | PARTIAL: Springfield/97477 host pack script (Planetiler, not a runtime dep) |
+| Pack inspector | `tools/pack-inspect/` | Implemented (host). Preview visible-tile walk is scaffolding, not Viewport API. |
+| Pack verifier | `tools/pack-verify/` | Not implemented (empty dir) |
 | Generic ESP32 example | `examples/generic-esp32/` | PARTIAL: ESP-IDF compile/link smoke test of the portable core (no graphics framework) |
 | M5GFX example | `examples/m5gfx/` | PARTIAL: ESP-IDF compile proof of DisplayTarget + synthetic FeatureTile (M5GFX, no M5Unified) |
-| Host render preview | `examples/host-render/` | PARTIAL: writes a 1280x720 PPM from synthetic FeatureTiles |
+| Host render preview | `examples/host-render/` | PARTIAL: synthetic 1280x720 PPM |
+| Springfield host preview | `tools/pack-inspect/` | HOST-ONLY MEASURED: real OSM → gzip PMTiles → 1280×720. Pack/PPM gitignored under data/local. |
 | Tab5 example | `examples/m5stack-tab5/` | Not implemented (empty dir) |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles`, `tiny.mvt`, `tiny-gzip.pmtiles` | Implemented (synthetic; gzip tile fixture for the decompress→pixels path) |
@@ -114,8 +116,8 @@ adapters/m5gfx/include/orcmap/m5gfx/  Exported optional headers
                       (`#include "orcmap/m5gfx/display_target.hpp"`).
                       Not compiled into core. Consumer supplies M5GFX.
 adapters/esp_idf/     Empty -- ESP-IDF filesystem ByteSource, planned.
-tools/pack-builder/   Empty -- OSM extract -> .pmtiles, planned.
-tools/pack-inspect/   Empty -- inspect a pack's metadata/contents, planned.
+tools/pack-builder/   Springfield pack script (Planetiler). Not runtime.
+tools/pack-inspect/   Host inspect + real-geography preview.
 tools/pack-verify/    Empty -- validate a pack against its manifest, planned.
 examples/generic-esp32/  ESP-IDF compile/link smoke test of the portable
                       core. No M5GFX/M5Unified. Not a map demo.

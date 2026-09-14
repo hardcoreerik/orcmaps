@@ -110,12 +110,10 @@ paths the current tests don't. Flagged, not yet mitigated.
       `lgfx::v1::LovyanGFX&`, Color→RGB565, shared line clip). No MVT.
       `examples/m5gfx` is an ESP-IDF compile proof, not a Tab5 product
       demo.
-- [ ] Tile content schema decided (`docs/FORMAT_DECISION.md` "Deferred") and
-      a `DecodedFeature -> orcmap::FeatureKind` mapping written against it —
-      needs a real Lane County MVT tile to decide from, not the synthetic
-      fixture (`ROADMAP.md` Phase 1 risk note, still applicable). Any
-      temporary mapper used for a render proof is EXPERIMENTAL, not the
-      stable public API.
+- [ ] Tile content schema decided (`docs/FORMAT_DECISION.md` "Deferred").
+      Springfield / 97477 OpenMapTiles 3.16 tiles are now MEASURED host
+      evidence; the mapping in `experimental::AssignFeatureKinds` is still
+      EXPERIMENTAL and must not be treated as the schema.
 - [x] Renderer core (`src/render/renderer.cpp`) that walks OrcMaps
       features (not `MvtFeature`), calls `ResolveFeatureStyle()`, issues
       generic draw operations. Host proof only; not a full map engine.
@@ -129,10 +127,9 @@ paths the current tests don't. Flagged, not yet mitigated.
 **Dependencies:** Phase 1 (reader) must keep working; style system (done)
 feeds the renderer once it exists.
 
-**Exit criteria:** one real tile's geometry, decoded from a `.pmtiles`
-archive, drawn to a Tab5 (or host-side test render) using an active
-`MapStyle`, with a measured decode+render time recorded in
-`docs/PERFORMANCE.md`.
+**Exit criteria:** host-side real-tile render + measured times: **met**
+(Springfield / 97477, 1280×720, `docs/PERFORMANCE.md`). Tab5 / SD path
+is **not** met.
 
 ## Phase 3 — Lane County / Eugene proof
 
@@ -140,6 +137,10 @@ archive, drawn to a Tab5 (or host-side test render) using an active
 project brief — pan, zoom, markers, ADS-B/LoRa overlays, bounded memory,
 OrcSDR still builds.
 
+- [x] HOST-ONLY evidence: Springfield / 97477 gzip PMTiles from Geofabrik
+      Oregon via Planetiler 0.10.2, rendered 1280×720 through the real
+      engine (`tools/pack-inspect`, `docs/PERFORMANCE.md`). Not a Lane
+      County product pack, not on-device, schema not frozen.
 - [ ] Real Lane County `.pmtiles` archive built from an OSM `.osm.pbf`
       extract (Geofabrik or similar) via a proper tiler (Planetiler/
       tippecanoe) — not the Overpass-JSON or incomplete-GeoJSON scripts
@@ -232,7 +233,8 @@ this phase on that basis.
 
 - [ ] Oregon / Pacific Northwest pack built and benchmarked
 - [ ] Tile-boundary crossing tested heavily (pan across many tiles)
-- [ ] Performance numbers recorded in `docs/PERFORMANCE.md`
+- [x] Host performance numbers recorded in `docs/PERFORMANCE.md` (Springfield
+      97477). ESP32 numbers still missing.
 
 ## Phase 8 — Global / planet scale
 
@@ -260,7 +262,8 @@ this phase on that basis.
 ## Deferred work
 
 - Tile content schema decision (general MVT vs. narrower custom) —
-  deferred to Phase 3 measurement, see `docs/FORMAT_DECISION.md`.
+  still deferred. Springfield OpenMapTiles 3.16 tiles are measured host
+  evidence, not a freeze. See `docs/FORMAT_DECISION.md`.
 - External `.orcstyle` style files — not blocked, not started.
 - Brotli/zstd tile compression support in `DecompressPayload()`.
 - HTTP Range `ByteSource` (remote streaming).

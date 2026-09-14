@@ -7,11 +7,11 @@ namespace experimental {
 
 // EXPERIMENTAL / NOT STABLE PUBLIC API.
 //
-// Temporary layer-name + property heuristic so tests (and a later render
-// proof) can attach FeatureKind without pretending the tile-content schema
-// is decided. The real mapping waits for a measured Lane County /
-// OpenMapTiles (or narrower) tile -- see docs/FORMAT_DECISION.md
-// "Deferred: tile content schema".
+// Temporary layer-name + property heuristic so tests and the Springfield
+// host preview can attach FeatureKind. Mappings below were extended from
+// measured OpenMapTiles 3.16 tiles (Planetiler) over Springfield / 97477.
+// This is still not the OrcMaps tile-content schema -- see
+// docs/FORMAT_DECISION.md "Deferred: tile content schema".
 //
 // Replace this file without changing Feature, Geometry, FeatureTile, the
 // style system, Viewport, or graphics integrations.

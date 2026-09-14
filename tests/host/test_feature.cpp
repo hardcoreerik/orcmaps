@@ -195,6 +195,42 @@ void TestAssignKindsNullFails() {
   ORCMAP_EXPECT_TRUE(!orcmap::experimental::AssignFeatureKinds(nullptr));
 }
 
+void TestExperimentalOpenMapTilesLikeMappings() {
+  orcmap::FeatureTile tile;
+  auto add = [&](const char* layer, orcmap::GeomType geom, const char* key,
+                 const char* value) {
+    orcmap::Feature f;
+    f.layer = layer;
+    f.geometry.type = geom;
+    if (key != nullptr) {
+      f.property_keys.push_back(key);
+      f.property_values.push_back(std::string(value));
+    }
+    tile.features.push_back(std::move(f));
+  };
+  add("transportation", orcmap::GeomType::kLineString, "class", "rail");
+  add("transportation", orcmap::GeomType::kLineString, "class", "motorway");
+  add("landcover", orcmap::GeomType::kPolygon, "subclass", "park");
+  add("landuse", orcmap::GeomType::kPolygon, "class", "residential");
+  add("landuse", orcmap::GeomType::kPolygon, "class", "playground");
+  add("park", orcmap::GeomType::kPolygon, "class", "protected_area");
+  add("park", orcmap::GeomType::kPoint, "class", "county_park");
+  add("aeroway", orcmap::GeomType::kPolygon, "class", "runway");
+  add("housenumber", orcmap::GeomType::kPoint, "housenumber", "123");
+  ORCMAP_EXPECT_TRUE(orcmap::experimental::AssignFeatureKinds(&tile));
+  ORCMAP_EXPECT_TRUE(tile.features[0].kind_assigned &&
+                     tile.features[0].kind == orcmap::FeatureKind::kRail);
+  ORCMAP_EXPECT_TRUE(tile.features[1].kind == orcmap::FeatureKind::kMotorway);
+  ORCMAP_EXPECT_TRUE(tile.features[2].kind == orcmap::FeatureKind::kPark);
+  ORCMAP_EXPECT_TRUE(tile.features[3].kind == orcmap::FeatureKind::kLand);
+  ORCMAP_EXPECT_TRUE(tile.features[4].kind == orcmap::FeatureKind::kPark);
+  ORCMAP_EXPECT_TRUE(tile.features[5].kind == orcmap::FeatureKind::kPark);
+  ORCMAP_EXPECT_TRUE(tile.features[6].kind ==
+                     orcmap::FeatureKind::kLabelPrimary);
+  ORCMAP_EXPECT_TRUE(tile.features[7].kind == orcmap::FeatureKind::kAirport);
+  ORCMAP_EXPECT_TRUE(!tile.features[8].kind_assigned);
+}
+
 }  // namespace
 
 void RunFeatureTests(const std::string& mvt_fixture_path) {
@@ -206,4 +242,5 @@ void RunFeatureTests(const std::string& mvt_fixture_path) {
   TestExperimentalClassifyFixture(mvt_fixture_path);
   TestExperimentalLeavesUnknownUnassigned();
   TestAssignKindsNullFails();
+  TestExperimentalOpenMapTilesLikeMappings();
 }

@@ -15,20 +15,26 @@ MVT→FeatureTile translation, style system, immediate `RenderTarget`,
 framebuffer, M5GFX `DisplayTarget` (exported `orcmap/m5gfx/` headers),
 host + consumer tests, provenance registry,
 `examples/generic-esp32` (no graphics framework), `examples/m5gfx`
-compile proof.
+compile proof, host pack-inspect.
 
 **PARTIAL:** Viewport (prepared TileScreenMap; no overzoom, no
 antimeridian wrap, no visible-tile enumerator). Zoom 0..31.
+`tools/pack-builder` Springfield script only.
 
-**EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds`.
+**EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds` (now
+measured against OpenMapTiles 3.16 Springfield tiles; still not the
+schema).
 
-**PLANNED (Phase 2 remaining):** `adapters/esp_idf` ByteSource, polygon
-holes, line width, overzoom, real Lane County pack. Brotli/zstd tile
-compression stay unsupported.
+**MEASURED (HOST-ONLY):** real Springfield / 97477 gzip PMTiles →
+1280×720 `orcsdr-dark` PPM. See `docs/PERFORMANCE.md`. NOT ESP32-
+validated. No on-device map exists.
 
-**BLOCKED on real data (later):** tile-content schema / stable
-`FeatureKind` mapping, Lane County pack, performance numbers. Do not
-finalize schema from `tiny.mvt`.
+**PLANNED:** `adapters/esp_idf` ByteSource, line width, labels, polygon
+holes, overzoom. Brotli/zstd stay unsupported.
+
+**NOT FROZEN:** tile-content schema / stable FeatureKind mapping. Do not
+finalize OpenMapTiles, Shortbread, or a custom schema from this one
+extract.
 
 ## Repository / branch state
 
@@ -103,14 +109,20 @@ finalize schema from `tiny.mvt`.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **78 test functions, all passing**.
+- Host test suite: **79 test functions, all passing**.
+- Host pack-inspect can open a real gzip PMTiles archive, dump layer
+  evidence, and render a 1280×720 Springfield preview through
+  `GetTile` → `DecompressPayload` → `DecodeMvtTile` →
+  `TranslateMvtToFeatureTile` → experimental classify →
+  `RenderFeatureTile`. HOST-ONLY. Pack and PPM live in gitignored
+  `data/local/`.
 
 ## What is partially working
 
-- **`orcmap::experimental::AssignFeatureKinds` — EXPERIMENTAL.** Layer-name
-  + `class` heuristic for tests. Not the production tile schema. Unrecognized
-  layers stay `kind_assigned == false`. Replace after a real Lane County
-  tile is measured.
+- **`orcmap::experimental::AssignFeatureKinds` — EXPERIMENTAL.** Extended
+  from measured OpenMapTiles 3.16 Springfield tiles (see mapping in
+  `src/tiles/mvt_classify_experimental.cpp`). Unrecognized layers stay
+  `kind_assigned == false`. Not the production tile schema.
 - **`adapters/m5gfx/` — optional exported DisplayTarget.** Header-only
   `orcmap/m5gfx/display_target.hpp` implements `RenderTarget` over
   `lgfx::v1::LovyanGFX&`. Core `REQUIRES ""`; consumers that want the
@@ -118,25 +130,18 @@ finalize schema from `tiny.mvt`.
   RGB565 (`Color.a` ignored). `examples/generic-esp32` still does not
   depend on M5GFX/M5Unified. Compile proof only — no on-device visual
   verification in this repo.
-- The PMTiles reader has only been exercised against synthetic fixtures
-  whose directories fit in the root (no leaf-directory fetch exercised
-  end-to-end against real data). Tile gzip is proven on
-  `tests/fixtures/tiny-gzip.pmtiles`, not on a real OSM extract.
-- The MVT decoder has likewise only been exercised against a small
-  synthetic fixture (3 layers, 1 feature each) built by a reference
-  encoder, not a real-world tile with hundreds of features, deeply
-  nested multi-ring polygons, or unusual attribute value combinations —
-  a real Lane County tile may exercise code paths the current tests
-  don't.
-- The data provenance registry's `official_pack_allowed: true` sources
-  (the 4 `CONFIRMED` records) are approved for use, but no pack builder
-  exists yet to actually consume them.
+- The PMTiles reader has now opened a real 141-tile gzip archive
+  (Springfield / 97477). Directories still fit in the root (no leaf
+  hop on this pack). Synthetic fixtures remain the CI path.
+- The MVT decoder has now decoded real urban tiles (thousands of
+  features, mixed geom types). Hole rings are still not subtracted.
+- Pack production exists as a host script (`tools/pack-builder`), not
+  a product pack builder / manifest pipeline.
 
 ## What is being worked on
 
-Nothing in this slice. Next: a real OSM-derived Springfield / Lane County
-(97477) pack through PMTiles → OrcMaps → 1280×720 host render. Not OrcSDR.
-Do not freeze the tile schema from synthetic fixtures.
+Nothing — Springfield host-render evidence slice at a stopping point.
+Not OrcSDR. Schema not frozen.
 
 ## Current blockers
 
@@ -146,9 +151,8 @@ Do not freeze the tile schema from synthetic fixtures.
 - Viewport is PARTIAL (no overzoom, no antimeridian wrap, no visible-tile
   set). Polygon holes are not subtracted. Line `width_px` is not
   rasterized.
-- No real OSM extract pipeline exists yet (Geofabrik download + osmium/
-  Planetiler) — needed before Phase 3 can start, and before the tile
-  content schema can be decided from evidence.
+- No on-device pack open (`adapters/esp_idf` ByteSource) and no Tab5
+  pixels. Host Springfield image is not an on-device map.
 - Several data sources are blocked on primary-source verification: NOAA
   ETOPO's ISO metadata page returned HTTP 503, USDOT NAD's disclaimer page
   returned HTTP 403 (twice, two mirrors) — both need a direct re-fetch
@@ -174,13 +178,10 @@ function again.
 
 ## Current performance measurements
 
-None yet. A host renderer exists, but there is no real map pack and no
-on-device map rendering measurement. Host framebuffer tests are
-correctness checks, not embedded performance numbers.
-`docs/PERFORMANCE.md` is a placeholder. The generic-esp32 smoke test
-proves the component *links*; it is not a performance result. The only
-real numbers in the repo are cited third-party numbers from the yuiseki
-precedent, in `docs/FORMAT_DECISION.md` — not OrcMaps' own measurements.
+HOST-ONLY Springfield / 97477 numbers are in `docs/PERFORMANCE.md`.
+A busy z14 tile: ~0.6 ms gzip decompress, ~2.2 ms MVT decode, ~0.7 ms
+FeatureTile copy, ~0.2 ms render; 1280×720 z14 frame ~221 ms. These are
+**not** ESP32 numbers. On-device measurement does not exist.
 
 ## Test status
 
@@ -194,10 +195,10 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 78 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 79 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
-translation, Viewport, clip, host render, and compression — see
-`ARCHITECTURE.md`
+translation, Viewport, clip, host render, compression, and experimental
+OpenMapTiles-like classification — see `ARCHITECTURE.md`
 "Testing architecture").
 
 Consumer smoke test (separate CMake project):
@@ -303,11 +304,11 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Real OSM-derived Springfield / Lane County (97477) geography as a
-   PMTiles archive, rendered 1280×720 on the host. Schema, leaf
-   directories, and performance numbers come from that evidence, not
-   `tiny.mvt`.
-2. `adapters/esp_idf` ByteSource (needed before on-device pack open).
+1. Line-width rendering — 1px roads are the largest usability gap on
+   the real Springfield image.
+2. `adapters/esp_idf` ByteSource and the same PMTiles archive from SD
+   (HOST path is proven; Tab5 pixels are not).
+3. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,
 overlay application features, pack marketplace UI.
@@ -319,8 +320,8 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — adapter packaging + bounded gzip decompression at a stopping
-point. OrcSDR not started.
+None — Springfield host geography evidence at a stopping point.
+OrcSDR not started.
 
 ## Notes for the next development session
 

@@ -1,0 +1,626 @@
+// Host-only PMTiles / MVT inspector and real-geography preview.
+// Preview visible-tile enumeration is scaffolding, not the Viewport API.
+
+#include "file_byte_source.hpp"
+#include "framebuffer_target.hpp"
+#include "orcmap/compression.hpp"
+#include "orcmap/experimental/mvt_classify.hpp"
+#include "orcmap/feature.hpp"
+#include "orcmap/geo.hpp"
+#include "orcmap/mvt.hpp"
+#include "orcmap/mvt_translate.hpp"
+#include "orcmap/pmtiles.hpp"
+#include "orcmap/renderer.hpp"
+#include "orcmap/style.hpp"
+#include "orcmap/viewport.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <map>
+#include <set>
+#include <string>
+#include <vector>
+
+namespace {
+
+constexpr size_t kHostDecompressBudget = 8u * 1024u * 1024u;
+
+const char* CompressionName(orcmap::Compression c) {
+  switch (c) {
+    case orcmap::Compression::kUnknown:
+      return "unknown";
+    case orcmap::Compression::kNone:
+      return "none";
+    case orcmap::Compression::kGzip:
+      return "gzip";
+    case orcmap::Compression::kBrotli:
+      return "brotli";
+    case orcmap::Compression::kZstd:
+      return "zstd";
+  }
+  return "unknown";
+}
+
+const char* TileTypeName(orcmap::TileType t) {
+  switch (t) {
+    case orcmap::TileType::kUnknown:
+      return "unknown";
+    case orcmap::TileType::kMvt:
+      return "mvt";
+    case orcmap::TileType::kPng:
+      return "png";
+    case orcmap::TileType::kJpeg:
+      return "jpeg";
+    case orcmap::TileType::kWebp:
+      return "webp";
+    case orcmap::TileType::kAvif:
+      return "avif";
+  }
+  return "unknown";
+}
+
+const char* GeomName(orcmap::GeomType t) {
+  switch (t) {
+    case orcmap::GeomType::kPoint:
+      return "point";
+    case orcmap::GeomType::kLineString:
+      return "linestring";
+    case orcmap::GeomType::kPolygon:
+      return "polygon";
+    case orcmap::GeomType::kUnknown:
+    default:
+      return "unknown";
+  }
+}
+
+const char* KindName(orcmap::FeatureKind k) {
+  switch (k) {
+    case orcmap::FeatureKind::kBackground:
+      return "background";
+    case orcmap::FeatureKind::kLand:
+      return "land";
+    case orcmap::FeatureKind::kWater:
+      return "water";
+    case orcmap::FeatureKind::kMotorway:
+      return "motorway";
+    case orcmap::FeatureKind::kPrimaryRoad:
+      return "primary_road";
+    case orcmap::FeatureKind::kSecondaryRoad:
+      return "secondary_road";
+    case orcmap::FeatureKind::kMinorRoad:
+      return "minor_road";
+    case orcmap::FeatureKind::kRail:
+      return "rail";
+    case orcmap::FeatureKind::kBoundary:
+      return "boundary";
+    case orcmap::FeatureKind::kBuilding:
+      return "building";
+    case orcmap::FeatureKind::kPark:
+      return "park";
+    case orcmap::FeatureKind::kAirport:
+      return "airport";
+    case orcmap::FeatureKind::kLabelPrimary:
+      return "label_primary";
+    case orcmap::FeatureKind::kLabelSecondary:
+      return "label_secondary";
+    case orcmap::FeatureKind::kLabelMuted:
+      return "label_muted";
+    case orcmap::FeatureKind::kCount:
+      return "count";
+  }
+  return "unknown";
+}
+
+std::string ValueString(const orcmap::PropertyValue& value) {
+  if (std::holds_alternative<std::string>(value)) {
+    return std::get<std::string>(value);
+  }
+  if (std::holds_alternative<double>(value)) {
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%g", std::get<double>(value));
+    return buf;
+  }
+  if (std::holds_alternative<int64_t>(value)) {
+    return std::to_string(std::get<int64_t>(value));
+  }
+  if (std::holds_alternative<uint64_t>(value)) {
+    return std::to_string(std::get<uint64_t>(value));
+  }
+  if (std::holds_alternative<bool>(value)) {
+    return std::get<bool>(value) ? "true" : "false";
+  }
+  return "";
+}
+
+struct TileStats {
+  bool present = false;
+  size_t stored = 0;
+  size_t raw = 0;
+  size_t features = 0;
+  size_t paths = 0;
+  size_t points = 0;
+  size_t property_keys = 0;
+  size_t string_bytes = 0;
+  size_t classified = 0;
+  size_t skipped = 0;
+  size_t approx_feature_bytes = 0;
+  double lookup_ms = 0;
+  double decompress_ms = 0;
+  double decode_ms = 0;
+  double translate_ms = 0;
+  double classify_ms = 0;
+  double render_ms = 0;
+  orcmap::FeatureTile features_owned;
+};
+
+size_t ApproxFeatureTileBytes(const orcmap::FeatureTile& tile) {
+  size_t n = sizeof(orcmap::FeatureTile);
+  n += tile.features.capacity() * sizeof(orcmap::Feature);
+  for (const orcmap::Feature& f : tile.features) {
+    n += f.layer.size();
+    n += f.geometry.paths.capacity() * sizeof(orcmap::Path);
+    for (const orcmap::Path& path : f.geometry.paths) {
+      n += path.capacity() * sizeof(orcmap::Point);
+    }
+    n += f.property_keys.capacity() * sizeof(std::string);
+    for (const std::string& key : f.property_keys) n += key.size();
+    n += f.property_values.capacity() * sizeof(orcmap::PropertyValue);
+    for (const orcmap::PropertyValue& value : f.property_values) {
+      if (std::holds_alternative<std::string>(value)) {
+        n += std::get<std::string>(value).size();
+      }
+    }
+  }
+  return n;
+}
+
+TileStats LoadTile(orcmap::PmTilesReader* reader, uint8_t z, uint32_t x,
+                   uint32_t y, bool classify) {
+  TileStats s;
+  using Clock = std::chrono::steady_clock;
+  auto t0 = Clock::now();
+  std::vector<uint8_t> stored;
+  if (!reader->GetTile(z, x, y, &stored)) return s;
+  s.present = true;
+  s.stored = stored.size();
+  s.lookup_ms = std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
+
+  auto t1 = Clock::now();
+  std::vector<uint8_t> raw;
+  if (!orcmap::DecompressPayload(reader->Header().tile_compression, stored.data(),
+                                 stored.size(), kHostDecompressBudget, &raw)) {
+    std::fprintf(stderr, "decompress failed z=%u x=%u y=%u stored=%zu\n", z, x, y,
+                 stored.size());
+    s.present = false;
+    return s;
+  }
+  s.raw = raw.size();
+  s.decompress_ms =
+      std::chrono::duration<double, std::milli>(Clock::now() - t1).count();
+
+  auto t2 = Clock::now();
+  orcmap::MvtTile mvt;
+  if (!orcmap::DecodeMvtTile(raw.data(), raw.size(), &mvt)) {
+    std::fprintf(stderr, "mvt decode failed z=%u x=%u y=%u\n", z, x, y);
+    s.present = false;
+    return s;
+  }
+  s.decode_ms = std::chrono::duration<double, std::milli>(Clock::now() - t2).count();
+
+  auto t3 = Clock::now();
+  if (!orcmap::TranslateMvtToFeatureTile(mvt, &s.features_owned)) {
+    s.present = false;
+    return s;
+  }
+  s.translate_ms =
+      std::chrono::duration<double, std::milli>(Clock::now() - t3).count();
+
+  if (classify) {
+    auto t4 = Clock::now();
+    orcmap::experimental::AssignFeatureKinds(&s.features_owned);
+    s.classify_ms =
+        std::chrono::duration<double, std::milli>(Clock::now() - t4).count();
+  }
+
+  s.features = s.features_owned.features.size();
+  for (const orcmap::Feature& f : s.features_owned.features) {
+    s.paths += f.geometry.paths.size();
+    for (const orcmap::Path& path : f.geometry.paths) s.points += path.size();
+    s.property_keys += f.property_keys.size();
+    s.string_bytes += f.layer.size();
+    for (const std::string& key : f.property_keys) s.string_bytes += key.size();
+    for (const orcmap::PropertyValue& value : f.property_values) {
+      if (std::holds_alternative<std::string>(value)) {
+        s.string_bytes += std::get<std::string>(value).size();
+      }
+    }
+    if (f.kind_assigned) {
+      ++s.classified;
+    } else {
+      ++s.skipped;
+    }
+  }
+  s.approx_feature_bytes = ApproxFeatureTileBytes(s.features_owned);
+  return s;
+}
+
+void PrintHeader(const orcmap::PmTilesHeader& h) {
+  std::printf("pmtiles version=%u tile_type=%s tile_compression=%s "
+              "internal_compression=%s\n",
+              h.version, TileTypeName(h.tile_type),
+              CompressionName(h.tile_compression),
+              CompressionName(h.internal_compression));
+  std::printf("zoom %u..%u center_zoom=%u tiles_addressed=%llu entries=%llu "
+              "contents=%llu clustered=%d\n",
+              h.min_zoom, h.max_zoom, h.center_zoom,
+              static_cast<unsigned long long>(h.addressed_tiles_count),
+              static_cast<unsigned long long>(h.tile_entries_count),
+              static_cast<unsigned long long>(h.tile_contents_count),
+              h.clustered ? 1 : 0);
+  std::printf("bounds lon[%g,%g] lat[%g,%g] center lon=%g lat=%g\n",
+              h.min_lon_e7 / 1e7, h.max_lon_e7 / 1e7, h.min_lat_e7 / 1e7,
+              h.max_lat_e7 / 1e7, h.center_lon_e7 / 1e7, h.center_lat_e7 / 1e7);
+}
+
+void PrintTileReport(uint8_t z, uint32_t x, uint32_t y, const TileStats& s) {
+  std::printf("z=%u x=%u y=%u\n", z, x, y);
+  if (!s.present) {
+    std::printf("  missing\n");
+    return;
+  }
+  const double ratio =
+      s.raw == 0 ? 0.0 : static_cast<double>(s.stored) / static_cast<double>(s.raw);
+  std::printf("  stored=%zu decompressed=%zu ratio=%.3f\n", s.stored, s.raw, ratio);
+  std::printf("  features=%zu paths=%zu points=%zu property_keys=%zu "
+              "string_bytes=%zu approx_feature_bytes=%zu\n",
+              s.features, s.paths, s.points, s.property_keys, s.string_bytes,
+              s.approx_feature_bytes);
+  std::printf("  classified=%zu skipped=%zu\n", s.classified, s.skipped);
+  std::printf("  HOST ms lookup=%.3f decompress=%.3f decode=%.3f translate=%.3f "
+              "classify=%.3f\n",
+              s.lookup_ms, s.decompress_ms, s.decode_ms, s.translate_ms,
+              s.classify_ms);
+
+  std::map<std::string, size_t> layers;
+  std::map<std::string, std::map<orcmap::GeomType, size_t>> geoms;
+  std::map<std::string, std::set<std::string>> keys;
+  std::map<std::string, std::map<std::string, std::set<std::string>>> samples;
+  uint32_t extent = 0;
+  for (const orcmap::Feature& f : s.features_owned.features) {
+    layers[f.layer]++;
+    geoms[f.layer][f.geometry.type]++;
+    if (extent == 0) extent = f.extent;
+    for (size_t i = 0; i < f.property_keys.size(); ++i) {
+      keys[f.layer].insert(f.property_keys[i]);
+      if (i < f.property_values.size()) {
+        std::set<std::string>& vals = samples[f.layer][f.property_keys[i]];
+        if (vals.size() < 8) vals.insert(ValueString(f.property_values[i]));
+      }
+    }
+  }
+  std::printf("  extent=%u layers=%zu\n", extent, layers.size());
+  for (const auto& kv : layers) {
+    std::printf("  layer %s: %zu features", kv.first.c_str(), kv.second);
+    auto git = geoms.find(kv.first);
+    if (git != geoms.end()) {
+      for (const auto& g : git->second) {
+        std::printf(" %s=%zu", GeomName(g.first), g.second);
+      }
+    }
+    std::printf("\n");
+    auto kit = keys.find(kv.first);
+    if (kit != keys.end()) {
+      std::printf("    keys:");
+      for (const std::string& k : kit->second) std::printf(" %s", k.c_str());
+      std::printf("\n");
+    }
+    auto sit = samples.find(kv.first);
+    if (sit != samples.end()) {
+      for (const char* interesting : {"class", "subclass", "brunnel", "name",
+                                      "ref", "kind", "type", "structure"}) {
+        auto vit = sit->second.find(interesting);
+        if (vit == sit->second.end() || vit->second.empty()) continue;
+        std::printf("    %s:", interesting);
+        for (const std::string& v : vit->second) {
+          std::printf(" %s", v.c_str());
+        }
+        std::printf("\n");
+      }
+    }
+  }
+
+  std::map<orcmap::FeatureKind, size_t> kinds;
+  std::map<std::string, size_t> skipped_layers;
+  for (const orcmap::Feature& f : s.features_owned.features) {
+    if (f.kind_assigned) {
+      kinds[f.kind]++;
+    } else {
+      skipped_layers[f.layer]++;
+    }
+  }
+  if (!kinds.empty()) {
+    std::printf("  kinds:");
+    for (const auto& kv : kinds) {
+      std::printf(" %s=%zu", KindName(kv.first), kv.second);
+    }
+    std::printf("\n");
+  }
+  if (!skipped_layers.empty()) {
+    std::printf("  skipped_layers:");
+    for (const auto& kv : skipped_layers) {
+      std::printf(" %s=%zu", kv.first.c_str(), kv.second);
+    }
+    std::printf("\n");
+  }
+}
+
+// Preview scaffolding: tiles whose [x,x+1)x[y,y+1) overlap the viewport.
+// Not production Viewport API (no overzoom, no antimeridian wrap).
+std::vector<orcmap::TileId> PreviewVisibleTiles(const orcmap::Viewport& vp) {
+  std::vector<orcmap::TileId> out;
+  if (!orcmap::ZoomIsValid(vp.zoom) || vp.tile_size_px <= 0) return out;
+  const orcmap::TileCoord c = orcmap::LatLonToTileCoord(
+      vp.center_lat_deg, vp.center_lon_deg, vp.zoom);
+  const double ts = static_cast<double>(vp.tile_size_px);
+  const double left = c.x - static_cast<double>(vp.width_px) * 0.5 / ts;
+  const double top = c.y - static_cast<double>(vp.height_px) * 0.5 / ts;
+  const double right = c.x + static_cast<double>(vp.width_px) * 0.5 / ts;
+  const double bottom = c.y + static_cast<double>(vp.height_px) * 0.5 / ts;
+  const uint32_t n = orcmap::TilesPerAxis(vp.zoom);
+  const int x0 = static_cast<int>(std::floor(left));
+  const int y0 = static_cast<int>(std::floor(top));
+  const int x1 = static_cast<int>(std::floor(right));
+  const int y1 = static_cast<int>(std::floor(bottom));
+  for (int y = y0; y <= y1; ++y) {
+    if (y < 0 || static_cast<uint32_t>(y) >= n) continue;
+    for (int x = x0; x <= x1; ++x) {
+      if (x < 0 || static_cast<uint32_t>(x) >= n) continue;
+      out.push_back(orcmap::TileId{vp.zoom, static_cast<uint32_t>(x),
+                                   static_cast<uint32_t>(y)});
+    }
+  }
+  return out;
+}
+
+int CmdHeader(const std::string& path) {
+  orcmap::host::FileByteSource source(path);
+  if (!source.Valid()) {
+    std::fprintf(stderr, "cannot open %s\n", path.c_str());
+    return 1;
+  }
+  orcmap::PmTilesReader reader(&source);
+  if (!reader.Open()) {
+    std::fprintf(stderr, "open failed\n");
+    return 1;
+  }
+  PrintHeader(reader.Header());
+  std::vector<uint8_t> meta;
+  if (reader.ReadMetadata(&meta)) {
+    std::printf("metadata_bytes=%zu\n", meta.size());
+    const size_t n = meta.size() < 800 ? meta.size() : 800;
+    std::fwrite(meta.data(), 1, n, stdout);
+    if (meta.size() > n) std::printf("...\n");
+    else std::printf("\n");
+  }
+  return 0;
+}
+
+int CmdTile(const std::string& path, uint8_t z, uint32_t x, uint32_t y) {
+  orcmap::host::FileByteSource source(path);
+  if (!source.Valid()) {
+    std::fprintf(stderr, "cannot open %s\n", path.c_str());
+    return 1;
+  }
+  orcmap::PmTilesReader reader(&source);
+  if (!reader.Open()) {
+    std::fprintf(stderr, "open failed\n");
+    return 1;
+  }
+  PrintHeader(reader.Header());
+  const TileStats s = LoadTile(&reader, z, x, y, true);
+  PrintTileReport(z, x, y, s);
+  return s.present ? 0 : 1;
+}
+
+int CmdSample(const std::string& path, double lat, double lon, uint8_t zoom,
+              int radius) {
+  orcmap::host::FileByteSource source(path);
+  if (!source.Valid()) {
+    std::fprintf(stderr, "cannot open %s\n", path.c_str());
+    return 1;
+  }
+  orcmap::PmTilesReader reader(&source);
+  if (!reader.Open()) {
+    std::fprintf(stderr, "open failed\n");
+    return 1;
+  }
+  PrintHeader(reader.Header());
+  const orcmap::TileId center = orcmap::LatLonToTile(lat, lon, zoom);
+  std::vector<size_t> stored;
+  std::vector<size_t> raw;
+  std::printf("sample center z=%u x=%u y=%u radius=%d\n", center.z, center.x,
+              center.y, radius);
+  const uint32_t n = orcmap::TilesPerAxis(zoom);
+  for (int dy = -radius; dy <= radius; ++dy) {
+    for (int dx = -radius; dx <= radius; ++dx) {
+      const int64_t x = static_cast<int64_t>(center.x) + dx;
+      const int64_t y = static_cast<int64_t>(center.y) + dy;
+      if (x < 0 || y < 0 || static_cast<uint64_t>(x) >= n ||
+          static_cast<uint64_t>(y) >= n) {
+        continue;
+      }
+      const TileStats s =
+          LoadTile(&reader, zoom, static_cast<uint32_t>(x),
+                   static_cast<uint32_t>(y), true);
+      PrintTileReport(zoom, static_cast<uint32_t>(x), static_cast<uint32_t>(y),
+                      s);
+      if (s.present) {
+        stored.push_back(s.stored);
+        raw.push_back(s.raw);
+      }
+    }
+  }
+  if (stored.empty()) return 1;
+  auto summarize = [](std::vector<size_t> v, const char* label) {
+    std::sort(v.begin(), v.end());
+    const size_t mid = v[v.size() / 2];
+    std::printf("%s n=%zu min=%zu median=%zu max=%zu\n", label, v.size(), v.front(),
+                mid, v.back());
+  };
+  summarize(stored, "stored_bytes");
+  summarize(raw, "decompressed_bytes");
+  return 0;
+}
+
+int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
+               int width, int height, const std::string& out) {
+  orcmap::host::FileByteSource source(path);
+  if (!source.Valid()) {
+    std::fprintf(stderr, "cannot open %s\n", path.c_str());
+    return 1;
+  }
+  orcmap::PmTilesReader reader(&source);
+  if (!reader.Open()) {
+    std::fprintf(stderr, "open failed\n");
+    return 1;
+  }
+  PrintHeader(reader.Header());
+
+  orcmap::Viewport vp;
+  vp.center_lat_deg = lat;
+  vp.center_lon_deg = lon;
+  vp.zoom = zoom;
+  vp.width_px = width;
+  vp.height_px = height;
+  vp.tile_size_px = 256;
+
+  const std::vector<orcmap::TileId> tiles = PreviewVisibleTiles(vp);
+  std::printf("preview lat=%.6f lon=%.6f zoom=%u %dx%d tiles=%zu "
+              "(preview scaffolding)\n",
+              lat, lon, zoom, width, height, tiles.size());
+
+  orcmap::host::FramebufferTarget fb(width, height);
+  const orcmap::MapStyle& style = orcmap::styles::OrcSdrDark();
+  if (!orcmap::ClearMapBackground(vp, style, &fb)) return 1;
+
+  std::vector<size_t> stored;
+  std::vector<size_t> raw;
+  size_t present = 0;
+  double render_sum = 0;
+  using Clock = std::chrono::steady_clock;
+  const auto frame0 = Clock::now();
+  for (const orcmap::TileId& tile : tiles) {
+    TileStats s = LoadTile(&reader, tile.z, tile.x, tile.y, true);
+    PrintTileReport(tile.z, tile.x, tile.y, s);
+    if (!s.present) continue;
+    ++present;
+    stored.push_back(s.stored);
+    raw.push_back(s.raw);
+    const auto r0 = Clock::now();
+    if (!orcmap::RenderFeatureTile(s.features_owned, tile, vp, style, &fb)) {
+      std::fprintf(stderr, "render failed z=%u x=%u y=%u\n", tile.z, tile.x,
+                   tile.y);
+      return 1;
+    }
+    s.render_ms =
+        std::chrono::duration<double, std::milli>(Clock::now() - r0).count();
+    render_sum += s.render_ms;
+    std::printf("  HOST ms render=%.3f\n", s.render_ms);
+  }
+  const double frame_ms =
+      std::chrono::duration<double, std::milli>(Clock::now() - frame0).count();
+  if (!fb.WritePpm(out)) {
+    std::fprintf(stderr, "write failed %s\n", out.c_str());
+    return 1;
+  }
+  std::printf("wrote %s present_tiles=%zu/%zu HOST_frame_ms=%.3f render_sum_ms=%.3f\n",
+              out.c_str(), present, tiles.size(), frame_ms, render_sum);
+  std::printf("HOST PERFORMANCE — NOT ESP32 PERFORMANCE\n");
+  if (!stored.empty()) {
+    std::sort(stored.begin(), stored.end());
+    std::sort(raw.begin(), raw.end());
+    std::printf("stored_bytes min=%zu median=%zu max=%zu\n", stored.front(),
+                stored[stored.size() / 2], stored.back());
+    std::printf("decompressed_bytes min=%zu median=%zu max=%zu\n", raw.front(),
+                raw[raw.size() / 2], raw.back());
+  }
+  return 0;
+}
+
+void Usage() {
+  std::fprintf(
+      stderr,
+      "orcmap_pack_inspect header ARCHIVE\n"
+      "orcmap_pack_inspect tile ARCHIVE Z X Y\n"
+      "orcmap_pack_inspect sample ARCHIVE --lat LAT --lon LON --zoom Z [--radius N]\n"
+      "orcmap_pack_inspect preview ARCHIVE --lat LAT --lon LON --zoom Z "
+      "[--width W --height H --out FILE]\n");
+}
+
+bool Flag(int argc, char** argv, const char* name, std::string* value) {
+  const std::string key = std::string("--") + name;
+  for (int i = 0; i < argc - 1; ++i) {
+    if (key == argv[i]) {
+      *value = argv[i + 1];
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  if (argc < 3) {
+    Usage();
+    return 1;
+  }
+  const std::string cmd = argv[1];
+  const std::string archive = argv[2];
+  if (cmd == "header") return CmdHeader(archive);
+  if (cmd == "tile") {
+    if (argc < 6) {
+      Usage();
+      return 1;
+    }
+    return CmdTile(archive, static_cast<uint8_t>(std::atoi(argv[3])),
+                   static_cast<uint32_t>(std::strtoul(argv[4], nullptr, 10)),
+                   static_cast<uint32_t>(std::strtoul(argv[5], nullptr, 10)));
+  }
+  std::string lat_s, lon_s, zoom_s, radius_s, width_s, height_s, out;
+  Flag(argc, argv, "lat", &lat_s);
+  Flag(argc, argv, "lon", &lon_s);
+  Flag(argc, argv, "zoom", &zoom_s);
+  Flag(argc, argv, "radius", &radius_s);
+  Flag(argc, argv, "width", &width_s);
+  Flag(argc, argv, "height", &height_s);
+  Flag(argc, argv, "out", &out);
+  if (cmd == "sample") {
+    if (lat_s.empty() || lon_s.empty() || zoom_s.empty()) {
+      Usage();
+      return 1;
+    }
+    const int radius = radius_s.empty() ? 1 : std::atoi(radius_s.c_str());
+    return CmdSample(archive, std::atof(lat_s.c_str()), std::atof(lon_s.c_str()),
+                     static_cast<uint8_t>(std::atoi(zoom_s.c_str())), radius);
+  }
+  if (cmd == "preview") {
+    if (lat_s.empty() || lon_s.empty() || zoom_s.empty()) {
+      Usage();
+      return 1;
+    }
+    const int width = width_s.empty() ? 1280 : std::atoi(width_s.c_str());
+    const int height = height_s.empty() ? 720 : std::atoi(height_s.c_str());
+    if (out.empty()) out = "springfield-97477-orcsdr-dark.ppm";
+    return CmdPreview(archive, std::atof(lat_s.c_str()), std::atof(lon_s.c_str()),
+                      static_cast<uint8_t>(std::atoi(zoom_s.c_str())), width,
+                      height, out);
+  }
+  Usage();
+  return 1;
+}
