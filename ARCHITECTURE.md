@@ -66,12 +66,14 @@ EXPERIMENTAL, not the tile-content schema.
 | `RenderTarget` | `include/orcmap/render_target.hpp` | Implemented (immediate primitives; no command buffer) |
 | Renderer core | `include/orcmap/renderer.hpp`, `src/render/renderer.cpp`, `src/render/clip.cpp` | Implemented (host-proof: ClearMapBackground + per-tile RenderFeatureTile). Not a complete map engine. |
 | Host framebuffer | `adapters/host/framebuffer_target.{hpp,cpp}` | Implemented (host only; RGBA8 + optional PPM) |
-| M5GFX adapter | `adapters/m5gfx/` | EXPERIMENTAL sketch (header-only Color→RGB565 + LovyanGFX helpers; not a CMake component; not compiled into core; currently takes MVT types — not yet retargeted onto Feature/RenderTarget) |
+| M5GFX adapter | `adapters/m5gfx/` | Implemented as `DisplayTarget` (`RenderTarget` over `lgfx::v1::LovyanGFX&`). Not compiled into core. No MVT types. |
 | Overlay primitives | `src/overlays/` | Not implemented (empty dir) |
 | Tile/rendered-tile cache | `src/cache/` | Not implemented (empty dir); `RenderedTileCacheKey` shape exists in `include/orcmap/cache_key.hpp` |
 | Pack builder | `tools/pack-builder/` | Not implemented (empty dir) |
 | Pack inspector/verifier | `tools/pack-inspect/`, `tools/pack-verify/` | Not implemented (empty dirs) |
 | Generic ESP32 example | `examples/generic-esp32/` | PARTIAL: ESP-IDF compile/link smoke test of the portable core (no graphics framework) |
+| M5GFX example | `examples/m5gfx/` | PARTIAL: ESP-IDF compile proof of DisplayTarget + synthetic FeatureTile (M5GFX, no M5Unified) |
+| Host render preview | `examples/host-render/` | PARTIAL: writes a 1280x720 PPM from synthetic FeatureTiles |
 | Tab5 example | `examples/m5stack-tab5/` | Not implemented (empty dir) |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles` (+ `generate_fixture.py`) | Implemented |
@@ -103,15 +105,17 @@ src/overlays/         Empty -- marker/polyline/polygon primitives, planned.
 src/cache/            Empty -- bounded LRU tile cache, planned.
 adapters/host/        file_byte_source.{hpp,cpp} -- stdio ByteSource;
                       framebuffer_target.{hpp,cpp} -- host RGBA8 RenderTarget.
-adapters/m5gfx/       EXPERIMENTAL sketch: color.hpp + renderer.hpp
-                      (header-only; not compiled into core).
+adapters/m5gfx/       DisplayTarget (RenderTarget) + ToRgb565. Header-only;
+                      not compiled into core. No MVT.
 adapters/esp_idf/     Empty -- ESP-IDF filesystem ByteSource, planned.
 tools/pack-builder/   Empty -- OSM extract -> .pmtiles, planned.
 tools/pack-inspect/   Empty -- inspect a pack's metadata/contents, planned.
 tools/pack-verify/    Empty -- validate a pack against its manifest, planned.
 examples/generic-esp32/  ESP-IDF compile/link smoke test of the portable
                       core. No M5GFX/M5Unified. Not a map demo.
-examples/m5stack-tab5/   Empty -- Tab5 graphics example, planned.
+examples/m5gfx/          ESP-IDF + M5GFX compile proof (DisplayTarget).
+examples/host-render/    Host PPM preview (synthetic tiles).
+examples/m5stack-tab5/   Empty -- Tab5 board example, planned.
 tests/host/           Host-buildable unit tests (no ESP-IDF needed).
 tests/consumer/       External-consumer build gate -- public headers only,
                       see "Consumer integration test" below.
@@ -155,10 +159,11 @@ docs/                 Architecture/decision/porting/licensing documents.
    decision.
 7. **Implemented (host proof):** `ClearMapBackground` once per frame,
    then `RenderFeatureTile` per source tile → `RenderTarget` (host
-   framebuffer). Viewport is PARTIAL. M5GFX not on this seam.
+   framebuffer). Viewport is PARTIAL. M5GFX DisplayTarget consumes this
+   seam.
 8. **Not yet implemented:** overzoom, antimeridian wrap, visible-tile
    enumeration, polygon holes, line width, tile cache, pack discovery,
-   M5GFX retarget, tile-payload decompression.
+   tile-payload decompression, OrcSDR integration.
 
 ## Map pack / archive layer
 
@@ -289,9 +294,10 @@ visible-tile enumerator, no overzoom, no antimeridian wrap
 P6 PPM). It is host-only (`adapters/host/`), not part of the ESP-IDF
 component.
 
-`adapters/m5gfx/` is an **EXPERIMENTAL sketch**, still MVT-typed, **not
-retargeted** onto this seam. If `adapters/m5gfx/` were deleted, core must
-still build and host-test.
+`adapters/m5gfx/DisplayTarget` implements `RenderTarget` on
+`lgfx::v1::LovyanGFX&` (RGB565 via `ToRgb565`, lines clipped with
+`ClipLineToPixels`). It has no MVT types and no map semantics. If
+`adapters/m5gfx/` were deleted, core must still build and host-test.
 
 ## Projection / coordinates
 
@@ -562,8 +568,8 @@ substitutes for the other.
 ## Future extension points
 
 - `adapters/esp_idf`: designed for, not yet built.
-- `adapters/m5gfx`: EXPERIMENTAL sketch exists, still MVT-typed; retarget
-  onto Feature/RenderTarget. Not the renderer architecture.
+- `adapters/m5gfx`: `DisplayTarget` is a RenderTarget. Not compiled into
+  core. Not the renderer architecture.
 - External `.orcstyle` files: `MapStyle`'s shape doesn't block this (see
   `docs/STYLING.md`), no loader exists.
 - Brotli/zstd tile compression: `Inflate()` currently only implements gzip

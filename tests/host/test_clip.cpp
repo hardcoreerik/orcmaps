@@ -80,6 +80,31 @@ void TestLargePolygonCoordinatesDoNotOverflow() {
   ORCMAP_EXPECT_TRUE(fb.At(15, 15) == fg);
 }
 
+void TestIntMinMaxPolygonDoesNotOverflow() {
+  const orcmap::Color bg = orcmap::Color::Rgb(2, 2, 2);
+  const orcmap::Color fg = orcmap::Color::Rgb(0, 128, 0);
+  orcmap::host::FramebufferTarget fb(8, 8, bg);
+  const int lo = std::numeric_limits<int>::min();
+  const int hi = std::numeric_limits<int>::max();
+  const int xy[] = {lo, lo, hi, lo, hi, hi, lo, hi};
+  fb.FillPolygon(xy, 4, fg);
+  ORCMAP_EXPECT_TRUE(fb.At(0, 0) == fg);
+  ORCMAP_EXPECT_TRUE(fb.At(4, 4) == fg);
+  ORCMAP_EXPECT_TRUE(fb.At(7, 7) == fg);
+}
+
+void TestFillRectBoundAddDoesNotOverflow() {
+  const orcmap::Color bg = orcmap::Color::Rgb(3, 3, 3);
+  const orcmap::Color fg = orcmap::Color::Rgb(9, 9, 9);
+  orcmap::host::FramebufferTarget fb(8, 8, bg);
+  fb.FillRect(std::numeric_limits<int>::max() - 3, 0, 100, 2, fg);
+  ORCMAP_EXPECT_TRUE(fb.At(0, 0) == bg);
+  fb.FillRect(-100, 3, std::numeric_limits<int>::max(), 1, fg);
+  ORCMAP_EXPECT_TRUE(fb.At(0, 3) == fg);
+  ORCMAP_EXPECT_TRUE(fb.At(7, 3) == fg);
+  ORCMAP_EXPECT_TRUE(fb.At(0, 4) == bg);
+}
+
 }  // namespace
 
 void RunClipTests() {
@@ -90,4 +115,6 @@ void RunClipTests() {
   TestPartialOffscreenHorizontalLine();
   TestHugeDiagonalClipsToVisibleSegment();
   TestLargePolygonCoordinatesDoNotOverflow();
+  TestIntMinMaxPolygonDoesNotOverflow();
+  TestFillRectBoundAddDoesNotOverflow();
 }

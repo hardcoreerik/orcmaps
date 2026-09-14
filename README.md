@@ -26,7 +26,7 @@ exists at [`examples/generic-esp32`](examples/generic-esp32) and does
 **not** require M5GFX. A host framebuffer render proof exists (no M5GFX). Viewport is PARTIAL.
 Not yet built: overlays, cache, M5GFX retarget, and a real on-device map
 draw. FeatureKind mapping is experimental, not a finalized tile schema.
-`adapters/m5gfx` is an experimental sketch, not a finished integration. See [`STATUS.md`](STATUS.md) for the live
+`adapters/m5gfx` is a `RenderTarget` (DisplayTarget), not compiled into core. See [`STATUS.md`](STATUS.md) for the live
 snapshot and [`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the
 OrcSDR prototype this project supersedes.
 
@@ -54,13 +54,15 @@ src/render/            Style system + FeatureTile renderer (host proof)
 src/overlays/          Planned marker/polyline/polygon overlay primitives
 src/cache/             Planned bounded LRU tile caches
 adapters/host/         stdio ByteSource for host tests/tools
-adapters/m5gfx/        EXPERIMENTAL M5GFX/LovyanGFX sketch (not compiled into core)
+adapters/m5gfx/        DisplayTarget RenderTarget (not compiled into core)
 adapters/esp_idf/      Planned ESP-IDF filesystem ByteSource adapter
 tools/pack-builder/    Planned host-side: OSM extract -> map pack
 tools/pack-inspect/    Planned host-side pack inspector
 tools/pack-verify/     Planned host-side pack verifier
 examples/m5stack-tab5/ Planned Tab5 graphics example
 examples/generic-esp32/ESP-IDF compile smoke test (no graphics framework)
+examples/m5gfx/        ESP-IDF + M5GFX DisplayTarget compile proof
+examples/host-render/  Host 1280x720 PPM preview (synthetic tiles)
 tests/host/            Host-buildable unit tests (no hardware required)
 tests/consumer/        External-consumer build gate (public headers only)
 data/sources/          Data provenance registry

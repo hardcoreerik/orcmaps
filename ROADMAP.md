@@ -100,14 +100,14 @@ paths the current tests don't. Flagged, not yet mitigated.
       MVT types must not become the renderer architecture. **EXPERIMENTAL**
       FeatureKind heuristic exists; the real schema is still deferred.
 - [x] Graphics-independent renderer seam: immediate `RenderTarget` +
-      `RenderFeatureTile` + host framebuffer proof. M5GFX is **not**
-      retargeted yet and must consume this seam, not MVT.
+      `RenderFeatureTile` + host framebuffer proof. M5GFX consumes this
+      seam via `DisplayTarget`.
 - [x] Minimal Viewport (prepared `TileScreenMap`). PARTIAL: no overzoom,
       no visible-tile enumerator, no antimeridian wrap. Zoom 0..31.
-- [ ] `adapters/m5gfx` finished integration (Color → RGB565, draw calls
-      against `lgfx::v1::LovyanGFX&`). **A header-only EXPERIMENTAL sketch
-      exists** (`adapters/m5gfx/color.hpp`, `renderer.hpp`) but is still
-      MVT-typed and is not this checkbox.
+- [x] `adapters/m5gfx` `DisplayTarget` (`RenderTarget` over
+      `lgfx::v1::LovyanGFX&`, Color→RGB565, shared line clip). No MVT.
+      `examples/m5gfx` is an ESP-IDF compile proof, not a Tab5 product
+      demo.
 - [ ] Tile content schema decided (`docs/FORMAT_DECISION.md` "Deferred") and
       a `DecodedFeature -> orcmap::FeatureKind` mapping written against it —
       needs a real Lane County MVT tile to decide from, not the synthetic

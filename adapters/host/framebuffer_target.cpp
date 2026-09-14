@@ -39,14 +39,17 @@ void FramebufferTarget::DrawPoint(int x, int y, Color color) { Put(x, y, color);
 
 void FramebufferTarget::FillRect(int x, int y, int w, int h, Color color) {
   if (w <= 0 || h <= 0) return;
-  const int x1 = x + w;
-  const int y1 = y + h;
-  const int x0 = x < 0 ? 0 : x;
-  const int y0 = y < 0 ? 0 : y;
-  const int x_end = x1 > width_ ? width_ : x1;
-  const int y_end = y1 > height_ ? height_ : y1;
-  for (int py = y0; py < y_end; ++py) {
-    for (int px = x0; px < x_end; ++px) Put(px, py, color);
+  int64_t x0 = x < 0 ? 0 : static_cast<int64_t>(x);
+  int64_t y0 = y < 0 ? 0 : static_cast<int64_t>(y);
+  int64_t x1 = static_cast<int64_t>(x) + static_cast<int64_t>(w);
+  int64_t y1 = static_cast<int64_t>(y) + static_cast<int64_t>(h);
+  if (x1 > width_) x1 = width_;
+  if (y1 > height_) y1 = height_;
+  if (x0 >= x1 || y0 >= y1) return;
+  for (int64_t py = y0; py < y1; ++py) {
+    for (int64_t px = x0; px < x1; ++px) {
+      Put(static_cast<int>(px), static_cast<int>(py), color);
+    }
   }
 }
 
@@ -105,9 +108,10 @@ void FramebufferTarget::FillPolygon(const int* xy_pairs, size_t n_points,
       const int lo = y0 < y1 ? y0 : y1;
       const int hi = y0 < y1 ? y1 : y0;
       if (y < lo || y >= hi) continue;
-      const int64_t num =
-          static_cast<int64_t>(y - y0) * static_cast<int64_t>(x1 - x0);
-      const int64_t den = static_cast<int64_t>(y1 - y0);
+      const int64_t num = (static_cast<int64_t>(y) - static_cast<int64_t>(y0)) *
+                          (static_cast<int64_t>(x1) - static_cast<int64_t>(x0));
+      const int64_t den =
+          static_cast<int64_t>(y1) - static_cast<int64_t>(y0);
       const int64_t x = static_cast<int64_t>(x0) + num / den;
       if (x > static_cast<int64_t>(std::numeric_limits<int>::max())) {
         crossings.push_back(std::numeric_limits<int>::max());

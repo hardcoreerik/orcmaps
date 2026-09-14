@@ -16,3 +16,5 @@ CMakeCache.txt
 examples/**/sdkconfig
 examples/**/sdkconfig.old
 **/build_log.txt
+**/managed_components/
+build-host-render/

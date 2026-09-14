@@ -91,8 +91,8 @@ step-function) zoom resolver — see `ResolveFeatureStyle()`'s doc comment.
 no dependency on M5GFX, LovyanGFX, LVGL, or any display API. Converting to
 a display's native pixel format (e.g. RGB565 for M5GFX/LovyanGFX) is an
 **target's** job, not the style system's. The host framebuffer target
-proves this; `adapters/m5gfx` is still an EXPERIMENTAL MVT-typed sketch
-to be retargeted onto `RenderTarget`. This keeps the same
+proves this; `adapters/m5gfx` converts Color to RGB565 at draw time.
+This keeps the same
 `MapStyle`/`ResolveFeatureStyle()` API usable by a future LVGL or host-side
 test renderer without change.
 

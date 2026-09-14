@@ -11,19 +11,19 @@ underway.
 **IMPLEMENTED:** PMTiles reader, Web Mercator math, schema-agnostic MVT
 decode, FeatureKind in `feature_kind.hpp`, Feature / Geometry model,
 MVT→FeatureTile translation, style system, immediate `RenderTarget`,
-`RenderFeatureTile` host proof, host framebuffer, host + consumer tests,
-provenance registry, `examples/generic-esp32` ESP-IDF compile/link
-(ESP-IDF 6.0.2 / `esp32p4`, no graphics framework).
+`RenderFeatureTile`, host framebuffer, M5GFX `DisplayTarget` (RenderTarget,
+no MVT), host + consumer tests, provenance registry,
+`examples/generic-esp32` (no graphics framework), `examples/m5gfx`
+compile proof.
 
 **PARTIAL:** Viewport (prepared TileScreenMap; no overzoom, no
 antimeridian wrap, no visible-tile enumerator). Zoom 0..31.
 
-**EXPERIMENTAL / SKETCH:** `orcmap::experimental::AssignFeatureKinds`.
-`adapters/m5gfx/` still MVT-typed, not retargeted.
+**EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds`.
 
-**PLANNED (Phase 2 remaining):** retarget M5GFX onto Feature/RenderTarget,
-tile-payload decompression seam, `adapters/esp_idf` ByteSource, polygon
-holes, line width, overzoom.
+**PLANNED (Phase 2 remaining):** tile-payload decompression seam,
+`adapters/esp_idf` ByteSource, polygon holes, line width, overzoom,
+real Lane County pack.
 
 **BLOCKED on real data (later):** tile-content schema / stable
 `FeatureKind` mapping, Lane County pack, performance numbers. Do not
@@ -98,7 +98,7 @@ finalize schema from `tiny.mvt`.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **65 test functions, all passing**.
+- Host test suite: **67 test functions, all passing**.
 
 ## What is partially working
 
@@ -131,13 +131,13 @@ finalize schema from `tiny.mvt`.
 
 ## What is being worked on
 
-Renderer hardening (frame clear, prepared transform, clip, zoom contract).
-Next candidate after review: retarget M5GFX onto `RenderTarget`/`Feature`.
-Not OrcSDR.
+M5GFX DisplayTarget retarget. Next: tile-payload decompression, then a
+real Lane County pack. Not OrcSDR.
 
 ## Current blockers
 
-- M5GFX adapter still consumes MVT types, not `Feature`/`RenderTarget`.
+- M5GFX `DisplayTarget` exists; there is no on-device visual verification
+  in this repo yet (compile proof + host pixels only).
 - No public generic tile-payload decompression seam (`GetTile()` returns
   stored bytes; `DecodeMvtTile()` wants decompressed MVT).
 - Viewport is PARTIAL (no overzoom, no antimeridian wrap, no visible-tile
@@ -191,7 +191,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 65 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 67 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, and host render — see `ARCHITECTURE.md`
 "Testing architecture").
@@ -299,12 +299,10 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Retarget `adapters/m5gfx` onto `Feature` / `RenderTarget`; remove
-   `orcmap/mvt.hpp` from it.
-2. Public generic tile-payload decompression path (`GetTile` → decompress
+1. Public generic tile-payload decompression path (`GetTile` → decompress
    → format decoder). Unsupported Brotli/Zstd stay clean failures.
-3. `adapters/esp_idf` ByteSource.
-4. Then a real Lane County/Eugene pack from the already-`CONFIRMED`
+2. `adapters/esp_idf` ByteSource.
+3. Then a real Lane County/Eugene pack from the already-`CONFIRMED`
    `openstreetmap` record — schema, leaf directories, compressed tiles,
    and performance numbers come from that evidence, not `tiny.mvt`.
 
@@ -318,7 +316,7 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — renderer hardening at a stopping point. M5GFX retarget not started.
+None — M5GFX DisplayTarget at a stopping point. OrcSDR not started.
 
 ## Notes for the next development session
 

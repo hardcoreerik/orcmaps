@@ -165,11 +165,9 @@ distribution under the documented source terms").
 - **Rendering: vector tiles decoded once, cached as RGB565** (RAM/PSRAM
   first, optional SD-backed cache second) — the hybrid approach, matching
   the yuiseki precedent and ORCMAP1's own informal sprite-cache pattern in
-  `adsb_dashboard.cpp`. **MVT decode is implemented; the renderer core,
-  generic feature model, viewport, and rendered-tile cache are not.** An
-  `adapters/m5gfx` sketch exists (header-only Color→RGB565 + LovyanGFX
-  helpers) but is EXPERIMENTAL, currently MVT-typed, and is not the
-  renderer architecture — see STATUS.md.
+  `adsb_dashboard.cpp`. Renderer core + Feature model + PARTIAL Viewport
+  exist. Rendered-tile cache does not. `adapters/m5gfx/DisplayTarget` is a
+  `RenderTarget`, not the renderer architecture — see STATUS.md.
 - **Projection: standard Web Mercator tile math**
   (`orcmap::LatLonToTile`/`TileToLatLon`, `include/orcmap/geo.hpp`),
   implemented and host-tested. RF-specific distance/bearing/geodesic math
@@ -230,8 +228,8 @@ plain RGBA8. Unclassified features are skipped. Zoom mismatch returns
 false. This is not a complete map engine (no overzoom, no antimeridian
 wrap, no holes, 1px strokes).
 
-`adapters/m5gfx/` is an **EXPERIMENTAL sketch** still taking MVT types.
-Do not grow it; retarget onto `Feature` + `RenderTarget`.
+`adapters/m5gfx/DisplayTarget` is a `RenderTarget` over LovyanGFX
+(RGB565 in the adapter only). It must not implement map semantics.
 
 ## Styling Model
 
@@ -361,12 +359,12 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
 ## Public API and Versioning
 
 - **Public API surface is `include/orcmap/` plus the adapter directories**
-  (`adapters/host/` today; `adapters/m5gfx` is an experimental integration
-  sketch, `adapters/esp_idf` is not yet implemented) — nothing under
+  (`adapters/host/` today; `adapters/m5gfx` is an optional RenderTarget
+  integration, `adapters/esp_idf` is not yet implemented) — nothing under
   `src/` or `third_party/` is a consumer-facing contract, ever. Format
   headers `mvt.hpp` / `pmtiles.hpp` are public *today* because they are
   still usable low-level APIs; they are not the long-term application API
-  (`MapEngine` / `Viewport` do not exist yet). `feature.hpp` is the
+  (`MapEngine` does not exist yet; Viewport is PARTIAL). `feature.hpp` is the
   format-independent feature model. `experimental/mvt_classify.hpp` is
   **not** stable public API. This is enforced structurally, not just by
   convention:
