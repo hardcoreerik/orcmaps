@@ -23,8 +23,10 @@ add_executable(orcmap_host_tests
     test_stroke.cpp
     test_render.cpp
     test_compression.cpp
+    test_pack.cpp
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/core/viewport.cpp
+    ${ORCMAP_ROOT}/src/core/pack.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_translate.cpp

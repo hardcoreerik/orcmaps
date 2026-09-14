@@ -132,15 +132,13 @@ Additional rules the checker enforces beyond this table:
 
 ## Pack manifests reference registry IDs, not free text
 
-Once pack manifests exist (`PACK_MANIFEST_SCHEMA.md`, not yet built — see
-`ROADMAP.md`), each manifest's source list will reference these records by
-`id`, and the checker will (once manifests exist) verify every referenced
+Pack manifests (`PACK_MANIFEST_SCHEMA.md`) reference these records by
+`id`, and the checker verifies every referenced
 ID actually exists in the registry and that the manifest's own license
 classification is consistent with its sources' classes (e.g. a manifest
 claiming `pack_class: clean` can't reference a source whose
-`clean_pack_allowed` is `false`). This part of the checker is not yet
-active — there is nothing to check yet, per `STATUS.md` — but the rule is
-documented here so it isn't invented differently later.
+`clean_pack_allowed` is `false`). The committed Springfield golden-pack
+manifest exercises this check today.
 
 ## Current records
 

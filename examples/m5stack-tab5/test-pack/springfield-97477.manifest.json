@@ -1,0 +1,44 @@
+{
+  "manifest_version": 1,
+  "pack_id": "geofabrik-oregon-2026-09-14__openmaptiles-3.16__standard__springfield-97477__b-1230550000_440300000_-1229600000_440900000__z0-15",
+  "pack_version": "2026.09.14.1",
+  "display_name": "Springfield / 97477",
+  "region_id": "springfield-97477",
+  "region_name": "Springfield, Oregon, USA",
+  "bounds": {
+    "min_lon": -123.055,
+    "min_lat": 44.03,
+    "max_lon": -122.96,
+    "max_lat": 44.09
+  },
+  "min_zoom": 0,
+  "max_zoom": 15,
+  "content_profile": "standard",
+  "pmtiles_version": 3,
+  "schema_version": "openmaptiles-3.16",
+  "source_snapshot": "geofabrik-oregon-2026-09-14",
+  "builder": "Planetiler OpenMapTiles profile",
+  "builder_version": "0.10.2 / OpenMapTiles 3.16.0",
+  "builder_commit": "0e5588c4a6e8c29a270a33afe8df62027d889604",
+  "build_date": "2026-09-14",
+  "sources": [
+    {
+      "provenance_id": "openstreetmap",
+      "acquired": "2026-09-14",
+      "source_version": "geofabrik-oregon-latest-2026-09-14"
+    }
+  ],
+  "pack_class": "open",
+  "required_attribution": [
+    "© OpenStreetMap contributors"
+  ],
+  "attribution_links": [
+    "https://www.openstreetmap.org/copyright"
+  ],
+  "priority": 100,
+  "size_bytes": 3507636,
+  "input_hashes": {
+    "geofabrik-oregon.osm.pbf": "5511e363f0cfdc41ac3d6a9b34668b6a34a2131ae88cc638c7f8d818190c6ddc"
+  },
+  "output_sha256": "8bf23873915668f41d098b98df32b11a6d08ec6754a63d885fce2f29abe4adfd"
+}

@@ -47,6 +47,16 @@ class DataProvenanceTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(record, indent=2), encoding="utf-8")
 
+    def write_manifest(self, filename, manifest):
+        path = self.root / "data" / "packs" / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    def write_example_manifest(self, manifest):
+        path = self.root / "examples" / "demo" / "test-pack" / "example.manifest.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
     def report(self):
         return run_checks(self.root)
 
@@ -166,6 +176,90 @@ class DataProvenanceTests(unittest.TestCase):
         record["evidence"]["reviewed_date"] = "Sept 13 2026"
         self.write_record("example-source.json", record)
         self.assertTrue(any(item.code == "bad-date" for item in self.report().errors))
+
+    def test_manifest_with_approved_source_passes(self):
+        self.write_record("example-source.json", valid_record())
+        self.write_manifest(
+            "example.manifest.json",
+            {
+                "pack_class": "clean",
+                "sources": [{"provenance_id": "example-source"}],
+            },
+        )
+        self.assertEqual([], self.report().errors)
+
+    def test_invalid_manifest_json_fails(self):
+        self.write_record("example-source.json", valid_record())
+        path = self.root / "data" / "packs" / "broken.manifest.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{not valid json", encoding="utf-8")
+        self.assertTrue(any(item.code == "invalid-manifest-json" for item in self.report().errors))
+
+    def test_manifest_source_must_have_provenance_id(self):
+        self.write_record("example-source.json", valid_record())
+        self.write_manifest(
+            "example.manifest.json",
+            {"pack_class": "clean", "sources": [{}]},
+        )
+        self.assertTrue(any(item.code == "missing-provenance-id" for item in self.report().errors))
+
+    def test_manifest_source_must_resolve_to_registry(self):
+        self.write_record("example-source.json", valid_record())
+        self.write_manifest(
+            "example.manifest.json",
+            {
+                "pack_class": "clean",
+                "sources": [{"provenance_id": "missing-source"}],
+            },
+        )
+        self.assertTrue(any(item.code == "unknown-provenance-id" for item in self.report().errors))
+
+    def test_manifest_must_reference_at_least_one_source(self):
+        self.write_record("example-source.json", valid_record())
+        self.write_manifest(
+            "example.manifest.json",
+            {"pack_class": "clean", "sources": []},
+        )
+        self.assertTrue(any(item.code == "missing-provenance-id" for item in self.report().errors))
+
+    def test_example_test_pack_manifest_is_checked(self):
+        self.write_record("example-source.json", valid_record())
+        self.write_example_manifest(
+            {
+                "pack_class": "open",
+                "sources": [{"provenance_id": "missing-source"}],
+            }
+        )
+        self.assertTrue(any(item.code == "unknown-provenance-id" for item in self.report().errors))
+
+    def test_manifest_source_must_be_allowed_in_official_packs(self):
+        record = valid_record()
+        record["policy"]["official_pack_allowed"] = False
+        record["policy"]["clean_pack_allowed"] = False
+        self.write_record("example-source.json", record)
+        self.write_manifest(
+            "example.manifest.json",
+            {
+                "pack_class": "open",
+                "sources": [{"provenance_id": "example-source"}],
+            },
+        )
+        self.assertTrue(any(item.code == "source-not-official" for item in self.report().errors))
+
+    def test_clean_manifest_source_must_be_clean_pack_allowed(self):
+        record = valid_record()
+        record["rights"]["license_class"] = "PERMISSIVE_ATTRIBUTION"
+        record["rights"]["attribution_required"] = True
+        record["policy"]["clean_pack_allowed"] = False
+        self.write_record("example-source.json", record)
+        self.write_manifest(
+            "example.manifest.json",
+            {
+                "pack_class": "clean",
+                "sources": [{"provenance_id": "example-source"}],
+            },
+        )
+        self.assertTrue(any(item.code == "source-not-clean" for item in self.report().errors))
 
     def test_no_derivatives_forces_modification_false(self):
         record = valid_record(id="static-source")

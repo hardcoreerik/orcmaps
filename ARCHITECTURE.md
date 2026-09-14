@@ -88,7 +88,8 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |
 | Consumer build gate | `tests/consumer/` | Implemented, passing |
 | Data provenance registry | `data/sources/*.json` | Implemented, 9 records (4 `CONFIRMED`: Natural Earth, OpenStreetMap, geoBoundaries gbOpen, Google Open Buildings; 5 `REVIEW_REQUIRED` -- see `docs/DATA_PROVENANCE_REGISTRY.md`) |
-| Pack manifest schema | `docs/PACK_MANIFEST_SCHEMA.md` | Documented, not implemented (no pack builder exists) |
+| Pack model/catalog/resolver | `include/orcmap/pack.hpp`, `src/core/pack.cpp` | Implemented and host-tested: validation, deterministic identity, catalog, and exactly one eligible local basemap. |
+| Pack manifest artifacts | `docs/PACK_MANIFEST_SCHEMA.md`, `examples/m5stack-tab5/test-pack/` | PARTIAL: schema and Springfield triplet exist; runtime JSON discovery and on-device file hashing do not. |
 
 ## Repository layout
 
@@ -98,10 +99,10 @@ include/orcmap/      Public headers: byte_source.hpp, geo.hpp, pmtiles.hpp,
                       attribution.hpp, map_source.hpp, mvt.hpp,
                       compression.hpp, feature.hpp,
                       mvt_translate.hpp, viewport.hpp, render_target.hpp,
-                      renderer.hpp, clip.hpp, stroke.hpp
+                      renderer.hpp, clip.hpp, stroke.hpp, pack.hpp
 include/orcmap/experimental/  EXPERIMENTAL FeatureKind heuristic
                       (mvt_classify.hpp) -- not stable API
-src/core/             geo.cpp (Web Mercator tile math), viewport.cpp
+src/core/             geo.cpp, viewport.cpp, pack.cpp
 src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader),
                       mvt_decoder.cpp (schema-agnostic MVT geometry decoder),
                       mvt_translate.cpp (MVT → FeatureTile),
@@ -356,16 +357,14 @@ Two related but distinct pieces, both implemented today:
   (`include/orcmap/attribution.hpp`) and `orcmap::MapSourceInfo` +
   `CollectRequiredAttribution()` (`include/orcmap/map_source.hpp`),
   host-tested in `tests/host/test_attribution.cpp`. This is what a future
-  consuming application asks the *running* engine, once pack manifests
-  and discovery exist to populate `MapSourceInfo` for real — the intent
+  consuming application asks the running engine. `PackManifest` now carries
+  the local attribution records; conversion into active `MapSourceInfo`
+  remains to be wired when filesystem discovery is added. The intent
   (`docs/DATA_AND_LICENSING.md` "Runtime attribution") is that an
-  application never hard-codes `"(c) OpenStreetMap contributors"`; it
+  application never hard-codes `"© OpenStreetMap contributors"`; it
   calls something like `map.activeSources()` and reads each source's
   `AttributionInfo` instead. Today these two structs exist and are
-  correct, but nothing populates a real `MapSourceInfo` from an actual
-  opened pack yet — that wiring depends on the pack manifest
-  (`docs/PACK_MANIFEST_SCHEMA.md`) and pack discovery, neither of which
-  exist yet (`ROADMAP.md`).
+  correct, but runtime JSON discovery does not populate an opened pack yet.
 
 The core engine intentionally never renders attribution text itself
 (`AttributionInfo` carries `text`/`url`, not a draw call) — this mirrors

@@ -15,6 +15,7 @@
 idf_component_register(
     SRCS "src/core/geo.cpp"
          "src/core/viewport.cpp"
+         "src/core/pack.cpp"
          "src/tiles/pmtiles_reader.cpp"
          "src/tiles/mvt_decoder.cpp"
          "src/tiles/mvt_translate.cpp"

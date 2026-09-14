@@ -4,8 +4,12 @@ An offline-first map engine for embedded devices. ESP32-class hardware
 (ESP32-S3, ESP32-P4) is the first target; the core is deliberately platform-
 portable so other microcontroller-class devices can adopt it later.
 
-OrcMaps renders useful, readable maps entirely from local storage (SD card) —
-no network connection required to display a map. It owns base geography
+OrcMaps renders useful, readable maps entirely from local storage (SD card).
+After firmware and map packs are provisioned, boot, pack selection,
+validation, pan, zoom, rendering, projection, attribution, and overlays must
+work with every network physically unavailable. OrcMaps core has no online
+tile fallback, account, activation, telemetry, or update-check requirement.
+It owns base geography
 (roads, water, boundaries, place labels) and a small set of generic drawing
 primitives (markers, polylines, polygons). It does **not** know what an
 aircraft, a LoRa node, or an RF site is — applications translate their own
@@ -27,6 +31,10 @@ exists at [`examples/generic-esp32`](examples/generic-esp32) and does
 M5GFX `DisplayTarget` is an optional exported adapter
 (`#include "orcmap/m5gfx/display_target.hpp"`). Viewport enumerates
 visible tiles (X wrap, no overzoom).
+The portable pack model, manifest validation, deterministic identity,
+multi-pack catalog, and one-best-local-pack resolver are host-tested. The
+Springfield golden pack now includes its manifest and SHA-256 sidecars.
+Runtime JSON discovery and on-device file hashing remain to be implemented.
 A hardware-verified static Springfield render exists on M5Stack Tab5
 ([`examples/m5stack-tab5`](examples/m5stack-tab5); evidence
 [`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`](docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md)).
@@ -42,7 +50,7 @@ experimental. See [`STATUS.md`](STATUS.md).
 
 ## Design principles
 
-1. **Offline first.** A downloaded map pack must render with zero network access.
+1. **Fully offline after provisioning.** The network may deliver packs, but is never part of runtime map operation. Missing detail uses another eligible local pack or reports unavailable; it is never fetched online.
 2. **One basemap, many applications.** Base geography is shared; every consumer supplies its own overlays.
 3. **Bounded memory.** Map/pack size must never determine RAM usage — everything streams.
 4. **Portable core.** No application state (aircraft, nodes, RF data) inside the engine.
@@ -57,7 +65,7 @@ experimental. See [`STATUS.md`](STATUS.md).
 
 ```
 include/orcmap/        Public headers — the portable API
-src/core/              Geo math, tile addressing, Viewport enumeration
+src/core/              Geo math, Viewport, pack validation/catalog/resolution
 src/storage/           Reserved; ByteSource interface lives in include/orcmap/
 src/tiles/             PMTiles reader, MVT decoder, bounded gzip decompress, MVT→Feature translation
 src/render/            Style system + FeatureTile renderer (host proof)

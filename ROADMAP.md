@@ -44,8 +44,8 @@ decision and a portable, host-tested core.
 - [x] Consumer integration test (`tests/consumer/`) proving a public-
       headers-only build works, structurally enforced via CMake include
       visibility
-- [x] Pack manifest schema documented (`docs/PACK_MANIFEST_SCHEMA.md`,
-      direction only — no pack builder exists to implement it against yet)
+- [x] Pack manifest schema, portable C++ data model/validation, deterministic
+      identity, catalog, and local resolver implemented and host-tested
 
 **Exit criteria:** met.
 
@@ -152,13 +152,13 @@ OrcSDR still builds.
       extract (Geofabrik or similar) via a proper tiler (Planetiler/
       tippecanoe) — not the Overpass-JSON or incomplete-GeoJSON scripts
       documented in `docs/ORCMAP1_AUDIT.md` §8
-- [ ] Real pack manifest produced alongside it, following
+- [x] Real Springfield golden-pack manifest and SHA-256 sidecar produced
+      alongside it, following
       `docs/PACK_MANIFEST_SCHEMA.md`, referencing the `openstreetmap`
       provenance record (already `CONFIRMED`/approved) by id
-- [ ] `tools/check_data_provenance.py` extended to validate manifest
+- [x] `tools/check_data_provenance.py` extended to validate manifest
       `sources[].provenance_id` references, per `docs/PACK_MANIFEST_SCHEMA.md`
-      "Future checker extension" — there is nothing to check until this
-      phase produces a real manifest
+      references and official/Clean pack eligibility
 - [ ] Pan works (viewport moves, new tiles load, cache reused where
       possible)
 - [ ] Zoom works (tile set changes correctly across zoom levels)
@@ -221,11 +221,16 @@ this phase on that basis.
 
 ## Phase 6 — Pack management
 
-**Goal:** install/update/remove map packs, both by SD copy and Wi-Fi.
+**Goal:** discover and validate local packs. Optional transfer tools may use
+SD copy or a network during provisioning, but runtime never requires either
+network access or a remote service.
 
 - [ ] On-device pack discovery: directory scan of installed `.pmtiles`
       files (not the fixed-slot catalog table pattern — see
       `docs/PACK_FORMAT.md`)
+- [x] Portable manifest/catalog/resolver core selects exactly one eligible
+      installed basemap and returns missing when no local pack qualifies
+- [ ] Runtime JSON manifest ingestion and streamed SHA-256 verification
 - [ ] Generalize OrcSDR's `catalog_sync` streaming/atomic-activate/rollback
       machinery for map-pack scale (chunked, resumable, per-chunk hash)
 - [ ] Settings → Data & Maps → Maps UI: Installed/Available/World/regions

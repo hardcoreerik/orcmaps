@@ -24,6 +24,12 @@ import sys
 from pathlib import Path
 
 SOURCES_DIR = "data/sources"
+# Committed, CI-visible manifests live here. Generated packs under
+# data/local/ are intentionally ignored.
+PACK_MANIFEST_GLOBS = (
+    "data/packs/*.manifest.json",
+    "examples/*/test-pack/*.manifest.json",
+)
 
 LICENSE_CLASSES = {
     "CC0", "PDDL", "PUBLIC_DOMAIN_VERIFIED", "US_FEDERAL_PUBLIC_DOMAIN",
@@ -259,6 +265,76 @@ def _check_evidence(records: dict[str, tuple[dict, str]], report: Report) -> Non
         report.passes.append("All registry records have well-formed evidence URLs and dates")
 
 
+def _check_pack_manifests(
+    root: Path, records: dict[str, tuple[dict, str]], report: Report
+) -> None:
+    checked = 0
+    ok = True
+    paths = sorted({path for pattern in PACK_MANIFEST_GLOBS for path in root.glob(pattern)})
+    for path in paths:
+        checked += 1
+        rel = path.relative_to(root).as_posix()
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            report.add("ERROR", "invalid-manifest-json", rel, f"not valid JSON: {exc}")
+            ok = False
+            continue
+        if not isinstance(manifest, dict):
+            report.add("ERROR", "invalid-manifest-json", rel, "top-level JSON value must be an object")
+            ok = False
+            continue
+
+        sources = manifest.get("sources")
+        if not isinstance(sources, list):
+            report.add("ERROR", "missing-field", rel, "missing required field: sources")
+            ok = False
+            continue
+        if not sources:
+            report.add(
+                "ERROR", "missing-provenance-id", rel,
+                "manifest must reference at least one provenance source",
+            )
+            ok = False
+            continue
+
+        for source in sources:
+            provenance_id = source.get("provenance_id") if isinstance(source, dict) else None
+            if not isinstance(provenance_id, str) or not provenance_id:
+                report.add(
+                    "ERROR", "missing-provenance-id", rel,
+                    "every manifest source must have a non-empty provenance_id",
+                )
+                ok = False
+                continue
+            registered = records.get(provenance_id)
+            if registered is None:
+                report.add(
+                    "ERROR", "unknown-provenance-id", rel,
+                    f"source provenance_id '{provenance_id}' is not registered",
+                )
+                ok = False
+                continue
+
+            record = registered[0]
+            if _get(record, "policy", "official_pack_allowed") is not True:
+                report.add(
+                    "ERROR", "source-not-official", rel,
+                    f"source '{provenance_id}' is not allowed in official packs",
+                )
+                ok = False
+            if (manifest.get("pack_class") == "clean" and
+                    _get(record, "policy", "clean_pack_allowed") is not True):
+                report.add(
+                    "ERROR", "source-not-clean", rel,
+                    f"source '{provenance_id}' is not allowed in clean packs",
+                )
+                ok = False
+
+    if checked and ok:
+        report.passes.append(f"All {checked} committed pack manifest(s) reference approved sources")
+
+
 def run_checks(root: Path) -> Report:
     root = root.resolve()
     report = Report()
@@ -268,6 +344,7 @@ def run_checks(root: Path) -> Report:
     _check_required_fields(records, report)
     _check_license_class(records, report)
     _check_evidence(records, report)
+    _check_pack_manifests(root, records, report)
     return report
 
 

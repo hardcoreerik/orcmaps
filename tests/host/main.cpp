@@ -15,6 +15,7 @@ void RunStrokeTests();
 void RunRenderTests(const std::string& mvt_fixture_path);
 void RunCompressionTests(const std::string& pmtiles_path,
                          const std::string& mvt_path);
+void RunPackTests();
 
 int main(int argc, char** argv) {
   const std::string fixture_path =
@@ -33,6 +34,7 @@ int main(int argc, char** argv) {
   RunStrokeTests();
   RunRenderTests(mvt_fixture_path);
   RunCompressionTests(fixture_path, mvt_fixture_path);
+  RunPackTests();
 
   if (orcmap::test::g_failures == 0) {
     std::printf("PASS: all OrcMaps host tests passed\n");

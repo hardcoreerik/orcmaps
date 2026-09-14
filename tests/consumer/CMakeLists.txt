@@ -17,6 +17,7 @@ set(ORCMAP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 add_library(orcmap_engine STATIC
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/core/viewport.cpp
+    ${ORCMAP_ROOT}/src/core/pack.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_translate.cpp

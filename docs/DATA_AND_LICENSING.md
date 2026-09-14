@@ -227,6 +227,12 @@ classification, required attribution text, and input/output content
 hashes. None of this is baked into tile geometry — it lives in the
 manifest, alongside the pack, not inside it.
 
+The first real triplet is the committed Springfield hardware-regression pack
+under `examples/m5stack-tab5/test-pack/`. Data Provenance Truth checks its
+source references and policy eligibility. Runtime JSON parsing and streamed
+archive hashing remain separate unfinished runtime work; the presence of a
+sidecar alone is not yet an on-device validation claim.
+
 ## Runtime attribution
 
 Attribution is not documentation-only. The engine is meant to expose which

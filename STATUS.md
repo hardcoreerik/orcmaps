@@ -13,7 +13,8 @@ decode, FeatureKind in `feature_kind.hpp`, Feature / Geometry model,
 MVT→FeatureTile translation, style system, immediate `RenderTarget`,
 `RenderFeatureTile`, bounded `DecompressPayload` (None/Gzip), host
 framebuffer, M5GFX `DisplayTarget` (exported `orcmap/m5gfx/` headers),
-host + consumer tests, provenance registry,
+  host + consumer tests, provenance registry, `PackManifest` validation,
+  deterministic pack identity, `PackCatalog`, local `ResolvePack`,
 `examples/generic-esp32` (no graphics framework), `examples/m5gfx`
 compile proof, `examples/m5stack-tab5` (hardware-verified static
   Springfield render on Tab5), `examples/lilygo-tdisplay-s3` (hardware-
@@ -21,7 +22,8 @@ compile proof, `examples/m5stack-tab5` (hardware-verified static
 `orcmap::esp_idf::FileByteSource`.
 
 **PARTIAL:** Viewport overzoom is not implemented. Zoom 0..31.
-`tools/pack-builder` Springfield script only.
+`tools/pack-builder` Springfield script only. Runtime manifest JSON discovery
+and on-device SHA-256 verification are not implemented.
 
 **EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds` (now
 measured against OpenMapTiles 3.16 Springfield tiles; still not the
@@ -69,11 +71,14 @@ extract.
 - `orcmap::MapStyle` + 4 built-in styles (`orcsdr-dark`, `standard-light`,
   `high-contrast-field`, `night-red-safe`) + `ResolveFeatureStyle()` +
   `StyleManager` runtime switching + `RenderedTileCacheKey`.
+- `orcmap::PackManifest` / `PackCatalog` / `ResolvePack` validate immutable
+  pack metadata and deterministically choose one eligible local basemap by
+  coverage, zoom, priority, then identity. No network fallback exists.
 - `orcmap::AttributionInfo` / `orcmap::MapSourceInfo` /
   `CollectRequiredAttribution()` — the runtime attribution API shape
   (`include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp`),
   host-tested. Nothing populates a real `MapSourceInfo` from an opened
-  pack yet (no pack manifest/discovery implementation exists) — this is
+  pack yet (runtime JSON discovery is not implemented) — this is
   the API a future `MapEngine` will feed, not a complete feature.
 - Data provenance registry: 9 reviewed datasets under `data/sources/*.json`
   (Natural Earth, OpenStreetMap, U.S. Census TIGER/Line, NOAA ETOPO, USGS
@@ -113,7 +118,7 @@ extract.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **105 test functions, all passing**.
+- Host test suite: **115 test functions, all passing**.
 - `EnumerateVisibleTiles` (unique TileIds, X wrap, Y clamp).
   `TileScreenMap` uses shortest wrapped X delta. Overzoom still rejected.
 - `RenderTarget::DrawLine` takes `width_px` from `MapPaint`. Shared
@@ -208,7 +213,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 105 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 115 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`

@@ -109,7 +109,9 @@ distribution under the documented source terms").
 
 ## Core Design Principles
 
-1. Offline first — a downloaded pack renders with zero network access.
+1. Fully offline after provisioning — boot, installed-pack selection and
+   validation, pan, zoom, rendering, projection, attribution, and overlays
+   require no network. Missing tiles never trigger an online fallback.
 2. One basemap, many applications — base geography is shared; every
    consumer supplies its own overlays.
 3. Bounded memory — pack/archive size must never determine RAM usage.
@@ -252,18 +254,21 @@ version — this is enforced by `tests/host/test_style.cpp`.
 
 ## Pack Distribution Model
 
-- Not yet implemented on-device. Direction (per `docs/ORCMAP1_AUDIT.md` §6
-  and `docs/PACK_FORMAT.md`): pack discovery will be directory-scan based
+- `PackManifest`, deterministic pack identity, validation, `PackCatalog`,
+  and one-best-local-pack resolution are implemented in
+  `include/orcmap/pack.hpp` / `src/core/pack.cpp`. JSON discovery and
+  on-device full-file SHA-256 verification are not implemented yet.
+- Direction (per `docs/ORCMAP1_AUDIT.md` §6 and `docs/PACK_FORMAT.md`):
+  on-device pack discovery will be directory-scan based
   (enumerate installed `.pmtiles` files), not the fixed 16-slot table
   OrcSDR's `catalog_sync.cpp` currently uses for its other data types.
 - OrcSDR's existing `catalog_sync` streaming-download / atomic-activate
   (`.part` → verify → `.bak` backup → rename)/rollback machinery is the
   proven foundation to generalize for map-scale (multi-GB, chunked,
   resumable) transfers — not to be thrown away and rebuilt from scratch.
-- Map data does not live in this source repository. Regional/world packs
-  will be distributed via releases/object storage, not committed binaries
-  (`tests/fixtures/tiny.pmtiles`, 519 bytes, is a synthetic test fixture,
-  not real map data, and is the only binary map-shaped file in this repo).
+- Regional/world product packs will be distributed separately rather than
+  committed. The repository deliberately retains the small Springfield
+  hardware-regression pack and synthetic fixtures as golden evidence.
 
 ## Licensing Model
 
@@ -289,10 +294,9 @@ for the machine-readable classification schema. Key rules:
 - Packs come from legitimate extract data (OSM `.osm.pbf` extracts via
   Geofabrik/planet + osmium/Planetiler/tippecanoe, or another source whose
   terms explicitly permit offline redistribution).
-- Every pack must carry source/source_url/source_date/license/attribution/
-  generator/generator_version/data_version/sha256 in its metadata — see
-  `docs/PACK_MANIFEST_SCHEMA.md` for the full manifest schema (established,
-  not yet implemented — no pack builder exists yet).
+- Every pack must carry local source, version, license, attribution, builder,
+  compatibility, size, and hash metadata. The schema and first real manifest
+  are implemented; runtime JSON loading and file hashing remain partial.
 - Engine license and map-data license are independent. OSM-derived data
   carries ODbL obligations (attribution, share-alike on the *data*) that
   apply regardless of the engine's own license.
@@ -533,8 +537,8 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   HTTP 403, Overture Places needing per-record license filtering before
   ingest). None of these are usable in an official pack until resolved —
   see "IP and Provenance Safety Model" above.
-- Pack manifest schema is documented (`docs/PACK_MANIFEST_SCHEMA.md`) but
-  unimplemented — no pack builder exists to produce one yet.
+- Runtime manifest JSON loading, removable-storage discovery, and on-device
+  full-file SHA-256 verification are not implemented yet.
 
 ## Historical Context That Matters
 

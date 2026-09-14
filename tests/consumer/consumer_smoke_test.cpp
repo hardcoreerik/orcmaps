@@ -30,6 +30,7 @@
 #include "orcmap/map_source.hpp"
 #include "orcmap/mvt.hpp"
 #include "orcmap/mvt_translate.hpp"
+#include "orcmap/pack.hpp"
 #include "orcmap/pmtiles.hpp"
 #include "orcmap/renderer.hpp"
 #include "orcmap/style.hpp"
@@ -132,6 +133,36 @@ bool CheckMvtTranslate(const std::string& mvt_fixture_path) {
   return !features.features[0].kind_assigned;
 }
 
+bool CheckPackResolution() {
+  orcmap::PackManifest pack;
+  pack.pack_version = "2026.09";
+  pack.display_name = "World";
+  pack.region_id = "world";
+  pack.region_name = "World";
+  pack.bounds = {-180.0, -85.0, 180.0, 85.0};
+  pack.min_zoom = 0;
+  pack.max_zoom = 7;
+  pack.content_profile = "overview";
+  pack.pmtiles_version = 3;
+  pack.schema_version = "openmaptiles-3.16";
+  pack.source_snapshot = "2026-09";
+  pack.builder = "consumer-test";
+  pack.builder_version = "1";
+  pack.builder_commit = std::string(40, 'a');
+  pack.build_date = "2026-09-14";
+  pack.provenance_ids = {"test-source"};
+  pack.pack_class = "clean";
+  pack.size_bytes = 1;
+  pack.output_sha256 = std::string(64, 'b');
+  pack.archive_path = "/orcmaps/packs/world/map.pmtiles";
+  pack.pack_id = orcmap::MakePackId(pack);
+  orcmap::PackCatalog catalog;
+  if (!catalog.Add(pack)) return false;
+  const auto* selected =
+      orcmap::ResolvePack(catalog, {-1.0, -1.0, 1.0, 1.0}, 4);
+  return selected != nullptr && selected->pack_id == pack.pack_id;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -150,6 +181,7 @@ int main(int argc, char** argv) {
   ok &= CheckMvtTranslate(mvt_fixture_path);
   ok &= CheckGzipTilePipeline(gzip_pmtiles);
   ok &= CheckHostRender();
+  ok &= CheckPackResolution();
 
   if (ok) {
     std::printf("PASS: OrcMaps consumer smoke test (public headers only)\n");
