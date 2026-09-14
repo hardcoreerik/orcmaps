@@ -23,10 +23,11 @@ compile proof, `examples/m5stack-tab5` (hardware-verified static
 
 **PARTIAL:** Portable camera controls are implemented and host-tested; hardware
 input bindings and viewport overzoom are not. Integer zoom is 0..31.
-`tools/pack-builder` can reproduce the Springfield pack and acquire the pinned
-Natural Earth 5.1.2 world-overview source bundle; it does not yet build the
-overview PMTiles. Runtime manifest JSON discovery and on-device SHA-256
-verification are not implemented.
+`tools/pack-builder` can reproduce the Springfield pack, acquire the pinned
+Natural Earth 5.1.2 world-overview source bundle, and **build world-overview
+PMTiles** — five candidates (z0-4 … z0-8) exist host-side as immutable
+archive/manifest/checksum triplets. No cutoff is selected. Runtime manifest
+JSON discovery and on-device SHA-256 verification are not implemented.
 
 **EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds` (now
 measured against OpenMapTiles 3.16 Springfield tiles; still not the
@@ -41,9 +42,11 @@ Before the no-text layer filter the same view was 11.3 s. Evidence:
 **PLANNED:** text labels, polygon holes, overzoom, further decoder speed.
 Brotli/zstd stay unsupported.
 
-**NOT FROZEN:** tile-content schema / stable FeatureKind mapping. Do not
-finalize OpenMapTiles, Shortbread, or a custom schema from this one
-extract.
+**NOT FROZEN:** tile-content schema / stable FeatureKind mapping. Two
+schema ids now exist in real built packs — `openmaptiles-3.16`
+(Springfield detail) and `orcmaps-overview-1` (Natural Earth overview
+candidates). Neither is final. Do not finalize OpenMapTiles, Shortbread,
+`orcmaps-overview-1`, or a custom schema from these extracts.
 
 ## Repository / branch state
 
@@ -164,17 +167,36 @@ extract.
 - Host-only Natural Earth acquisition pins and verifies 21 official archives
   covering seven layers at 110m, 50m, and 10m. Local archives, shapefiles,
   `SOURCE.json`, and `SHA256SUMS.txt` remain under gitignored `data/local/`.
-  No world-overview PMTiles has been built.
+- **World-overview packs are built (host-only, gitignored).** Five candidates
+  under `data/local/world-overview/build/`, each an immutable
+  archive/manifest/checksum triplet: z0-4 871,343 B; z0-5 1,492,862 B;
+  z0-6 4,833,728 B; z0-7 9,737,500 B; z0-8 17,165,758 B. Built with
+  Planetiler 0.10.2 + go-pmtiles 1.28.2 from the pinned Natural Earth 5.1.2
+  bundle; `pack_class: clean`, sole `provenance_id: natural-earth` (a
+  `CONFIRMED` record), per-input SHA-256 recorded in each manifest. They
+  declare `schema_version: orcmaps-overview-1` — a second schema alongside
+  the Springfield pack's `openmaptiles-3.16`, and equally **not frozen**.
+  Host renders exist at z4/z5/z6 for world, North America, Pacific
+  Northwest, and Oregon views. **No render timings were captured**, no
+  z0-10 candidate was generated, no cutoff was chosen, and no overview pack
+  has been rendered on device. Size/embedding analysis lives in
+  `docs/ORCMAPS_EMBEDDED_WORLD_FIRMWARE_CONCEPT.md` (status PLANNED/DEFERRED).
 
 ## What is being worked on
 
-The Springfield demo is running on a physical LilyGO T-Display-S3 Touch
-with SD Shield. It was flashed through COM13, and the corrected 320x170
-landscape view renders `/orcmaps/springfield.pmtiles`. Exact serial timing
-was not captured; the user observed power-to-map as very fast. The current
-firmware preserves each result as `/orcmaps/orcmaps-report-NNNN.txt` and
-shows the frame total on screen. The first confirmed numbered-report run
-displayed **1,037 ms**.
+World-overview pack generation and the size/cutoff question. Five
+candidates are built and visually rendered on host; the open work is
+timing them, picking a cutoff, and deciding whether a z0-4-class pack gets
+embedded in firmware flash (`docs/ORCMAPS_EMBEDDED_WORLD_FIRMWARE_CONCEPT.md`,
+PLANNED/DEFERRED — explicitly *not* to displace the SD-card path).
+
+Previously (complete, not in motion): the Springfield demo runs on a
+physical LilyGO T-Display-S3 Touch with SD Shield, flashed through COM13,
+rendering `/orcmaps/springfield.pmtiles` in a corrected 320x170 landscape
+view. Exact serial timing was not captured; the user observed power-to-map
+as very fast. That firmware preserves each result as
+`/orcmaps/orcmaps-report-NNNN.txt` and shows the frame total on screen;
+the first confirmed numbered-report run displayed **1,037 ms**.
 
 ## Current blockers
 
@@ -214,6 +236,11 @@ FeatureTile copy, ~0.2 ms render; the current quiet 1280×720 z14 host
 frame is ~75 ms. These are **not** ESP32 numbers. Physical Tab5 results
 are ~4.4 s for the same viewport. The LilyGO ESP32-S3 frame total is
 **1,037 ms**. Full power-to-map and stage timings have not been transcribed.
+
+World-overview candidates have **measured sizes only** (see "What is
+partially working"). Their host renders were produced but never timed, and
+`docs/PERFORMANCE.md` records no overview numbers — do not quote an
+overview render time until one is actually measured.
 
 ## Test status
 
@@ -269,8 +296,11 @@ python -m unittest discover -s tests -p 'test_data_provenance.py'
 ```
 
 Results as of this writing: both checkers report `0 errors` against the
-real repository; 19 documentation-truth unit tests pass, 20
-data-provenance unit tests pass.
+real repository; 19 documentation-truth unit tests pass, 28
+data-provenance unit tests pass. (These Python counts are **not** verified
+by Documentation Truth — its count check only covers host C++ `void Test*`
+functions, so a stale Python count can drift silently. It did: this line
+said 20 until 2026-09-14.)
 
 ## Integration status
 
@@ -355,12 +385,15 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. With approval, build and compare Natural Earth overview PMTiles candidates;
-   source acquisition is complete, but no pack or cutoff exists yet.
+1. Capture host render timings for the five existing overview candidates
+   (sizes and visual renders exist; timings were never recorded), then
+   choose a cutoff. Building them is done; the decision is not.
 2. Read a numbered `/orcmaps/orcmaps-report-NNNN.txt` file and record the
    exact stage timings.
-3. Continue the ESP32-P4 decode path after the LilyGO baseline exists.
-4. Do not freeze OpenMapTiles as the OrcMaps schema without review.
+3. Render an overview pack on device — no ESP32 has drawn one yet.
+4. Continue the ESP32-P4 decode path after the LilyGO baseline exists.
+5. Do not freeze `openmaptiles-3.16` or `orcmaps-overview-1` as the OrcMaps
+   schema without review. Two schemas now exist; neither is final.
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,
 overlay application features, pack marketplace UI.
@@ -372,8 +405,11 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-The Natural Earth acquisition path and project-status documents. Tab5 and
-LilyGO hardware evidence remain unchanged. OrcSDR integration has not started.
+World-overview pack generation (built, un-timed, no cutoff) and the
+project-status documents. `docs/ORCMAPS_EMBEDDED_WORLD_FIRMWARE_CONCEPT.md`
+is new and holds the firmware-embedding direction as PLANNED/DEFERRED. Tab5
+and LilyGO hardware evidence remain unchanged. OrcSDR integration has not
+started.
 
 ## Notes for the next development session
 
