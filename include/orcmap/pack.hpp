@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "orcmap/attribution.hpp"
@@ -48,6 +49,7 @@ enum class PackValidationError {
 };
 
 std::string MakePackId(const PackManifest& manifest);
+bool IsSupportedSchemaVersion(std::string_view schema_version);
 PackValidationError ValidatePackManifest(const PackManifest& manifest);
 
 class PackCatalog {

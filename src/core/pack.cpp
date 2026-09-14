@@ -10,8 +10,6 @@
 namespace orcmap {
 namespace {
 
-constexpr char kSupportedSchema[] = "openmaptiles-3.16";
-
 bool IsIdentityPart(const std::string& value) {
   if (value.empty()) return false;
   return std::all_of(value.begin(), value.end(), [](unsigned char c) {
@@ -96,6 +94,11 @@ std::string MakePackId(const PackManifest& manifest) {
          std::to_string(static_cast<unsigned>(manifest.max_zoom));
 }
 
+bool IsSupportedSchemaVersion(std::string_view schema_version) {
+  return schema_version == "openmaptiles-3.16" ||
+         schema_version == "orcmaps-overview-1";
+}
+
 PackValidationError ValidatePackManifest(const PackManifest& manifest) {
   if (manifest.pack_id.empty() || manifest.pack_version.empty() ||
       manifest.display_name.empty() || manifest.region_id.empty() ||
@@ -112,7 +115,7 @@ PackValidationError ValidatePackManifest(const PackManifest& manifest) {
     return PackValidationError::kZoomRange;
   }
   if (manifest.pmtiles_version != 3 ||
-      manifest.schema_version != kSupportedSchema ||
+      !IsSupportedSchemaVersion(manifest.schema_version) ||
       (manifest.pack_class != "clean" && manifest.pack_class != "permissive" &&
        manifest.pack_class != "open")) {
     return PackValidationError::kCompatibility;
