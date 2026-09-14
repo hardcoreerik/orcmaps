@@ -9,19 +9,20 @@ slice, synthetic fixture) are complete. Phase 2 (rendering foundation) is
 underway.
 
 **IMPLEMENTED:** PMTiles reader, Web Mercator math, schema-agnostic MVT
-decode, OrcMaps Feature / Geometry model, MVT→FeatureTile translation,
-style system, host + consumer tests, provenance registry,
-`examples/generic-esp32` ESP-IDF compile/link of the portable core
+decode, FeatureKind in `feature_kind.hpp`, Feature / Geometry model,
+MVT→FeatureTile translation, style system, immediate `RenderTarget`,
+`RenderFeatureTile` host proof, host framebuffer, host + consumer tests,
+provenance registry, `examples/generic-esp32` ESP-IDF compile/link
 (ESP-IDF 6.0.2 / `esp32p4`, no graphics framework).
 
-**EXPERIMENTAL / SKETCH:** `orcmap::experimental::AssignFeatureKinds`
-(layer-name heuristic, not the tile schema). `adapters/m5gfx/` (header-only
-Color→RGB565 + LovyanGFX helpers). The adapter still takes MVT types —
-retarget onto `Feature` is later. Not compiled into core.
+**PARTIAL:** Viewport (center/zoom/size + tile-local→screen; no overzoom).
 
-**PLANNED (Phase 2 remaining):** graphics-independent render seam,
-retarget M5GFX onto Feature, tile-payload decompression seam, minimal
-Viewport, host render proof, `adapters/esp_idf` ByteSource.
+**EXPERIMENTAL / SKETCH:** `orcmap::experimental::AssignFeatureKinds`.
+`adapters/m5gfx/` still MVT-typed, not retargeted.
+
+**PLANNED (Phase 2 remaining):** retarget M5GFX onto Feature/RenderTarget,
+tile-payload decompression seam, `adapters/esp_idf` ByteSource, polygon
+holes, line width, overzoom.
 
 **BLOCKED on real data (later):** tile-content schema / stable
 `FeatureKind` mapping, Lane County pack, performance numbers. Do not
@@ -91,7 +92,12 @@ finalize schema from `tiny.mvt`.
 - `orcmap::Feature` / `Geometry` / `FeatureTile` (`include/orcmap/feature.hpp`)
   — format-independent geometry + properties. `TranslateMvtToFeatureTile()`
   deep-copies MVT into owned Feature data. Does not assign `FeatureKind`.
-- Host test suite: **37 test functions, all passing**.
+  Geometry type lives only on `geometry.type`. `FeatureKind` lives in
+  `feature_kind.hpp` (Feature does not include style.hpp).
+- `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
+  — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
+  Unclassified features skipped. First polygon path only.
+- Host test suite: **50 test functions, all passing**.
 
 ## What is partially working
 
@@ -124,16 +130,16 @@ finalize schema from `tiny.mvt`.
 
 ## What is being worked on
 
-Feature / Geometry + MVT translation slice is complete. Next is the
-graphics-independent render seam (evaluate RenderTarget vs render-command),
-then retarget M5GFX onto `Feature`. Not OrcSDR.
+Host render proof slice. Next: retarget M5GFX onto `RenderTarget`/`Feature`.
+Not OrcSDR.
 
 ## Current blockers
 
-- No graphics-independent renderer / Viewport, so nothing yet draws a
-  `FeatureTile`. The Feature model exists; the render seam does not.
+- M5GFX adapter still consumes MVT types, not `Feature`/`RenderTarget`.
 - No public generic tile-payload decompression seam (`GetTile()` returns
   stored bytes; `DecodeMvtTile()` wants decompressed MVT).
+- Viewport is PARTIAL (no overzoom / visible-tile set). Polygon holes
+  are not subtracted. Line `width_px` is not rasterized.
 - No real OSM extract pipeline exists yet (Geofabrik download + osmium/
   Planetiler) — needed before Phase 3 can start, and before the tile
   content schema can be decided from evidence.
@@ -180,10 +186,10 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 37 test functions
-covering geo math, PMTiles container parsing, the style system, the
-runtime attribution API, MVT decode, and Feature/MVT translation — see
-`ARCHITECTURE.md` "Testing architecture").
+(one `ctest` entry, `orcmap_host_tests`, itself running 50 test functions
+covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
+translation, Viewport, and host render — see `ARCHITECTURE.md` "Testing
+architecture").
 
 Consumer smoke test (separate CMake project):
 
@@ -288,15 +294,12 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Evaluate RenderTarget vs render-command stream; implement the smallest
-   graphics-independent seam; add a host-testable render proof.
-2. Retarget `adapters/m5gfx` onto `Feature` / that seam; remove
+1. Retarget `adapters/m5gfx` onto `Feature` / `RenderTarget`; remove
    `orcmap/mvt.hpp` from it.
-3. Public generic tile-payload decompression path (`GetTile` → decompress
+2. Public generic tile-payload decompression path (`GetTile` → decompress
    → format decoder). Unsupported Brotli/Zstd stay clean failures.
-4. Minimal Viewport (center lat/lon, zoom, screen size).
-5. `adapters/esp_idf` ByteSource.
-6. Then a real Lane County/Eugene pack from the already-`CONFIRMED`
+3. `adapters/esp_idf` ByteSource.
+4. Then a real Lane County/Eugene pack from the already-`CONFIRMED`
    `openstreetmap` record — schema, leaf directories, compressed tiles,
    and performance numbers come from that evidence, not `tiny.mvt`.
 
@@ -310,8 +313,7 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — Feature / Geometry slice at a stopping point. Renderer work has
-not started.
+None — host render proof at a stopping point. M5GFX retarget not started.
 
 ## Notes for the next development session
 

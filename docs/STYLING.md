@@ -15,6 +15,8 @@ style each one wants.
 ## API
 
 `include/orcmap/style.hpp` / `src/render/style.cpp`.
+`FeatureKind` lives in `include/orcmap/feature_kind.hpp` so Feature and
+Style share it without Feature depending on the style subsystem.
 
 - `FeatureKind` — the base-map categories a style can paint: background,
   land, water, motorway/primary/secondary/minor road, rail, boundary,
@@ -88,9 +90,9 @@ step-function) zoom resolver — see `ResolveFeatureStyle()`'s doc comment.
 `orcmap::Color` (`include/orcmap/color.hpp`) is a plain RGBA8 struct with
 no dependency on M5GFX, LovyanGFX, LVGL, or any display API. Converting to
 a display's native pixel format (e.g. RGB565 for M5GFX/LovyanGFX) is an
-**adapter's** job, not the style system's — see `adapters/m5gfx` (an
-EXPERIMENTAL header-only sketch today, not a finished integration;
-tracked in `ROADMAP.md`). This keeps the same
+**target's** job, not the style system's. The host framebuffer target
+proves this; `adapters/m5gfx` is still an EXPERIMENTAL MVT-typed sketch
+to be retargeted onto `RenderTarget`. This keeps the same
 `MapStyle`/`ResolveFeatureStyle()` API usable by a future LVGL or host-side
 test renderer without change.
 

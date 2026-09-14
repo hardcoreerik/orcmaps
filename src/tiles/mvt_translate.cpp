@@ -23,11 +23,10 @@ GeomType MapGeomType(MvtGeomType type) {
 Feature CopyFeature(const MvtLayer& layer, const MvtFeature& in) {
   Feature out;
   out.id = in.id;
-  out.geom_type = MapGeomType(in.geom_type);
   out.kind_assigned = false;
   out.extent = layer.extent == 0 ? 4096 : layer.extent;
   out.layer = layer.name;
-  out.geometry.type = out.geom_type;
+  out.geometry.type = MapGeomType(in.geom_type);
   out.geometry.paths.reserve(in.geometry.size());
   for (const MvtRing& ring : in.geometry) {
     Path path;

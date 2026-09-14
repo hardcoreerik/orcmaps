@@ -5,7 +5,7 @@
 #include <variant>
 #include <vector>
 
-#include "orcmap/style.hpp"
+#include "orcmap/feature_kind.hpp"
 
 namespace orcmap {
 
@@ -15,12 +15,18 @@ namespace orcmap {
 //
 // Geometry answers "what shape is this?" FeatureKind answers "what does
 // this represent for styling?" Those are separate. A polygon is not
-// automatically water, a building, or a park.
+// automatically water, a building, or a park. This header depends on
+// feature_kind.hpp, not on the style subsystem.
 //
 // Coordinates are tile-local integers in [0, extent) nominally (buffer
 // overflow past the tile edge is allowed, matching common vector-tile
-// practice). Conversion to screen pixels or lat/lon is a later Viewport /
+// practice). Conversion to screen pixels or lat/lon is a Viewport /
 // renderer concern, not this model's.
+//
+// Storage layout (flattened FeatureTile of Features, each carrying its
+// own layer string and extent) is provisional. The types are architectural;
+// packing/interning can change after real-tile measurement. Do not treat
+// the current layout as a frozen ABI.
 
 enum class GeomType : uint8_t {
   kUnknown = 0,
@@ -51,7 +57,6 @@ using PropertyValue = std::variant<std::monostate, std::string, double, int64_t,
 
 struct Feature {
   uint64_t id = 0;
-  GeomType geom_type = GeomType::kUnknown;
   // Semantic class for the style system. Unassigned until a classifier
   // (experimental today; schema decision still deferred) sets it.
   FeatureKind kind = FeatureKind::kBackground;

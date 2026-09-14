@@ -1,0 +1,215 @@
+#include "framebuffer_target.hpp"
+#include "orcmap/experimental/mvt_classify.hpp"
+#include "orcmap/feature.hpp"
+#include "orcmap/mvt.hpp"
+#include "orcmap/mvt_translate.hpp"
+#include "orcmap/renderer.hpp"
+#include "orcmap/style.hpp"
+#include "orcmap/viewport.hpp"
+
+#include <fstream>
+#include <initializer_list>
+#include <string>
+#include <vector>
+
+#include "test_util.hpp"
+
+namespace {
+
+orcmap::Viewport Z0Frame(int size) {
+  orcmap::Viewport v;
+  v.center_lat_deg = 0.0;
+  v.center_lon_deg = 0.0;
+  v.zoom = 0;
+  v.width_px = size;
+  v.height_px = size;
+  v.tile_size_px = size;
+  return v;
+}
+
+orcmap::Feature MakePoly(orcmap::FeatureKind kind, bool assigned,
+                         std::initializer_list<orcmap::Point> ring) {
+  orcmap::Feature f;
+  f.kind = kind;
+  f.kind_assigned = assigned;
+  f.extent = 4096;
+  f.geometry.type = orcmap::GeomType::kPolygon;
+  f.geometry.paths.emplace_back(ring);
+  return f;
+}
+
+orcmap::Path Rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1) {
+  return {orcmap::Point{x0, y0}, orcmap::Point{x1, y0}, orcmap::Point{x1, y1},
+          orcmap::Point{x0, y1}};
+}
+
+void TestEmptyTileFillsBackground() {
+  orcmap::host::FramebufferTarget fb(32, 32, orcmap::Color::Rgb(255, 0, 255));
+  orcmap::FeatureTile empty;
+  orcmap::RenderFeatureTile(empty, orcmap::TileId{0, 0, 0}, Z0Frame(32),
+                            orcmap::styles::OrcSdrDark(), &fb);
+  const orcmap::Color bg = orcmap::Color::Rgb(8, 10, 12);
+  ORCMAP_EXPECT_TRUE(fb.At(0, 0) == bg);
+  ORCMAP_EXPECT_TRUE(fb.At(16, 16) == bg);
+  ORCMAP_EXPECT_TRUE(fb.At(31, 31) == bg);
+}
+
+void TestUnclassifiedFeatureIsSkipped() {
+  orcmap::FeatureTile tile;
+  tile.features.push_back(MakePoly(orcmap::FeatureKind::kWater, false,
+                                   {orcmap::Point{0, 0}, orcmap::Point{4096, 0},
+                                    orcmap::Point{4096, 4096},
+                                    orcmap::Point{0, 4096}}));
+  orcmap::host::FramebufferTarget fb(32, 32);
+  orcmap::RenderFeatureTile(tile, orcmap::TileId{0, 0, 0}, Z0Frame(32),
+                            orcmap::styles::OrcSdrDark(), &fb);
+  ORCMAP_EXPECT_TRUE(fb.At(16, 16) == orcmap::Color::Rgb(8, 10, 12));
+}
+
+void TestClassifiedPolygonFillsExpectedRegion() {
+  orcmap::FeatureTile tile;
+  // Left half of the z0 tile.
+  tile.features.push_back(MakePoly(orcmap::FeatureKind::kWater, true,
+                                   {orcmap::Point{0, 0}, orcmap::Point{2048, 0},
+                                    orcmap::Point{2048, 4096},
+                                    orcmap::Point{0, 4096}}));
+  orcmap::host::FramebufferTarget fb(32, 32);
+  orcmap::RenderFeatureTile(tile, orcmap::TileId{0, 0, 0}, Z0Frame(32),
+                            orcmap::styles::OrcSdrDark(), &fb);
+  const orcmap::Color water =
+      orcmap::ResolveFeatureStyle(orcmap::FeatureKind::kWater, 0,
+                                  orcmap::styles::OrcSdrDark())
+          .color;
+  const orcmap::Color bg = orcmap::Color::Rgb(8, 10, 12);
+  ORCMAP_EXPECT_TRUE(fb.At(4, 16) == water);
+  ORCMAP_EXPECT_TRUE(fb.At(28, 16) == bg);
+}
+
+void TestDifferentStylesProduceDifferentPixels() {
+  orcmap::FeatureTile empty;
+  orcmap::host::FramebufferTarget dark(16, 16);
+  orcmap::host::FramebufferTarget light(16, 16);
+  orcmap::RenderFeatureTile(empty, orcmap::TileId{0, 0, 0}, Z0Frame(16),
+                            orcmap::styles::OrcSdrDark(), &dark);
+  orcmap::RenderFeatureTile(empty, orcmap::TileId{0, 0, 0}, Z0Frame(16),
+                            orcmap::styles::StandardLight(), &light);
+  ORCMAP_EXPECT_TRUE(dark.At(0, 0) != light.At(0, 0));
+  ORCMAP_EXPECT_TRUE(dark.At(0, 0) == orcmap::Color::Rgb(8, 10, 12));
+  ORCMAP_EXPECT_TRUE(light.At(0, 0) == orcmap::Color::Rgb(247, 247, 245));
+}
+
+void TestOutOfBoundsGeometryClips() {
+  orcmap::Feature f;
+  f.kind = orcmap::FeatureKind::kMotorway;
+  f.kind_assigned = true;
+  f.extent = 4096;
+  f.geometry.type = orcmap::GeomType::kLineString;
+  f.geometry.paths.push_back({orcmap::Point{-100000, -100000},
+                              orcmap::Point{1000000, 1000000}});
+  orcmap::FeatureTile tile;
+  tile.features.push_back(f);
+  orcmap::host::FramebufferTarget fb(8, 8);
+  orcmap::RenderFeatureTile(tile, orcmap::TileId{0, 0, 0}, Z0Frame(8),
+                            orcmap::styles::OrcSdrDark(), &fb);
+  ORCMAP_EXPECT_EQ(fb.Width(), 8);
+}
+
+void TestNullTargetIsSafe() {
+  orcmap::FeatureTile tile;
+  orcmap::RenderFeatureTile(tile, orcmap::TileId{0, 0, 0}, Z0Frame(8),
+                            orcmap::styles::OrcSdrDark(), nullptr);
+}
+
+void TestPolygonExtraPathsAreNotFilled() {
+  // Limitation: only the first polygon path is filled. Extra paths are
+  // ignored (holes are not subtracted). This test locks that so it cannot
+  // silently become "fill every ring as a solid".
+  orcmap::Feature f;
+  f.kind = orcmap::FeatureKind::kWater;
+  f.kind_assigned = true;
+  f.extent = 4096;
+  f.geometry.type = orcmap::GeomType::kPolygon;
+  f.geometry.paths.push_back(Rect(0, 0, 2048, 4096));      // left half
+  f.geometry.paths.push_back(Rect(2048, 0, 4096, 4096));   // right half
+  orcmap::FeatureTile tile;
+  tile.features.push_back(f);
+  orcmap::host::FramebufferTarget fb(32, 32);
+  orcmap::RenderFeatureTile(tile, orcmap::TileId{0, 0, 0}, Z0Frame(32),
+                            orcmap::styles::OrcSdrDark(), &fb);
+  const orcmap::Color water =
+      orcmap::ResolveFeatureStyle(orcmap::FeatureKind::kWater, 0,
+                                  orcmap::styles::OrcSdrDark())
+          .color;
+  const orcmap::Color bg = orcmap::Color::Rgb(8, 10, 12);
+  ORCMAP_EXPECT_TRUE(fb.At(4, 16) == water);
+  ORCMAP_EXPECT_TRUE(fb.At(28, 16) == bg);
+}
+
+void TestPointAndLineString(const orcmap::MapStyle& style) {
+  orcmap::Feature point;
+  point.kind = orcmap::FeatureKind::kLabelPrimary;
+  point.kind_assigned = true;
+  point.extent = 4096;
+  point.geometry.type = orcmap::GeomType::kPoint;
+  point.geometry.paths.push_back({orcmap::Point{2048, 2048}});
+
+  orcmap::Feature line;
+  line.kind = orcmap::FeatureKind::kMotorway;
+  line.kind_assigned = true;
+  line.extent = 4096;
+  line.geometry.type = orcmap::GeomType::kLineString;
+  line.geometry.paths.push_back(
+      {orcmap::Point{0, 2048}, orcmap::Point{4096, 2048}});
+
+  orcmap::FeatureTile tile;
+  tile.features.push_back(point);
+  tile.features.push_back(line);
+
+  orcmap::host::FramebufferTarget fb(32, 32);
+  orcmap::RenderFeatureTile(tile, orcmap::TileId{0, 0, 0}, Z0Frame(32), style,
+                            &fb);
+  const orcmap::Color bg =
+      orcmap::ResolveFeatureStyle(orcmap::FeatureKind::kBackground, 0, style)
+          .color;
+  bool changed = false;
+  for (int y = 0; y < 32; ++y) {
+    for (int x = 0; x < 32; ++x) {
+      if (fb.At(x, y) != bg) changed = true;
+    }
+  }
+  ORCMAP_EXPECT_TRUE(changed);
+}
+
+void TestTinyMvtPipelineExperimentalClassifier(const std::string& path) {
+  // Semantic classification here is EXPERIMENTAL. tiny.mvt geometry is a
+  // few units in a 4096 extent, so it may not cover a whole pixel; this
+  // test proves the pipeline does not crash and fills a deterministic
+  // background.
+  std::ifstream f(path, std::ios::binary);
+  const std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)),
+                                   std::istreambuf_iterator<char>());
+  ORCMAP_EXPECT_TRUE(!data.empty());
+  orcmap::MvtTile mvt;
+  ORCMAP_EXPECT_TRUE(orcmap::DecodeMvtTile(data.data(), data.size(), &mvt));
+  orcmap::FeatureTile features;
+  ORCMAP_EXPECT_TRUE(orcmap::TranslateMvtToFeatureTile(mvt, &features));
+  ORCMAP_EXPECT_TRUE(orcmap::experimental::AssignFeatureKinds(&features));
+  orcmap::host::FramebufferTarget fb(32, 32);
+  orcmap::RenderFeatureTile(features, orcmap::TileId{0, 0, 0}, Z0Frame(32),
+                            orcmap::styles::OrcSdrDark(), &fb);
+  ORCMAP_EXPECT_TRUE(fb.At(0, 0) == orcmap::Color::Rgb(8, 10, 12));
+}
+
+}  // namespace
+
+void RunRenderTests(const std::string& mvt_fixture_path) {
+  TestEmptyTileFillsBackground();
+  TestUnclassifiedFeatureIsSkipped();
+  TestClassifiedPolygonFillsExpectedRegion();
+  TestDifferentStylesProduceDifferentPixels();
+  TestOutOfBoundsGeometryClips();
+  TestNullTargetIsSafe();
+  TestPolygonExtraPathsAreNotFilled();
+  TestPointAndLineString(orcmap::styles::OrcSdrDark());
+  TestTinyMvtPipelineExperimentalClassifier(mvt_fixture_path);
+}

@@ -16,12 +16,15 @@ set(ORCMAP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 # what's under test here.
 add_library(orcmap_engine STATIC
     ${ORCMAP_ROOT}/src/core/geo.cpp
+    ${ORCMAP_ROOT}/src/core/viewport.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_translate.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_classify_experimental.cpp
     ${ORCMAP_ROOT}/src/render/style.cpp
+    ${ORCMAP_ROOT}/src/render/renderer.cpp
     ${ORCMAP_ROOT}/adapters/host/file_byte_source.cpp
+    ${ORCMAP_ROOT}/adapters/host/framebuffer_target.cpp
     ${ORCMAP_ROOT}/third_party/miniz/miniz.c
     ${ORCMAP_ROOT}/third_party/miniz/miniz_tinfl.c
 )

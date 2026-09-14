@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "orcmap/color.hpp"
+#include "orcmap/feature_kind.hpp"
 
 namespace orcmap {
 
@@ -11,38 +12,12 @@ namespace orcmap {
 // -- this header is the API surface it describes.
 //
 // Hard separation this file enforces: a MapStyle knows how to paint
-// *categories* of base-map geography (roads, water, labels...). It knows
-// nothing about ADS-B aircraft, LoRa nodes, or any other application
-// overlay -- those are drawn through the separate overlay API
-// (src/overlays, not yet implemented) using their own colors, entirely
-// independent of the active MapStyle. See "Overlays are NOT base-map
-// styles" in docs/STYLING.md.
-
-// The base-map feature categories OrcMaps can style. This list is driven
-// by what ORCMAP1 already drew (road/water/airport/label) plus the
-// categories a standard vector schema (OpenMapTiles/Shortbread) commonly
-// exposes -- see docs/FORMAT_DECISION.md "Deferred: tile content schema".
-// Adding a category here is a deliberate, reviewed change (it's part of
-// the public API every style must define a rule for), not a place to
-// casually bolt on one-off appearance flags.
-enum class FeatureKind : uint8_t {
-  kBackground = 0,
-  kLand,
-  kWater,
-  kMotorway,
-  kPrimaryRoad,
-  kSecondaryRoad,
-  kMinorRoad,
-  kRail,
-  kBoundary,
-  kBuilding,
-  kPark,
-  kAirport,
-  kLabelPrimary,    // e.g. city/place names
-  kLabelSecondary,  // e.g. smaller settlements
-  kLabelMuted,      // e.g. attribution, minor annotations
-  kCount,
-};
+// *categories* of base-map geography (FeatureKind in feature_kind.hpp).
+// FeatureKind is not defined here -- features own semantic identity,
+// styles own appearance. This file knows nothing about ADS-B aircraft,
+// LoRa nodes, or any other application overlay -- those are drawn through
+// the separate overlay API (src/overlays, not yet implemented) using their
+// own colors. See "Overlays are NOT base-map styles" in docs/STYLING.md.
 
 // One feature category's visual rule. Zoom-gating lives here (min_zoom/
 // max_zoom), not as a separate parallel table, so a style file (built-in

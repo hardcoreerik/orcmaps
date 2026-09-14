@@ -59,7 +59,6 @@ void TestUnknownGeomCopied() {
   ORCMAP_EXPECT_EQ(out.features.size(), static_cast<size_t>(1));
   const orcmap::Feature& f = out.features[0];
   ORCMAP_EXPECT_EQ(f.id, static_cast<uint64_t>(42));
-  ORCMAP_EXPECT_TRUE(f.geom_type == orcmap::GeomType::kUnknown);
   ORCMAP_EXPECT_TRUE(f.geometry.type == orcmap::GeomType::kUnknown);
   ORCMAP_EXPECT_TRUE(!f.kind_assigned);
   ORCMAP_EXPECT_EQ(f.extent, 256u);
@@ -111,7 +110,7 @@ void TestTranslateFixture(const std::string& fixture_path) {
   const orcmap::Feature* water = FindByLayer(tile, "water");
   ORCMAP_EXPECT_TRUE(water != nullptr);
   if (water != nullptr) {
-    ORCMAP_EXPECT_TRUE(water->geom_type == orcmap::GeomType::kPolygon);
+    ORCMAP_EXPECT_TRUE(water->geometry.type == orcmap::GeomType::kPolygon);
     ORCMAP_EXPECT_TRUE(!water->kind_assigned);
     ORCMAP_EXPECT_EQ(water->extent, 4096u);
     ORCMAP_EXPECT_EQ(water->geometry.paths.size(), static_cast<size_t>(1));
@@ -136,7 +135,7 @@ void TestTranslateFixture(const std::string& fixture_path) {
   const orcmap::Feature* road = FindByLayer(tile, "road");
   ORCMAP_EXPECT_TRUE(road != nullptr);
   if (road != nullptr) {
-    ORCMAP_EXPECT_TRUE(road->geom_type == orcmap::GeomType::kLineString);
+    ORCMAP_EXPECT_TRUE(road->geometry.type == orcmap::GeomType::kLineString);
     ORCMAP_EXPECT_TRUE(!road->kind_assigned);
     ORCMAP_EXPECT_EQ(road->geometry.paths.size(), static_cast<size_t>(1));
     ORCMAP_EXPECT_EQ(road->geometry.paths[0].size(), static_cast<size_t>(3));
@@ -150,7 +149,7 @@ void TestTranslateFixture(const std::string& fixture_path) {
   const orcmap::Feature* place = FindByLayer(tile, "place");
   ORCMAP_EXPECT_TRUE(place != nullptr);
   if (place != nullptr) {
-    ORCMAP_EXPECT_TRUE(place->geom_type == orcmap::GeomType::kPoint);
+    ORCMAP_EXPECT_TRUE(place->geometry.type == orcmap::GeomType::kPoint);
     ORCMAP_EXPECT_TRUE(!place->kind_assigned);
     ORCMAP_EXPECT_EQ(place->geometry.paths.size(), static_cast<size_t>(1));
     ORCMAP_EXPECT_EQ(place->geometry.paths[0].size(), static_cast<size_t>(1));
@@ -186,7 +185,7 @@ void TestExperimentalLeavesUnknownUnassigned() {
   orcmap::FeatureTile tile;
   orcmap::Feature unknown;
   unknown.layer = "not-a-real-schema-layer";
-  unknown.geom_type = orcmap::GeomType::kPoint;
+  unknown.geometry.type = orcmap::GeomType::kPoint;
   tile.features.push_back(unknown);
   ORCMAP_EXPECT_TRUE(orcmap::experimental::AssignFeatureKinds(&tile));
   ORCMAP_EXPECT_TRUE(!tile.features[0].kind_assigned);

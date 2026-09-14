@@ -199,16 +199,16 @@ treated as a correctness rule, not a preference.
   M5GFX rendering, 1280×720 display.
 - Secondary feasibility target: ESP32-S3, kept realistic by not letting
   core code assume Tab5-specific resources (PSRAM size, display size).
-- The core (`include/orcmap`, `src/core`, `src/tiles`, `src/render/style.cpp`)
+- The core (`include/orcmap`, `src/core`, `src/tiles`, `src/render`)
   has **zero** ESP-IDF, M5Stack, M5GFX, LovyanGFX, or other graphics-
   framework dependency today, and must stay that way — this is enforced
   structurally (those headers are never included from `src/core`,
-  `src/tiles`, or the style system) and verified by host tests plus the
+  `src/tiles`, or `src/render`) and verified by host tests plus the
   `examples/generic-esp32` ESP-IDF smoke test, which must not require
   M5GFX/M5Unified. M5GFX is the first *reference graphics integration*
   (`adapters/m5gfx`), not the OrcMaps renderer architecture. Architectural
   test: if `adapters/m5gfx/` were deleted, core must still build, run host
-  tests, open/decode map data, project, and style.
+  tests, open/decode map data, project, style, and produce host pixels.
 
 ## Storage Model
 
@@ -222,17 +222,15 @@ Implemented adapters: `orcmap::host::FileByteSource`
 
 ## Rendering Model
 
-No renderer **core** exists yet (see STATUS.md). The intended shape, per
-`docs/STYLING.md`: a renderer consumes `orcmap::MapPaint` from
-`ResolveFeatureStyle()`, never reads style colors or hardcodes literals
-directly. `orcmap::Color` is plain RGBA8; conversion to a display's native
-pixel format (RGB565 for M5GFX) is an adapter's job, not the core's.
+Host-proof renderer exists: `RenderFeatureTile` consumes `FeatureTile` +
+`Viewport` + `MapStyle` and issues primitives to `RenderTarget`. Paint
+comes only from `ResolveFeatureStyle()`. `orcmap::Color` is plain RGBA8;
+conversion to a display's native pixel format is the target's job.
+Unclassified features are skipped. This is not a complete map engine
+(no overzoom, no holes, 1px strokes).
 
-`adapters/m5gfx/` is an **EXPERIMENTAL sketch** (header-only `ToRgb565` and
-LovyanGFX draw helpers). It currently still takes MVT decode types
-(`MvtFeature` etc.) — that coupling is now a known defect of the sketch,
-because the OrcMaps Feature / Geometry model exists. Do not grow that
-sketch; retarget it onto `Feature` in a later slice.
+`adapters/m5gfx/` is an **EXPERIMENTAL sketch** still taking MVT types.
+Do not grow it; retarget onto `Feature` + `RenderTarget`.
 
 ## Styling Model
 

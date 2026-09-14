@@ -16,9 +16,10 @@ flowchart TD
     Tile["MVT decoder -- IMPLEMENTED, schema-agnostic"]
     Features["OrcMaps Feature / Geometry -- IMPLEMENTED"]
     Style["orcmap::MapStyle / ResolveFeatureStyle -- IMPLEMENTED"]
-    Viewport["Viewport -- NOT IMPLEMENTED"]
+    Viewport["Viewport -- PARTIAL"]
     Cache["Rendered Tile Cache -- NOT IMPLEMENTED"]
-    Core["Renderer core -- NOT IMPLEMENTED"]
+    Core["Renderer core -- IMPLEMENTED (host proof)"]
+    Host["Host framebuffer -- IMPLEMENTED"]
     M5["M5GFX adapter -- EXPERIMENTAL sketch, still MVT-typed"]
     Overlay["Overlay Layer -- NOT IMPLEMENTED"]
     Display["Display"]
@@ -31,16 +32,20 @@ flowchart TD
     Style --> Core
     Viewport --> Core
     Cache <--> Core
+    Core --> Host
     Core --> M5
+    Host --> Display
     M5 --> Display
     Overlay --> Core
 ```
 
 Implemented today: `Pack -> Source -> Reader` (host-tested), schema-agnostic
 `MVT decode` (host-tested), MVT → OrcMaps `FeatureTile` translation
-(host-tested), and `Style` (host-tested). An `adapters/m5gfx` sketch exists
-but still draws MVT types directly — retarget onto `Feature` is later.
-FeatureKind mapping is EXPERIMENTAL, not the tile-content schema.
+(host-tested), `Style` (host-tested), a PARTIAL Viewport, a generic
+`RenderTarget` + renderer core, and a host framebuffer proof. An
+`adapters/m5gfx` sketch exists but still draws MVT types directly —
+retarget onto `Feature`/`RenderTarget` is later. FeatureKind mapping is
+EXPERIMENTAL, not the tile-content schema.
 
 ## Major components
 
@@ -52,12 +57,16 @@ FeatureKind mapping is EXPERIMENTAL, not the tile-content schema.
 | Geo/tile math | `include/orcmap/geo.hpp`, `src/core/geo.cpp` | Implemented |
 | `orcmap::PmTilesReader` | `include/orcmap/pmtiles.hpp`, `src/tiles/pmtiles_reader.cpp` | Implemented (container layer only) |
 | Vector tile (MVT) decoder | `include/orcmap/mvt.hpp`, `src/tiles/mvt_decoder.cpp` | Implemented (schema-agnostic container decode only) |
-| OrcMaps Feature / Geometry | `include/orcmap/feature.hpp` | Implemented (format-independent; tile-local integer coords) |
+| `FeatureKind` | `include/orcmap/feature_kind.hpp` | Implemented (shared by Feature and Style; Feature does not include style.hpp) |
+| OrcMaps Feature / Geometry | `include/orcmap/feature.hpp` | Implemented (format-independent; tile-local integer coords; storage layout provisional) |
 | MVT → Feature translation | `include/orcmap/mvt_translate.hpp`, `src/tiles/mvt_translate.cpp` | Implemented (deep copy; does not assign FeatureKind) |
 | Experimental FeatureKind heuristic | `include/orcmap/experimental/mvt_classify.hpp`, `src/tiles/mvt_classify_experimental.cpp` | EXPERIMENTAL (not the tile-content schema; not stable API) |
 | `orcmap::MapStyle` / style system | `include/orcmap/style.hpp`, `include/orcmap/color.hpp`, `include/orcmap/cache_key.hpp`, `src/render/style.cpp` | Implemented |
-| Renderer core | `src/render/` | PLANNED (only `style.cpp` exists in this dir so far) |
-| M5GFX adapter | `adapters/m5gfx/` | EXPERIMENTAL sketch (header-only Color→RGB565 + LovyanGFX helpers; not a CMake component; not compiled into core; currently takes MVT types — to be retargeted onto an OrcMaps feature/render seam) |
+| Viewport | `include/orcmap/viewport.hpp`, `src/core/viewport.cpp` | PARTIAL (center/zoom/size + tile-local→screen; no overzoom, no visible-tile enumerator) |
+| `RenderTarget` | `include/orcmap/render_target.hpp` | Implemented (immediate primitives; no command buffer) |
+| Renderer core | `include/orcmap/renderer.hpp`, `src/render/renderer.cpp` | Implemented (host-proof: FeatureTile → style → Viewport → RenderTarget). Not a complete map engine. |
+| Host framebuffer | `adapters/host/framebuffer_target.{hpp,cpp}` | Implemented (host only; RGBA8 + optional PPM) |
+| M5GFX adapter | `adapters/m5gfx/` | EXPERIMENTAL sketch (header-only Color→RGB565 + LovyanGFX helpers; not a CMake component; not compiled into core; currently takes MVT types — not yet retargeted onto Feature/RenderTarget) |
 | Overlay primitives | `src/overlays/` | Not implemented (empty dir) |
 | Tile/rendered-tile cache | `src/cache/` | Not implemented (empty dir); `RenderedTileCacheKey` shape exists in `include/orcmap/cache_key.hpp` |
 | Pack builder | `tools/pack-builder/` | Not implemented (empty dir) |
@@ -75,24 +84,25 @@ FeatureKind mapping is EXPERIMENTAL, not the tile-content schema.
 
 ```
 include/orcmap/      Public headers: byte_source.hpp, geo.hpp, pmtiles.hpp,
-                      color.hpp, style.hpp, cache_key.hpp, attribution.hpp,
-                      map_source.hpp, mvt.hpp, feature.hpp, mvt_translate.hpp
+                      color.hpp, feature_kind.hpp, style.hpp, cache_key.hpp,
+                      attribution.hpp, map_source.hpp, mvt.hpp, feature.hpp,
+                      mvt_translate.hpp, viewport.hpp, render_target.hpp,
+                      renderer.hpp
 include/orcmap/experimental/  EXPERIMENTAL FeatureKind heuristic
                       (mvt_classify.hpp) -- not stable API
-src/core/             geo.cpp (Web Mercator tile math)
+src/core/             geo.cpp (Web Mercator tile math), viewport.cpp
 src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader),
                       mvt_decoder.cpp (schema-agnostic MVT geometry decoder),
                       mvt_translate.cpp (MVT → FeatureTile),
                       mvt_classify_experimental.cpp (EXPERIMENTAL)
-src/render/           style.cpp (built-in styles + resolver). Renderer
-                      core itself not yet added here.
+src/render/           style.cpp, renderer.cpp
 src/storage/          Empty -- reserved for any storage-layer logic beyond
                       the ByteSource interface itself (interface lives in
                       include/, not here).
 src/overlays/         Empty -- marker/polyline/polygon primitives, planned.
 src/cache/            Empty -- bounded LRU tile cache, planned.
-adapters/host/        file_byte_source.{hpp,cpp} -- stdio ByteSource for
-                      host tests and future host-side tools.
+adapters/host/        file_byte_source.{hpp,cpp} -- stdio ByteSource;
+                      framebuffer_target.{hpp,cpp} -- host RGBA8 RenderTarget.
 adapters/m5gfx/       EXPERIMENTAL sketch: color.hpp + renderer.hpp
                       (header-only; not compiled into core).
 adapters/esp_idf/     Empty -- ESP-IDF filesystem ByteSource, planned.
@@ -143,9 +153,10 @@ docs/                 Architecture/decision/porting/licensing documents.
 6. **EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds()` may
    attach a `FeatureKind` using a layer-name heuristic. Not the schema
    decision.
-7. **Not yet implemented:** a graphics-independent renderer core +
-   viewport, drawing through a graphics integration, and caching the
-   rendered result.
+7. **Implemented (host proof):** `RenderFeatureTile` → `RenderTarget`
+   (host framebuffer). Viewport is PARTIAL. M5GFX not on this seam.
+8. **Not yet implemented:** overzoom, polygon holes, line width, tile
+   cache, pack discovery, M5GFX retarget, tile-payload decompression.
 
 ## Map pack / archive layer
 
@@ -242,8 +253,35 @@ be destroyed. It does not assign `FeatureKind`.
 `orcmap::experimental::AssignFeatureKinds()` is a replaceable layer-name
 heuristic for tests. It is not the production schema.
 
-A renderer core that walks generic features is not built — see "Renderer"
-below.
+`GeomType` lives only on `Geometry` (`feature.geometry.type`). Feature
+storage (per-feature layer string + extent) is provisional.
+
+## Renderer
+
+**IMPLEMENTED** for a host proof, not a complete map engine.
+`RenderFeatureTile()` (`include/orcmap/renderer.hpp`) walks a `FeatureTile`,
+calls `ResolveFeatureStyle()`, and issues primitives to a `RenderTarget`.
+It accepts no MVT types. Unclassified features (`kind_assigned == false`)
+are skipped. Polygon fill uses the **first path only** as a simple outer
+ring; additional paths (holes) are not subtracted — locked by
+`tests/host/test_render.cpp`. Strokes are 1px (`width_px` not rasterized).
+Overzoom (source tile z != viewport zoom) is not handled.
+
+`RenderTarget` (`include/orcmap/render_target.hpp`) is an immediate
+interface: `FillRect`, `DrawPoint`, `DrawLine`, `FillPolygon`. No command
+buffer. Color is `orcmap::Color` (RGBA8).
+
+`Viewport` (`include/orcmap/viewport.hpp`) is **PARTIAL**: center lat/lon,
+zoom, output size, `tile_size_px`, and `TileLocalToScreen()`. No visible-tile
+enumerator, no overzoom.
+
+`orcmap::host::FramebufferTarget` is the first target (RGBA8 buffer, optional
+P6 PPM). It is host-only (`adapters/host/`), not part of the ESP-IDF
+component.
+
+`adapters/m5gfx/` is an **EXPERIMENTAL sketch**, still MVT-typed, **not
+retargeted** onto this seam. If `adapters/m5gfx/` were deleted, core must
+still build and host-test.
 
 ## Projection / coordinates
 
@@ -258,22 +296,7 @@ happen in floating point *before* casting to `uint32_t`, not after). RF
 distance/bearing/geodesic math is explicitly out of scope here — that
 stays in OrcSDR.
 
-## Renderer
 
-**PLANNED** — no renderer core exists in `src/render/` (only `style.cpp`).
-Per `docs/STYLING.md`, the intended contract is: renderer code calls
-`orcmap::ResolveFeatureStyle(kind, zoom, style)` and draws using the
-returned `orcmap::MapPaint`, never reading style colors directly or
-hardcoding literals. `orcmap::Color` is plain RGBA8 with zero display-API
-dependency; converting to a display's native pixel format is an adapter's
-responsibility.
-
-`adapters/m5gfx/` is an **EXPERIMENTAL sketch**, not that renderer core:
-header-only `ToRgb565` plus `DrawFeature` against `lgfx::v1::LovyanGFX&`.
-It currently includes `orcmap/mvt.hpp` and draws `MvtFeature` geometry
-directly. That coupling is a known defect of the sketch, not the target
-architecture. M5GFX must not gain architectural privilege: if
-`adapters/m5gfx/` were deleted, core must still build and host-test.
 
 ## Style system
 
@@ -529,8 +552,8 @@ substitutes for the other.
 ## Future extension points
 
 - `adapters/esp_idf`: designed for, not yet built.
-- `adapters/m5gfx`: EXPERIMENTAL sketch exists; not a finished
-  integration and not the renderer architecture.
+- `adapters/m5gfx`: EXPERIMENTAL sketch exists, still MVT-typed; retarget
+  onto Feature/RenderTarget. Not the renderer architecture.
 - External `.orcstyle` files: `MapStyle`'s shape doesn't block this (see
   `docs/STYLING.md`), no loader exists.
 - Brotli/zstd tile compression: `Inflate()` currently only implements gzip

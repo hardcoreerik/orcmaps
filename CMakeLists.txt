@@ -1,7 +1,8 @@
 # OrcMaps -- standalone ESP-IDF component (repo root = component root).
 #
-# Portable core only (geo, PMTiles reader, MVT decoder, feature model,
-# style system).
+# Portable core only (geo, viewport, PMTiles reader, MVT decoder, feature
+# model, style system, renderer). Host framebuffer is adapters/host, not
+# here.
 # No M5GFX/M5Unified/graphics-framework dependency -- adapters/m5gfx is
 # optional integration, not registered here. adapters/esp_idf sources are
 # added here once that ByteSource adapter exists (docs/ROADMAP.md Phase 2).
@@ -12,11 +13,13 @@
 
 idf_component_register(
     SRCS "src/core/geo.cpp"
+         "src/core/viewport.cpp"
          "src/tiles/pmtiles_reader.cpp"
          "src/tiles/mvt_decoder.cpp"
          "src/tiles/mvt_translate.cpp"
          "src/tiles/mvt_classify_experimental.cpp"
          "src/render/style.cpp"
+         "src/render/renderer.cpp"
          "third_party/miniz/miniz.c"
          "third_party/miniz/miniz_tinfl.c"
     INCLUDE_DIRS "include"
