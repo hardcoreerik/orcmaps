@@ -9,6 +9,7 @@ namespace orcmap_demo {
 struct Report {
   int display_width;
   int display_height;
+  const char* style_id;
   size_t visible;
   size_t present;
   size_t missing;
@@ -38,7 +39,7 @@ inline bool WriteReport(const char* path, const Report& report) {
       "ORCMAPS LILYGO T-DISPLAY-S3 HARDWARE DEMO\n"
       "display=%dx%d\n"
       "map=/sd/orcmaps/springfield.pmtiles\n"
-      "zoom=14 style=orcsdr-dark\n"
+      "zoom=14 style=%s\n"
       "visible=%zu present=%zu missing=%zu\n"
       "timing_ms enumerate=%.3f GetTile=%.3f gzip=%.3f decode=%.3f "
       "translate=%.3f classify=%.3f render=%.3f frame_total=%.3f\n"
@@ -47,7 +48,8 @@ inline bool WriteReport(const char* path, const Report& report) {
       "memory internal_before=%zu internal_min=%zu psram_before=%zu "
       "psram_min=%zu psram_total=%zu\n"
       "RESULT=PASS\n",
-      report.display_width, report.display_height, report.visible,
+      report.display_width, report.display_height, report.style_id,
+      report.visible,
       report.present, report.missing, report.enumerate_ms, report.lookup_ms,
       report.gzip_ms, report.decode_ms, report.translate_ms,
       report.classify_ms, report.render_ms, report.frame_total_ms,

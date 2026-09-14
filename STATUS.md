@@ -70,7 +70,9 @@ extract.
   math, antimeridian-safe, Mercator-latitude-clamp-safe.
 - `orcmap::MapStyle` + 4 built-in styles (`orcsdr-dark`, `standard-light`,
   `high-contrast-field`, `night-red-safe`) + `ResolveFeatureStyle()` +
-  `StyleManager` runtime switching + `RenderedTileCacheKey`.
+  `StyleManager` runtime switching + `RenderedTileCacheKey`. The LilyGO demo
+  selects any built-in offline through `/orcmaps/style.txt`; only its
+  `orcsdr-dark` result is hardware-measured so far.
 - `orcmap::PackManifest` / `PackCatalog` / `ResolvePack` validate immutable
   pack metadata and deterministically choose one eligible local basemap by
   coverage, zoom, priority, then identity. No network fallback exists.

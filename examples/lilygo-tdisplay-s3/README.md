@@ -2,7 +2,7 @@
 
 Standalone Springfield map test for the LilyGO T-Display-S3 Touch with
 the SD Shield fitted. It opens `/sd/orcmaps/springfield.pmtiles`, renders
-the OrcSDR Dark style at zoom 14, and writes timing and memory measurements
+a selected built-in style at zoom 14, and writes timing and memory measurements
 to numbered `/sd/orcmaps/orcmaps-report-NNNN.txt` files as well as USB serial.
 
 ## Status
@@ -45,6 +45,12 @@ Copy it to `/orcmaps/springfield.pmtiles` on a FAT32 microSD card. The
 firmware never formats or modifies the map. Each successful render creates
 the first unused `/orcmaps/orcmaps-report-NNNN.txt` file (`0001` through
 `9999`), preserving earlier runs.
+
+The default is `orcsdr-dark`. For a daytime map, create
+`/orcmaps/style.txt` containing `standard-light`. The existing
+`high-contrast-field` and `night-red-safe` IDs are also accepted. A missing,
+empty, or unknown setting falls back to `orcsdr-dark`, and every report records
+the style actually used.
 
 ## Build, flash, and monitor
 

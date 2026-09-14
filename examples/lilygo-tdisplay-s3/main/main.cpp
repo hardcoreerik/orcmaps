@@ -26,6 +26,7 @@
 #include <sdmmc_cmd.h>
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,7 @@ namespace {
 constexpr char kTag[] = "orcmap_tdisplay_s3";
 constexpr char kMapPath[] = "/sd/orcmaps/springfield.pmtiles";
 constexpr char kReportDirectory[] = "/sd/orcmaps";
+constexpr char kStylePath[] = "/sd/orcmaps/style.txt";
 constexpr double kCenterLat = 44.0500;
 constexpr double kCenterLon = -123.0220;
 constexpr uint8_t kZoom = 14;
@@ -194,6 +196,22 @@ void BenchmarkSequentialRead(const char* path, uint64_t file_size) {
   std::fclose(file);
 }
 
+const orcmap::MapStyle& LoadStyle() {
+  FILE* file = std::fopen(kStylePath, "rb");
+  if (file == nullptr) return orcmap::styles::OrcSdrDark();
+  char id[64]{};
+  const bool read = std::fgets(id, sizeof(id), file) != nullptr;
+  std::fclose(file);
+  if (!read) return orcmap::styles::OrcSdrDark();
+  id[std::strcspn(id, "\r\n\t ")] = '\0';
+  const orcmap::MapStyle* style = orcmap::FindBuiltinStyleById(id);
+  if (style == nullptr) {
+    ESP_LOGW(kTag, "unknown style '%s'; using orcsdr-dark", id);
+    return orcmap::styles::OrcSdrDark();
+  }
+  return *style;
+}
+
 }  // namespace
 
 extern "C" void app_main() {
@@ -273,7 +291,7 @@ extern "C" void app_main() {
            static_cast<unsigned>(PsramLargest()));
 
   orcmap::m5gfx_adapter::DisplayTarget target(g_display);
-  const orcmap::MapStyle& style = orcmap::styles::OrcSdrDark();
+  const orcmap::MapStyle& style = LoadStyle();
   if (!orcmap::ClearMapBackground(viewport, style, &target)) {
     Fail("ClearMapBackground failed", nullptr);
   }
@@ -399,6 +417,7 @@ extern "C" void app_main() {
   const orcmap_demo::Report report{
       display_width,
       display_height,
+      style.id,
       tiles.size(),
       present,
       missing,
