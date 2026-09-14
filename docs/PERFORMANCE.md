@@ -103,12 +103,18 @@ Cited in `docs/FORMAT_DECISION.md`:
 - `yuiseki/m5-cardputer-offgrid-tiny-map` (ESP32-S3, no PSRAM): z13 tile
   render 33s → 8.1s after optimization, z0 0.4s.
 
-## Tab5 hardware (ESP32-P4, firmware 1427597)
+## Tab5 hardware (ESP32-P4)
 
-Same viewport as the host table. Cold frame **11302 ms**. Decode 5612 ms,
-translate 2693 ms, render 1246 ms, GetTile 610 ms, gzip 170 ms. Sequential
-SD read ~1.73 MB/s at 40 MHz 4-bit. Internal heap min ~40 KiB during
-MvtTile decode. Full table: `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`.
+Same viewport as the host table. Sequential SD read ~1.73 MB/s at 40 MHz
+4-bit. Full log: `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`.
+
+**BEFORE no-text layer filter** (firmware `1427597`): cold frame
+**11302 ms**. Decode 5612 ms, translate 2693 ms, render 1246 ms, GetTile
+610 ms, gzip 170 ms. Internal heap min ~40 KiB during MvtTile decode.
+
+**AFTER no-text layer filter / CURRENT** (`b396c7d`): cold frame
+**4421 ms**. Decode 1296 ms, translate 707 ms, classify 9 ms, render
+1239 ms, GetTile ~610 ms, gzip ~170 ms.
 
 ## Tab5 after no-text layer filter (same viewport)
 

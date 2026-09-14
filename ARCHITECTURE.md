@@ -552,7 +552,9 @@ shipped.
 
 ## Performance architecture
 
-Tab5 Springfield cold frame ~11.3 s (decode+translate ~73%). Host ~75 ms
+Tab5 Springfield current uncached cold frame ~4.4 s (was 11.3 s before
+the no-text layer filter). Decode+translate ~2.0 s, render ~1.24 s.
+Host ~75 ms
 for the same view. See `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. Not
 production-ready.
 draw. `examples/generic-esp32` proves the component links; it is not a

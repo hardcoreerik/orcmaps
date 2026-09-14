@@ -173,8 +173,34 @@ void TestFilterExcludesRequestedLayer(const std::string& fixture_path) {
   ORCMAP_EXPECT_TRUE(FindLayer(tile, "place") != nullptr);
   for (const auto& layer : tile.layers) {
     ORCMAP_EXPECT_TRUE(layer.name != "water");
-    ORCMAP_EXPECT_TRUE(!layer.features.empty() || true);
+    ORCMAP_EXPECT_TRUE(!layer.features.empty());
   }
+}
+
+struct NameSink {
+  std::vector<std::string> names;
+};
+
+bool RecordNamesKeepAll(const char* name, size_t len, void* ctx) {
+  auto* sink = static_cast<NameSink*>(ctx);
+  sink->names.emplace_back(name, len);
+  return true;
+}
+
+void TestFilterCallbackReceivesNames(const std::string& fixture_path) {
+  const std::vector<uint8_t> data = ReadFile(fixture_path);
+  NameSink sink;
+  orcmap::MvtDecodeOptions opt;
+  opt.include_layer = &RecordNamesKeepAll;
+  opt.include_layer_ctx = &sink;
+  orcmap::MvtTile tile;
+  ORCMAP_EXPECT_TRUE(
+      orcmap::DecodeMvtTile(data.data(), data.size(), opt, &tile));
+  ORCMAP_EXPECT_EQ(sink.names.size(), static_cast<size_t>(3));
+  ORCMAP_EXPECT_TRUE(sink.names[0] == "water");
+  ORCMAP_EXPECT_TRUE(sink.names[1] == "road");
+  ORCMAP_EXPECT_TRUE(sink.names[2] == "place");
+  ORCMAP_EXPECT_EQ(tile.layers.size(), static_cast<size_t>(3));
 }
 
 void TestBasemapFilterSkipsPlaceOnFixture(const std::string& fixture_path) {
@@ -206,5 +232,6 @@ void RunMvtTests(const std::string& fixture_path) {
   TestTruncatedFixtureFails(fixture_path);
   TestFilterNullMatchesLegacy(fixture_path);
   TestFilterExcludesRequestedLayer(fixture_path);
+  TestFilterCallbackReceivesNames(fixture_path);
   TestBasemapFilterSkipsPlaceOnFixture(fixture_path);
 }

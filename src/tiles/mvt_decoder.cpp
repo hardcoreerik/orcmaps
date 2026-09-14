@@ -305,6 +305,29 @@ bool DecodeFeature(const uint8_t* data, size_t length,
 
 // --- Layer -------------------------------------------------------------
 
+// Name + top-level framing only. Nested key/value/feature payloads are
+// skipped as length-delimited blobs (no MvtValue / MvtFeature allocation).
+bool InspectLayerName(const uint8_t* data, size_t length, std::string* name) {
+  Reader r{data, length};
+  bool has_name = false;
+  while (!r.AtEnd()) {
+    uint32_t field_number, wire_type;
+    if (!r.ReadTag(&field_number, &wire_type)) return false;
+    if (field_number == 1) {
+      const uint8_t* str_data;
+      size_t str_len;
+      if (wire_type != 2 || !r.ReadLengthDelimited(&str_data, &str_len)) {
+        return false;
+      }
+      name->assign(reinterpret_cast<const char*>(str_data), str_len);
+      has_name = true;
+    } else {
+      if (!r.SkipField(wire_type)) return false;
+    }
+  }
+  return has_name;
+}
+
 bool DecodeLayer(const uint8_t* data, size_t length,
                  const MvtDecodeOptions& options, MvtLayer* out,
                  bool* keep) {
@@ -406,9 +429,18 @@ bool DecodeMvtTile(const uint8_t* data, size_t length,
       if (wire_type != 2 || !r.ReadLengthDelimited(&layer_data, &layer_len)) {
         return false;
       }
+      if (options.include_layer != nullptr) {
+        std::string layer_name;
+        if (!InspectLayerName(layer_data, layer_len, &layer_name)) return false;
+        if (!options.include_layer(layer_name.c_str(), layer_name.size(),
+                                   options.include_layer_ctx)) {
+          continue;
+        }
+      }
       MvtLayer layer;
       bool keep = true;
-      if (!DecodeLayer(layer_data, layer_len, options, &layer, &keep)) {
+      MvtDecodeOptions full;
+      if (!DecodeLayer(layer_data, layer_len, full, &layer, &keep)) {
         return false;
       }
       if (keep) out->layers.push_back(std::move(layer));

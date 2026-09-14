@@ -131,7 +131,8 @@ feeds the renderer once it exists.
 
 **Exit criteria:** host-side real-tile render + measured times: **met**
 (Springfield / 97477, 1280×720, `docs/PERFORMANCE.md`). Tab5 / SD path
-is **met** as a static hardware-verified frame (Tab5 ~11.3 s). Pan/zoom
+is **met** as a static hardware-verified frame (Tab5 current ~4.4 s
+uncached; 11.3 s was the pre-filter measurement). Pan/zoom
 and labels are not met.
 
 ## Phase 3 — Lane County / Eugene proof

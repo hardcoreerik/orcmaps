@@ -28,10 +28,11 @@ schema).
 
 **MEASURED (HOST):** Springfield / 97477 gzip PMTiles → 1280×720
 `orcsdr-dark` PPM. **MEASURED (TAB5 HARDWARE):** same view on physical
-M5Stack Tab5, cold frame ~11.3 s, `RESULT: PASS`. Evidence:
+M5Stack Tab5, current uncached cold frame **~4.4 s** (`RESULT: PASS`).
+Before the no-text layer filter the same view was 11.3 s. Evidence:
 `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. Static render only.
 
-**PLANNED:** text labels, polygon holes, overzoom, decoder speed.
+**PLANNED:** text labels, polygon holes, overzoom, further decoder speed.
 Brotli/zstd stay unsupported.
 
 **NOT FROZEN:** tile-content schema / stable FeatureKind mapping. Do not
@@ -111,7 +112,7 @@ extract.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **104 test functions, all passing**.
+- Host test suite: **105 test functions, all passing**.
 - `EnumerateVisibleTiles` (unique TileIds, X wrap, Y clamp).
   `TileScreenMap` uses shortest wrapped X delta. Overzoom still rejected.
 - `RenderTarget::DrawLine` takes `width_px` from `MapPaint`. Shared
@@ -147,15 +148,15 @@ extract.
 
 ## What is being worked on
 
-Nothing — no-text MVT layer filter on Tab5 (cold frame 11.3 s → 4.4 s).
-Not OrcSDR.
+Nothing — Tab5 current cold frame ~4.4 s uncached. Not OrcSDR.
 
 ## Current blockers
 
 - Brotli/zstd tile compression is unsupported (`DecompressPayload` fails).
 - Viewport enumerates visible tiles and wraps X; overzoom is still
   rejected. Polygon holes are not subtracted. Text labels are not drawn.
-- Tab5 cold frame is ~11.3 s; MVT decode+translate dominate. No pan/zoom.
+- Tab5 current cold frame ~4.4 s uncached (decode+translate ~2.0 s,
+  render ~1.24 s, storage ~0.61 s). No labels / pan / cache / overzoom.
 - Several data sources are blocked on primary-source verification: NOAA
   ETOPO's ISO metadata page returned HTTP 503, USDOT NAD's disclaimer page
   returned HTTP 403 (twice, two mirrors) — both need a direct re-fetch
@@ -198,7 +199,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 104 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 105 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`
@@ -307,8 +308,8 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Speed up MVT decode + FeatureTile translation on ESP32-P4 (Tab5
-   cold frame is ~11.3 s; decode+translate ~73%).
+1. Continue ESP32-P4 decode path (current ~4.4 s uncached; decode+translate
+   ~2.0 s, render ~1.24 s).
 2. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,

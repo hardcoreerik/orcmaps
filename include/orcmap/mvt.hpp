@@ -85,7 +85,9 @@ struct MvtTile {
 // Optional decode policy. `include_layer` is a non-owning function pointer
 // (no std::function). Null include_layer decodes every layer (legacy).
 // The callback must not assume OpenMapTiles names; callers supply policy.
-// Skipped layers are omitted from `out` (no partial features).
+// Skipped layers are omitted from `out` (no partial features). A skipped
+// layer is only checked for top-level protobuf framing and a name; its
+// feature/key/value payloads are not semantically decoded.
 struct MvtDecodeOptions {
   bool (*include_layer)(const char* name, size_t name_len, void* ctx) = nullptr;
   void* include_layer_ctx = nullptr;

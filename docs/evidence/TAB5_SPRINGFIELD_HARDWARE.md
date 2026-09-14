@@ -69,19 +69,34 @@ in 610 ms). Storage is not the dominant cold-frame cost.
 
 ## Engine timing (ESP32-P4 / TAB5)
 
-| Stage | Tab5 ms | Host same view (comparative only) |
-|---|---|---|
-| EnumerateVisibleTiles | 0.12 | ~0.01 |
-| GetTile / ByteSource | 610 | ~0.6 |
-| gzip | 170 | ~7 |
-| MVT decode | **5612** | ~27 |
-| translate | **2693** | ~9 |
-| classify | 66 | ~0.4 |
-| render | 1246 | ~5 |
-| **cold frame** | **11302 (~11.3 s)** | ~75 |
+Host numbers are comparative only, not interchangeable.
 
-Decode + translate ≈ 8305 ms (~73% of the frame). Primary optimization
-target. Host and Tab5 numbers are not interchangeable.
+**BEFORE no-text layer filter** (firmware `1427597`):
+
+| Stage | Tab5 ms |
+|---|---|
+| GetTile / ByteSource | 610 |
+| gzip | 170 |
+| MVT decode | 5612 |
+| translate | 2693 |
+| classify | 66 |
+| render | 1246 |
+| **cold frame** | **11302 (~11.3 s)** |
+
+**AFTER no-text layer filter / CURRENT** (`b396c7d`):
+
+| Stage | Tab5 ms |
+|---|---|
+| GetTile / ByteSource | 610 |
+| gzip | 169 |
+| MVT decode | 1296 |
+| translate | 707 |
+| classify | 9 |
+| render | 1239 |
+| **cold frame** | **4421 (~4.4 s)** |
+
+Current uncached cost is ~4.4 s. Decode+translate ~2.0 s; render ~1.24 s;
+storage ~0.61 s. The 11.3 s figure is historical.
 
 ## Memory
 
