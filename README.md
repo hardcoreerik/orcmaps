@@ -35,7 +35,8 @@ SD Shield is physically verified under ESP-IDF 5.5.4
 ([`examples/lilygo-tdisplay-s3`](examples/lilygo-tdisplay-s3); evidence
 [`docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md`](docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md)).
 That demo writes a new numbered timing report to the SD card after every
-successful render, avoiding a USB serial dependency.
+successful render, avoiding a USB serial dependency. Its first confirmed
+numbered-report run rendered the Springfield frame in **1,037 ms**.
 Not production-ready: no pan/zoom, no labels. FeatureKind mapping is
 experimental. See [`STATUS.md`](STATUS.md).
 

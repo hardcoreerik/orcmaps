@@ -559,8 +559,9 @@ Tab5 Springfield current uncached cold frame ~4.4 s (was 11.3 s before
 the no-text layer filter). Decode+translate ~2.0 s, render ~1.24 s.
 Host ~75 ms for the same view. See
 `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. The LilyGO ESP32-S3 demo
-also renders the pack on physical hardware, but has no captured timing
-yet. These static renders are not
+also renders the pack on physical hardware; its confirmed frame total is
+1,037 ms. Full power-to-map and stage timings remain in the SD report.
+These static renders are not
 production-ready. `examples/generic-esp32` proves the component links;
 it is not a performance result. See `docs/PERFORMANCE.md` and
 `ROADMAP.md`.

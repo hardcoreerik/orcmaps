@@ -325,8 +325,8 @@ pack. The current Tab5 cold frame is ~4.4 s after excluded MVT layers are
 skipped before payload decode; the same view is ~75 ms on the host.
 `docs/PERFORMANCE.md` and
 `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md` are authoritative. The
-LilyGO ESP32-S3 path is physically render-verified; exact timing is not
-yet captured.
+LilyGO ESP32-S3 path is physically render-verified at a 1,037 ms frame
+total; full power-to-map and stage timings have not been transcribed.
 
 ## Memory Constraints
 

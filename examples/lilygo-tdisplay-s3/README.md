@@ -11,7 +11,8 @@ to numbered `/sd/orcmaps/orcmaps-report-NNNN.txt` files as well as USB serial.
 - Host OrcMaps regression test: **PASS**
 - Flash / display / SD / map render: **PASS** (2026-09-14)
 - SD timing report write: **PASS** (`REPORT SAVED` physically confirmed)
-- Exact values: **not transcribed from the card yet**
+- Frame total: **1,037 ms** (physical on-screen result)
+- Full power-to-map and stage values: **not transcribed from the card yet**
 - Touch input: **not used by this static render test**
 
 ## Hardware

@@ -154,7 +154,8 @@ with SD Shield. It was flashed through COM13, and the corrected 320x170
 landscape view renders `/orcmaps/springfield.pmtiles`. Exact serial timing
 was not captured; the user observed power-to-map as very fast. The current
 firmware preserves each result as `/orcmaps/orcmaps-report-NNNN.txt` and
-shows the frame total on screen.
+shows the frame total on screen. The first confirmed numbered-report run
+displayed **1,037 ms**.
 
 ## Current blockers
 
@@ -192,8 +193,8 @@ HOST-ONLY Springfield / 97477 numbers are in `docs/PERFORMANCE.md`.
 A busy z14 tile: ~0.6 ms gzip decompress, ~2.2 ms MVT decode, ~0.7 ms
 FeatureTile copy, ~0.2 ms render; the current quiet 1280×720 z14 host
 frame is ~75 ms. These are **not** ESP32 numbers. Physical Tab5 results
-are ~4.4 s for the same viewport. LilyGO ESP32-S3 render is physically
-verified, but exact timing is pending.
+are ~4.4 s for the same viewport. The LilyGO ESP32-S3 frame total is
+**1,037 ms**. Full power-to-map and stage timings have not been transcribed.
 
 ## Test status
 
@@ -222,11 +223,12 @@ idf.py set-target esp32s3
 idf.py build
 ```
 
-Result: build PASS; `orcmap_lilygo_tdisplay_s3.bin` is 380,432 bytes.
+Result: build PASS; `orcmap_lilygo_tdisplay_s3.bin` is 381,824 bytes.
 COM13 flash hashes verified. Physical display/SD/render: PASS after the
 landscape rotation correction. The SD-report firmware also flashed with
-verified hashes, and `REPORT SAVED` was physically confirmed. Exact values
-have not been transcribed from the card.
+verified hashes. The numbered report and display result passed physically;
+the on-screen frame total was 1,037 ms. Detailed values have not been
+transcribed from the card.
 
 Consumer smoke test (separate CMake project):
 

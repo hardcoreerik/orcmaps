@@ -35,8 +35,8 @@ power-to-map as "faaaaast."
 | Touch input | NOT TESTED; outside this static demo |
 
 The serial monitor was reattached without reset, but no second complete
-boot log arrived. The qualitative speed observation is therefore not a
-numeric benchmark and must not be compared directly with the Tab5 timing.
+boot log arrived. A later on-screen result supplies the frame total; the
+earlier qualitative power-to-map observation remains non-numeric.
 
 ## SD report follow-up
 
@@ -44,5 +44,11 @@ A follow-up firmware was built and flashed through COM13 with verified image
 hashes. After rendering, it creates the first unused numbered file from
 `/sd/orcmaps/orcmaps-report-0001.txt` through `-9999.txt`, preserving prior
 runs. The display shows `Result: <total> ms  Report saved`. The earlier fixed-
-name report write was physically confirmed; physical confirmation of this
-numbered-report revision is pending.
+name report write was physically confirmed. The user then confirmed the
+numbered-report display result: **`Result: 1037 ms  Report saved`**.
+
+The 1,037 ms result is `frame_total_ms`: the tile render loop from visible-
+tile processing through the completed frame. It excludes display setup,
+PSRAM initialization, SD mount, archive open, and the preceding SD benchmark.
+Those full power-to-map and stage values remain available in the numbered
+report but have not been transcribed.

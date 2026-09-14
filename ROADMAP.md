@@ -242,7 +242,8 @@ this phase on that basis.
 - [ ] Tile-boundary crossing tested heavily (pan across many tiles)
 - [x] Host performance numbers recorded in `docs/PERFORMANCE.md` (Springfield
       97477) and Tab5 ESP32-P4 hardware numbers recorded. LilyGO ESP32-S3
-      render is physically verified, but exact hardware timing is still missing.
+      frame total is physically verified at 1,037 ms; full stage timings
+      remain on the SD report.
 
 ## Phase 8 — Global / planet scale
 

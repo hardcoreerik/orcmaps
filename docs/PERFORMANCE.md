@@ -12,12 +12,11 @@ HOST PERFORMANCE — NOT ESP32 PERFORMANCE
 ESP32-P4 / TAB5 HARDWARE — RESULT PASS
 ```
 
-The LilyGO T-Display-S3 ESP32-S3 demo renders on physical hardware. The
-user described power-to-map as very fast, but no numeric serial timing was
-captured. The current demo preserves each run as a numbered
-`/orcmaps/orcmaps-report-NNNN.txt` and displays the frame total; the values
-have not been transcribed yet. Do not infer ESP32-S3 timing from the earlier
-observation or from Tab5.
+The LilyGO T-Display-S3 ESP32-S3 demo renders on physical hardware. A
+numbered-report run displayed a **1,037 ms frame total**. This is the timed
+tile render loop, not full power-to-map. The current demo preserves each run
+as `/orcmaps/orcmaps-report-NNNN.txt`; power-to-map and stage values have not
+been transcribed from the card.
 
 ## What was measured (2026-09-14)
 
@@ -143,5 +142,5 @@ MvtTile: ~140 KiB vs ~40 KiB. Render time unchanged.
 
 ## Still unmeasured
 
-LilyGO T-Display-S3 numeric render time. Pan/zoom latency. Cache hit rates.
-Direct MVT→FeatureTile path.
+LilyGO T-Display-S3 power-to-map and stage timings. Pan/zoom latency. Cache
+hit rates. Direct MVT→FeatureTile path.
