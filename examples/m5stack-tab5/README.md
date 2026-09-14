@@ -64,35 +64,33 @@ Writable-file `_IONBF` (OrcSDR `setvbuf(..., _IONBF, 0)`) is **not**
 copied. `FileByteSource` keeps the file open and uses default libc
 buffering + `fseeko`/`fread`.
 
-## SD card layout
+## SD card (do not regenerate the pack for the basic demo)
 
-Format the card FAT32 (or exFAT if your IDF FatFS build supports it).
-
-Copy the host-generated pack:
+The exact hardware-tested archive is in this repo:
 
 ```
-data/local/springfield-97477.pmtiles
+examples/m5stack-tab5/test-pack/springfield-97477.pmtiles
 ```
 
-to the card as:
+3,507,636 bytes. SHA-256
+`8bf23873915668f41d098b98df32b11a6d08ec6754a63d885fce2f29abe4adfd`.
+Attribution: `test-pack/ATTRIBUTION.md` (© OpenStreetMap contributors, ODbL).
 
-```
-/orcmaps/springfield.pmtiles
-```
+1. Format microSD FAT32.
+2. Create `/orcmaps/` on the card.
+3. Copy `springfield-97477.pmtiles` to **`/orcmaps/springfield.pmtiles`**
+   (that filename, not `springfield-97477.pmtiles`).
+4. Build and flash this example.
+5. Expected: Springfield OrcSDR Dark on the full 1280×720 display.
 
-After mount the firmware opens:
+After mount the firmware opens `/sd/orcmaps/springfield.pmtiles`.
 
-```
-/sd/orcmaps/springfield.pmtiles
-```
+Expected PASS counts: **24 visible / 20 present / 4 missing**. The four
+missing tiles (and any dark strip on the west edge) are the bounded demo
+pack, not an engine error.
 
-Do not embed the archive in firmware. Do not commit it to git.
-
-Host regeneration (from repo root, Java 21 + Planetiler):
-
-```
-pwsh tools/pack-builder/build_springfield_pack.ps1
-```
+Pack regeneration (`tools/pack-builder/build_springfield_pack.ps1`) is
+advanced/reproducibility only. Not required to run the demo.
 
 ## Demo map (application constants, not core defaults)
 

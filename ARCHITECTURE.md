@@ -79,8 +79,9 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Generic ESP32 example | `examples/generic-esp32/` | PARTIAL: ESP-IDF compile/link smoke test of the portable core (no graphics framework) |
 | M5GFX example | `examples/m5gfx/` | PARTIAL: ESP-IDF compile proof of DisplayTarget + synthetic FeatureTile (M5GFX, no M5Unified) |
 | Host render preview | `examples/host-render/` | PARTIAL: synthetic 1280x720 PPM |
-| Springfield host preview | `tools/pack-inspect/` | HOST-ONLY MEASURED: real OSM → gzip PMTiles → 1280×720. Pack/PPM gitignored under data/local. |
-| Tab5 example | `examples/m5stack-tab5/` | Standalone hardware demo (M5Unified + SDMMC Slot 0). BUILD-proven in-repo; on-device render is a separate milestone. |
+| Springfield host preview | `tools/pack-inspect/` | HOST-ONLY MEASURED: real OSM → gzip PMTiles → 1280×720. |
+| Springfield demo pack | `examples/m5stack-tab5/test-pack/` | Public OSM-derived PMTiles used on Tab5 (ODbL). |
+| Tab5 example | `examples/m5stack-tab5/` | Hardware-verified static Springfield render (M5Unified + SDMMC Slot 0). See `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles`, `tiny.mvt`, `tiny-gzip.pmtiles` | Implemented (synthetic; gzip tile fixture for the decompress→pixels path) |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |
@@ -551,7 +552,9 @@ shipped.
 
 ## Performance architecture
 
-Not yet measurable — a host renderer exists, but there is no real pack and no on-device map
+Tab5 Springfield cold frame ~11.3 s (decode+translate ~73%). Host ~75 ms
+for the same view. See `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. Not
+production-ready.
 draw. `examples/generic-esp32` proves the component links; it is not a
 performance result. See `docs/PERFORMANCE.md` (placeholder) and
 `ROADMAP.md`.

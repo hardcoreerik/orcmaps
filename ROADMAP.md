@@ -97,8 +97,8 @@ paths the current tests don't. Flagged, not yet mitigated.
       Brotli/zstd return false. GetTile remains raw stored bytes.
 - [x] `adapters/esp_idf` `FileByteSource` (FILE* on a mounted VFS path;
       buffered; no SD mount, no Tab5, no `_IONBF`)
-- [x] `examples/m5stack-tab5` standalone hardware demo (compile/link).
-      On-device render is a separate evidence milestone.
+- [x] `examples/m5stack-tab5` hardware-verified static Springfield
+      render on physical Tab5 (`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`).
 - [x] OrcMaps-owned Feature / Geometry model, and an explicit MVT →
       OrcMaps translation boundary (`feature.hpp`, `TranslateMvtToFeatureTile`).
       MVT types must not become the renderer architecture. **EXPERIMENTAL**
@@ -131,7 +131,8 @@ feeds the renderer once it exists.
 
 **Exit criteria:** host-side real-tile render + measured times: **met**
 (Springfield / 97477, 1280×720, `docs/PERFORMANCE.md`). Tab5 / SD path
-is **not** met until `examples/m5stack-tab5` is flashed and measured.
+is **met** as a static hardware-verified frame (Tab5 ~11.3 s). Pan/zoom
+and labels are not met.
 
 ## Phase 3 — Lane County / Eugene proof
 

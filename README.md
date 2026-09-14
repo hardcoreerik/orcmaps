@@ -27,11 +27,11 @@ exists at [`examples/generic-esp32`](examples/generic-esp32) and does
 M5GFX `DisplayTarget` is an optional exported adapter
 (`#include "orcmap/m5gfx/display_target.hpp"`). Viewport enumerates
 visible tiles (X wrap, no overzoom).
-Not yet built: overlays, cache, and a real on-device map draw with
-production packs. FeatureKind mapping is experimental, not a finalized
-tile schema. See [`STATUS.md`](STATUS.md) for the live
-snapshot and [`docs/ORCMAP1_AUDIT.md`](docs/ORCMAP1_AUDIT.md) for the
-OrcSDR prototype this project supersedes.
+A hardware-verified static Springfield render exists on M5Stack Tab5
+([`examples/m5stack-tab5`](examples/m5stack-tab5); evidence
+[`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`](docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md)).
+Not production-ready: no pan/zoom, no labels. FeatureKind mapping is
+experimental. See [`STATUS.md`](STATUS.md).
 
 ## Design principles
 

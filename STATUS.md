@@ -15,8 +15,9 @@ MVT→FeatureTile translation, style system, immediate `RenderTarget`,
 framebuffer, M5GFX `DisplayTarget` (exported `orcmap/m5gfx/` headers),
 host + consumer tests, provenance registry,
 `examples/generic-esp32` (no graphics framework), `examples/m5gfx`
-compile proof, `examples/m5stack-tab5` (Tab5 + SD, BUILD only until
-flashed), host pack-inspect, `orcmap::esp_idf::FileByteSource`.
+compile proof, `examples/m5stack-tab5` (hardware-verified static
+Springfield render on Tab5), host pack-inspect,
+`orcmap::esp_idf::FileByteSource`.
 
 **PARTIAL:** Viewport overzoom is not implemented. Zoom 0..31.
 `tools/pack-builder` Springfield script only.
@@ -25,12 +26,13 @@ flashed), host pack-inspect, `orcmap::esp_idf::FileByteSource`.
 measured against OpenMapTiles 3.16 Springfield tiles; still not the
 schema).
 
-**MEASURED (HOST-ONLY):** real Springfield / 97477 gzip PMTiles →
-1280×720 `orcsdr-dark` PPM. See `docs/PERFORMANCE.md`. NOT ESP32-
-validated until the Tab5 demo is flashed.
+**MEASURED (HOST):** Springfield / 97477 gzip PMTiles → 1280×720
+`orcsdr-dark` PPM. **MEASURED (TAB5 HARDWARE):** same view on physical
+M5Stack Tab5, cold frame ~11.3 s, `RESULT: PASS`. Evidence:
+`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. Static render only.
 
-**PLANNED:** text labels, polygon holes, overzoom, on-device Tab5
-evidence. Brotli/zstd stay unsupported.
+**PLANNED:** text labels, polygon holes, overzoom, decoder speed.
+Brotli/zstd stay unsupported.
 
 **NOT FROZEN:** tile-content schema / stable FeatureKind mapping. Do not
 finalize OpenMapTiles, Shortbread, or a custom schema from this one
@@ -133,8 +135,8 @@ extract.
   `lgfx::v1::LovyanGFX&`. Core `REQUIRES ""`; consumers that want the
   adapter supply their own M5GFX. No MVT types, no map semantics. Opaque
   RGB565 (`Color.a` ignored). `examples/generic-esp32` still does not
-  depend on M5GFX/M5Unified. Compile proof only — no on-device visual
-  verification in this repo.
+  depend on M5GFX/M5Unified. Tab5 hardware-verified via
+  `examples/m5stack-tab5`.
 - The PMTiles reader has now opened a real 141-tile gzip archive
   (Springfield / 97477). Directories still fit in the root (no leaf
   hop on this pack). Synthetic fixtures remain the CI path.
@@ -145,18 +147,15 @@ extract.
 
 ## What is being worked on
 
-Nothing — Tab5 standalone demo at a stopping point (BUILD, not yet
-flashed). Not OrcSDR.
+Nothing — Tab5 Springfield hardware PASS published. Next is decoder
+speed. Not OrcSDR.
 
 ## Current blockers
 
-- M5GFX `DisplayTarget` exists; there is no on-device visual verification
-  in this repo yet (compile proof + host pixels only).
 - Brotli/zstd tile compression is unsupported (`DecompressPayload` fails).
 - Viewport enumerates visible tiles and wraps X; overzoom is still
   rejected. Polygon holes are not subtracted. Text labels are not drawn.
-- No on-device pack open (`adapters/esp_idf` ByteSource) and no Tab5
-  pixels. Host Springfield image is not an on-device map.
+- Tab5 cold frame is ~11.3 s; MVT decode+translate dominate. No pan/zoom.
 - Several data sources are blocked on primary-source verification: NOAA
   ETOPO's ISO metadata page returned HTTP 503, USDOT NAD's disclaimer page
   returned HTTP 403 (twice, two mirrors) — both need a direct re-fetch
@@ -308,8 +307,8 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Flash `examples/m5stack-tab5` and capture ESP32-P4 / Tab5 serial
-   numbers (SD read MB/s, GetTile, gzip, decode, render, heap/PSRAM).
+1. Speed up MVT decode + FeatureTile translation on ESP32-P4 (Tab5
+   cold frame is ~11.3 s; decode+translate ~73%).
 2. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,
@@ -322,8 +321,7 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — Tab5 demo BUILD-ready. On-device evidence waits on a flash.
-OrcSDR not started.
+None — hardware-verified static Tab5 map published. OrcSDR not started.
 
 ## Notes for the next development session
 
