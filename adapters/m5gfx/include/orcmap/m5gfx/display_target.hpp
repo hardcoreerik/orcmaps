@@ -10,6 +10,7 @@
 #include "orcmap/clip.hpp"
 #include "orcmap/m5gfx/color.hpp"
 #include "orcmap/render_target.hpp"
+#include "orcmap/stroke.hpp"
 
 namespace orcmap {
 namespace m5gfx_adapter {
@@ -19,9 +20,9 @@ namespace m5gfx_adapter {
 // dependency. Core sources never include M5GFX.h.
 //
 // Alpha: ToRgb565 ignores Color.a (opaque RGB565).
-// Lines: ClipLineToPixels then drawLine (same contract as host).
-// FillPolygon: even-odd scanline of the given vertices (renderer already
-// passes first path only). 1px strokes; width_px is not this adapter's job.
+// Lines: MapPaint::width_px via shared RasterizeCenteredStroke (1px uses
+// LovyanGFX drawLine). FillPolygon: even-odd scanline of the given
+// vertices (renderer already passes first path only).
 
 class DisplayTarget : public RenderTarget {
  public:
@@ -51,9 +52,21 @@ class DisplayTarget : public RenderTarget {
     display_.drawPixel(x, y, ToRgb565(color));
   }
 
-  void DrawLine(int x0, int y0, int x1, int y1, Color color) override {
-    if (!ClipLineToPixels(&x0, &y0, &x1, &y1, Width(), Height())) return;
-    display_.drawLine(x0, y0, x1, y1, ToRgb565(color));
+  void DrawLine(int x0, int y0, int x1, int y1, Color color,
+                float width_px = 1.0f) override {
+    const int raster_w = RasterStrokeWidthPx(width_px);
+    if (raster_w <= 0) return;
+    // 1px keeps LovyanGFX drawLine (previous adapter behavior). Widths
+    // > 1 use the shared square-brush stroke so host and M5GFX match.
+    if (raster_w == 1) {
+      if (!ClipLineToPixels(&x0, &y0, &x1, &y1, Width(), Height())) return;
+      display_.drawLine(x0, y0, x1, y1, ToRgb565(color));
+      return;
+    }
+    RasterizeCenteredStroke(x0, y0, x1, y1, width_px, Width(), Height(),
+                            [&](int x, int y, int w, int h) {
+                              FillRect(x, y, w, h, color);
+                            });
   }
 
   void FillPolygon(const int* xy_pairs, size_t n_points, Color color) override {

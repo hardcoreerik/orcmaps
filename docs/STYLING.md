@@ -95,6 +95,10 @@ proves this; `adapters/m5gfx` converts Color to RGB565 at draw time.
 `Color.a` is stored on the generic type; the M5GFX adapter currently
 renders opaque RGB565 and does not blend. Overlay compositing is future
 engine work.
+`MapPaint::width_px` is now rasterized by every `RenderTarget` via
+`include/orcmap/stroke.hpp` (≤1 px is one pixel; >1 is a centered
+square brush). Label FeatureKinds are skipped until text rendering
+exists; they are not drawn as placeholder dots.
 This keeps the same
 `MapStyle`/`ResolveFeatureStyle()` API usable by a future LVGL or host-side
 test renderer without change.

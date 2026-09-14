@@ -22,7 +22,8 @@ class FramebufferTarget : public RenderTarget {
 
   void FillRect(int x, int y, int w, int h, Color color) override;
   void DrawPoint(int x, int y, Color color) override;
-  void DrawLine(int x0, int y0, int x1, int y1, Color color) override;
+  void DrawLine(int x0, int y0, int x1, int y1, Color color,
+                float width_px = 1.0f) override;
   void FillPolygon(const int* xy_pairs, size_t n_points, Color color) override;
 
   Color At(int x, int y) const;

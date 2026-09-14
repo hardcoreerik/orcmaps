@@ -95,7 +95,7 @@ include/orcmap/      Public headers: byte_source.hpp, geo.hpp, pmtiles.hpp,
                       attribution.hpp, map_source.hpp, mvt.hpp,
                       compression.hpp, feature.hpp,
                       mvt_translate.hpp, viewport.hpp, render_target.hpp,
-                      renderer.hpp, clip.hpp
+                      renderer.hpp, clip.hpp, stroke.hpp
 include/orcmap/experimental/  EXPERIMENTAL FeatureKind heuristic
                       (mvt_classify.hpp) -- not stable API
 src/core/             geo.cpp (Web Mercator tile math), viewport.cpp
@@ -104,7 +104,8 @@ src/tiles/            pmtiles_reader.cpp (PMTiles v3 container reader),
                       mvt_translate.cpp (MVT → FeatureTile),
                       compression.cpp (bounded None/Gzip),
                       mvt_classify_experimental.cpp (EXPERIMENTAL)
-src/render/           style.cpp, renderer.cpp, clip.cpp
+src/render/           style.cpp, renderer.cpp, clip.cpp (stroke.hpp is
+                      header-only shared width/brush)
 src/storage/          Empty -- reserved for any storage-layer logic beyond
                       the ByteSource interface itself (interface lives in
                       include/, not here).
@@ -278,17 +279,20 @@ zoom, or `source_tile.z != viewport.zoom` (overzoom is not guessed).
 Unclassified features (`kind_assigned == false`) are skipped. Polygon fill
 uses the **first path only** as a simple outer ring; additional paths
 (holes) are not subtracted — locked by `tests/host/test_render.cpp`.
-Strokes are 1px (`width_px` not rasterized).
+Strokes use `MapPaint::width_px` through `RenderTarget::DrawLine`
+(`include/orcmap/stroke.hpp`: ≤1 px is one pixel; >1 is a centered
+square brush of nearest-integer width). Label FeatureKinds are skipped
+until text rendering exists.
 
 Projection uses `TileScreenMap` (`MakeTileScreenMap` once per source tile /
 extent, then `ProjectLocal` multiply-add per vertex). Mercator center math
 does not run per vertex. Screen coords saturate to `int` range. Line
-rasterization clips with Liang-Barsky (`ClipLineToPixels`) before
-Bresenham. Polygon scanline intercepts use `int64_t`.
+rasterization clips with Liang-Barsky; thick strokes expand the clip
+rectangle by `width/2`. Polygon scanline intercepts use `int64_t`.
 
 `RenderTarget` (`include/orcmap/render_target.hpp`) is an immediate
-interface: `FillRect`, `DrawPoint`, `DrawLine`, `FillPolygon`. No command
-buffer. Color is `orcmap::Color` (RGBA8).
+interface: `FillRect`, `DrawPoint`, `DrawLine(..., width_px)`,
+`FillPolygon`. No command buffer. Color is `orcmap::Color` (RGBA8).
 
 `Viewport` (`include/orcmap/viewport.hpp`) is **PARTIAL**: center lat/lon,
 zoom, output size, `tile_size_px`, and a prepared `TileScreenMap`. No

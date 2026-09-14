@@ -28,17 +28,17 @@ int ClampPixel(double v, int lo, int hi) {
 
 }  // namespace
 
-bool ClipLineToPixels(int* x0, int* y0, int* x1, int* y1, int width,
-                      int height) {
+bool ClipLineToPixelRect(int* x0, int* y0, int* x1, int* y1, int xmin,
+                         int ymin, int xmax, int ymax) {
   if (x0 == nullptr || y0 == nullptr || x1 == nullptr || y1 == nullptr) {
     return false;
   }
-  if (width <= 0 || height <= 0) return false;
+  if (xmin > xmax || ymin > ymax) return false;
 
-  const double xmin = 0.0;
-  const double ymin = 0.0;
-  const double xmax = static_cast<double>(width - 1);
-  const double ymax = static_cast<double>(height - 1);
+  const double xmin_d = static_cast<double>(xmin);
+  const double ymin_d = static_cast<double>(ymin);
+  const double xmax_d = static_cast<double>(xmax);
+  const double ymax_d = static_cast<double>(ymax);
   const double ax = static_cast<double>(*x0);
   const double ay = static_cast<double>(*y0);
   const double bx = static_cast<double>(*x1);
@@ -47,19 +47,22 @@ bool ClipLineToPixels(int* x0, int* y0, int* x1, int* y1, int width,
   const double dy = by - ay;
   double t0 = 0.0;
   double t1 = 1.0;
-  // Liang-Barsky: clip parametric t against each edge of the pixel rect.
-  if (!ClipT(-dx, ax - xmin, &t0, &t1)) return false;
-  if (!ClipT(dx, xmax - ax, &t0, &t1)) return false;
-  if (!ClipT(-dy, ay - ymin, &t0, &t1)) return false;
-  if (!ClipT(dy, ymax - ay, &t0, &t1)) return false;
+  if (!ClipT(-dx, ax - xmin_d, &t0, &t1)) return false;
+  if (!ClipT(dx, xmax_d - ax, &t0, &t1)) return false;
+  if (!ClipT(-dy, ay - ymin_d, &t0, &t1)) return false;
+  if (!ClipT(dy, ymax_d - ay, &t0, &t1)) return false;
 
-  const int max_x = width - 1;
-  const int max_y = height - 1;
-  *x0 = ClampPixel(ax + t0 * dx, 0, max_x);
-  *y0 = ClampPixel(ay + t0 * dy, 0, max_y);
-  *x1 = ClampPixel(ax + t1 * dx, 0, max_x);
-  *y1 = ClampPixel(ay + t1 * dy, 0, max_y);
+  *x0 = ClampPixel(ax + t0 * dx, xmin, xmax);
+  *y0 = ClampPixel(ay + t0 * dy, ymin, ymax);
+  *x1 = ClampPixel(ax + t1 * dx, xmin, xmax);
+  *y1 = ClampPixel(ay + t1 * dy, ymin, ymax);
   return true;
+}
+
+bool ClipLineToPixels(int* x0, int* y0, int* x1, int* y1, int width,
+                      int height) {
+  if (width <= 0 || height <= 0) return false;
+  return ClipLineToPixelRect(x0, y0, x1, y1, 0, 0, width - 1, height - 1);
 }
 
 }  // namespace orcmap

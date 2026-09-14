@@ -202,6 +202,9 @@ TileStats LoadTile(orcmap::PmTilesReader* reader, uint8_t z, uint32_t x,
   s.raw = raw.size();
   s.decompress_ms =
       std::chrono::duration<double, std::milli>(Clock::now() - t1).count();
+  // Streaming: drop compressed bytes before decode.
+  stored.clear();
+  stored.shrink_to_fit();
 
   auto t2 = Clock::now();
   orcmap::MvtTile mvt;
@@ -211,6 +214,8 @@ TileStats LoadTile(orcmap::PmTilesReader* reader, uint8_t z, uint32_t x,
     return s;
   }
   s.decode_ms = std::chrono::duration<double, std::milli>(Clock::now() - t2).count();
+  raw.clear();
+  raw.shrink_to_fit();
 
   auto t3 = Clock::now();
   if (!orcmap::TranslateMvtToFeatureTile(mvt, &s.features_owned)) {
@@ -219,6 +224,7 @@ TileStats LoadTile(orcmap::PmTilesReader* reader, uint8_t z, uint32_t x,
   }
   s.translate_ms =
       std::chrono::duration<double, std::milli>(Clock::now() - t3).count();
+  mvt = orcmap::MvtTile{};
 
   if (classify) {
     auto t4 = Clock::now();
@@ -478,7 +484,8 @@ int CmdSample(const std::string& path, double lat, double lon, uint8_t zoom,
 }
 
 int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
-               int width, int height, const std::string& out) {
+               int width, int height, const std::string& out,
+               const orcmap::MapStyle& style, bool verbose) {
   orcmap::host::FileByteSource source(path);
   if (!source.Valid()) {
     std::fprintf(stderr, "cannot open %s\n", path.c_str());
@@ -500,27 +507,40 @@ int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
   vp.tile_size_px = 256;
 
   const std::vector<orcmap::TileId> tiles = PreviewVisibleTiles(vp);
-  std::printf("preview lat=%.6f lon=%.6f zoom=%u %dx%d tiles=%zu "
+  std::printf("preview lat=%.6f lon=%.6f zoom=%u %dx%d style=%s tiles=%zu "
               "(preview scaffolding)\n",
-              lat, lon, zoom, width, height, tiles.size());
+              lat, lon, zoom, width, height, style.id, tiles.size());
 
   orcmap::host::FramebufferTarget fb(width, height);
-  const orcmap::MapStyle& style = orcmap::styles::OrcSdrDark();
   if (!orcmap::ClearMapBackground(vp, style, &fb)) return 1;
 
   std::vector<size_t> stored;
   std::vector<size_t> raw;
   size_t present = 0;
-  double render_sum = 0;
+  double lookup_sum = 0, decomp_sum = 0, decode_sum = 0, translate_sum = 0,
+         classify_sum = 0, render_sum = 0, report_sum = 0;
   using Clock = std::chrono::steady_clock;
   const auto frame0 = Clock::now();
   for (const orcmap::TileId& tile : tiles) {
     TileStats s = LoadTile(&reader, tile.z, tile.x, tile.y, true);
-    PrintTileReport(tile.z, tile.x, tile.y, s);
+    const auto p0 = Clock::now();
+    if (verbose) {
+      PrintTileReport(tile.z, tile.x, tile.y, s);
+    } else if (s.present) {
+      std::printf("z=%u x=%u y=%u stored=%zu raw=%zu features=%zu\n", tile.z,
+                  tile.x, tile.y, s.stored, s.raw, s.features);
+    }
+    report_sum +=
+        std::chrono::duration<double, std::milli>(Clock::now() - p0).count();
     if (!s.present) continue;
     ++present;
     stored.push_back(s.stored);
     raw.push_back(s.raw);
+    lookup_sum += s.lookup_ms;
+    decomp_sum += s.decompress_ms;
+    decode_sum += s.decode_ms;
+    translate_sum += s.translate_ms;
+    classify_sum += s.classify_ms;
     const auto r0 = Clock::now();
     if (!orcmap::RenderFeatureTile(s.features_owned, tile, vp, style, &fb)) {
       std::fprintf(stderr, "render failed z=%u x=%u y=%u\n", tile.z, tile.x,
@@ -530,17 +550,29 @@ int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
     s.render_ms =
         std::chrono::duration<double, std::milli>(Clock::now() - r0).count();
     render_sum += s.render_ms;
-    std::printf("  HOST ms render=%.3f\n", s.render_ms);
+    // Release FeatureTile before the next source tile (streaming).
+    s.features_owned.features.clear();
+    s.features_owned.features.shrink_to_fit();
   }
-  const double frame_ms =
-      std::chrono::duration<double, std::milli>(Clock::now() - frame0).count();
+  const auto w0 = Clock::now();
   if (!fb.WritePpm(out)) {
     std::fprintf(stderr, "write failed %s\n", out.c_str());
     return 1;
   }
-  std::printf("wrote %s present_tiles=%zu/%zu HOST_frame_ms=%.3f render_sum_ms=%.3f\n",
-              out.c_str(), present, tiles.size(), frame_ms, render_sum);
-  std::printf("HOST PERFORMANCE — NOT ESP32 PERFORMANCE\n");
+  const double write_ms =
+      std::chrono::duration<double, std::milli>(Clock::now() - w0).count();
+  const double frame_ms =
+      std::chrono::duration<double, std::milli>(Clock::now() - frame0).count();
+  const double accounted = lookup_sum + decomp_sum + decode_sum + translate_sum +
+                           classify_sum + render_sum + report_sum + write_ms;
+  std::printf("wrote %s present_tiles=%zu/%zu HOST_frame_ms=%.3f\n", out.c_str(),
+              present, tiles.size(), frame_ms);
+  std::printf("HOST ONLY — NOT ESP32 PERFORMANCE\n");
+  std::printf("HOST ms lookup=%.3f decompress=%.3f decode=%.3f translate=%.3f "
+              "classify=%.3f render=%.3f report=%.3f write_ppm=%.3f "
+              "accounted=%.3f unaccounted=%.3f\n",
+              lookup_sum, decomp_sum, decode_sum, translate_sum, classify_sum,
+              render_sum, report_sum, write_ms, accounted, frame_ms - accounted);
   if (!stored.empty()) {
     std::sort(stored.begin(), stored.end());
     std::sort(raw.begin(), raw.end());
@@ -559,7 +591,15 @@ void Usage() {
       "orcmap_pack_inspect tile ARCHIVE Z X Y\n"
       "orcmap_pack_inspect sample ARCHIVE --lat LAT --lon LON --zoom Z [--radius N]\n"
       "orcmap_pack_inspect preview ARCHIVE --lat LAT --lon LON --zoom Z "
-      "[--width W --height H --out FILE]\n");
+      "[--width W --height H --out FILE --style ID --verbose]\n");
+}
+
+bool HasFlag(int argc, char** argv, const char* name) {
+  const std::string key = std::string("--") + name;
+  for (int i = 0; i < argc; ++i) {
+    if (key == argv[i]) return true;
+  }
+  return false;
 }
 
 bool Flag(int argc, char** argv, const char* name, std::string* value) {
@@ -592,7 +632,7 @@ int main(int argc, char** argv) {
                    static_cast<uint32_t>(std::strtoul(argv[4], nullptr, 10)),
                    static_cast<uint32_t>(std::strtoul(argv[5], nullptr, 10)));
   }
-  std::string lat_s, lon_s, zoom_s, radius_s, width_s, height_s, out;
+  std::string lat_s, lon_s, zoom_s, radius_s, width_s, height_s, out, style_id;
   Flag(argc, argv, "lat", &lat_s);
   Flag(argc, argv, "lon", &lon_s);
   Flag(argc, argv, "zoom", &zoom_s);
@@ -600,6 +640,8 @@ int main(int argc, char** argv) {
   Flag(argc, argv, "width", &width_s);
   Flag(argc, argv, "height", &height_s);
   Flag(argc, argv, "out", &out);
+  Flag(argc, argv, "style", &style_id);
+  const bool verbose = HasFlag(argc, argv, "verbose");
   if (cmd == "sample") {
     if (lat_s.empty() || lon_s.empty() || zoom_s.empty()) {
       Usage();
@@ -616,10 +658,18 @@ int main(int argc, char** argv) {
     }
     const int width = width_s.empty() ? 1280 : std::atoi(width_s.c_str());
     const int height = height_s.empty() ? 720 : std::atoi(height_s.c_str());
-    if (out.empty()) out = "springfield-97477-orcsdr-dark.ppm";
+    if (style_id.empty()) style_id = "orcsdr-dark";
+    const orcmap::MapStyle* style = orcmap::FindBuiltinStyleById(style_id.c_str());
+    if (style == nullptr) {
+      std::fprintf(stderr, "unknown style '%s'\n", style_id.c_str());
+      return 1;
+    }
+    if (out.empty()) {
+      out = std::string("springfield-97477-") + style->id + ".ppm";
+    }
     return CmdPreview(archive, std::atof(lat_s.c_str()), std::atof(lon_s.c_str()),
                       static_cast<uint8_t>(std::atoi(zoom_s.c_str())), width,
-                      height, out);
+                      height, out, *style, verbose);
   }
   Usage();
   return 1;

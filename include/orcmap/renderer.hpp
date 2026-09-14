@@ -26,9 +26,11 @@ bool ClearMapBackground(const Viewport& viewport, const MapStyle& style,
 // - source_tile.z != viewport.zoom (overzoom is not implemented)
 //
 // Features with kind_assigned == false are skipped (not guessed).
+// Label kinds (kLabelPrimary/Secondary/Muted) are skipped until text
+// rendering exists -- they are not drawn as placeholder point pixels.
 // Polygon fill uses the first path only as a simple outer ring; additional
 // paths (holes) are not subtracted -- see ARCHITECTURE.md.
-// Line width_px is not rasterized yet (1px strokes).
+// Line strokes use MapPaint::width_px via RenderTarget::DrawLine.
 
 bool RenderFeatureTile(const FeatureTile& features, TileId source_tile,
                        const Viewport& viewport, const MapStyle& style,

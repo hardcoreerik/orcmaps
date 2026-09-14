@@ -13,4 +13,10 @@ namespace orcmap {
 bool ClipLineToPixels(int* x0, int* y0, int* x1, int* y1, int width,
                       int height);
 
+// Inclusive pixel rectangle [xmin, xmax] x [ymin, ymax]. Used for thick
+// strokes whose centerline may sit just outside the framebuffer while the
+// brush still overlaps visible pixels.
+bool ClipLineToPixelRect(int* x0, int* y0, int* x1, int* y1, int xmin,
+                         int ymin, int xmax, int ymax);
+
 }  // namespace orcmap

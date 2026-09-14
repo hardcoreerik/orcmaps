@@ -13,13 +13,17 @@ cmake --build build-pack-inspect --config Release
 orcmap_pack_inspect header ARCHIVE
 orcmap_pack_inspect tile ARCHIVE Z X Y
 orcmap_pack_inspect sample ARCHIVE --lat LAT --lon LON --zoom Z [--radius N]
-orcmap_pack_inspect preview ARCHIVE --lat LAT --lon LON --zoom Z [--out FILE]
+orcmap_pack_inspect preview ARCHIVE --lat LAT --lon LON --zoom Z
+    [--out FILE --style ID --verbose]
 ```
+
+Style ids: `orcsdr-dark`, `standard-light`, `high-contrast-field`,
+`night-red-safe`.
 
 Springfield / 97477 host preview (pack from `tools/pack-builder`):
 
 ```
-build-pack-inspect/Release/orcmap_pack_inspect.exe preview data/local/springfield-97477.pmtiles --lat 44.0500 --lon -123.0220 --zoom 14 --out data/local/springfield-97477-orcsdr-dark.ppm
+build-pack-inspect/Release/orcmap_pack_inspect.exe preview data/local/springfield-97477.pmtiles --lat 44.0500 --lon -123.0220 --zoom 14 --style orcsdr-dark --out data/local/springfield-97477-orcsdr-dark.ppm
 ```
 
 Generated images are gitignored. Do not treat a committed PPM as project

@@ -23,7 +23,11 @@ class RenderTarget {
 
   virtual void FillRect(int x, int y, int w, int h, Color color) = 0;
   virtual void DrawPoint(int x, int y, Color color) = 0;
-  virtual void DrawLine(int x0, int y0, int x1, int y1, Color color) = 0;
+
+  // Centered stroke. `width_px` comes from MapPaint (the style), never
+  // from FeatureKind inside an adapter. See include/orcmap/stroke.hpp.
+  virtual void DrawLine(int x0, int y0, int x1, int y1, Color color,
+                        float width_px) = 0;
 
   // Simple filled polygon, `n_points` vertices as [x0,y0,x1,y1,...].
   // No holes. n_points < 3 is a no-op. The target clips to its bounds.

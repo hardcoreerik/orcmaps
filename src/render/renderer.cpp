@@ -15,20 +15,26 @@ void DrawPointMapped(RenderTarget* target, const TileScreenMap& map,
 }
 
 void DrawLineMapped(RenderTarget* target, const TileScreenMap& map, int32_t x0,
-                    int32_t y0, int32_t x1, int32_t y1, Color color) {
+                    int32_t y0, int32_t x1, int32_t y1, Color color,
+                    float width_px) {
   int sx0 = 0;
   int sy0 = 0;
   int sx1 = 0;
   int sy1 = 0;
   ProjectLocal(map, x0, y0, &sx0, &sy0);
   ProjectLocal(map, x1, y1, &sx1, &sy1);
-  target->DrawLine(sx0, sy0, sx1, sy1, color);
+  target->DrawLine(sx0, sy0, sx1, sy1, color, width_px);
 }
 
 void RenderOneFeature(const Feature& feature, const TileScreenMap& map,
                       const Viewport& viewport, const MapStyle& style,
                       RenderTarget* target, std::vector<int>* poly_xy) {
   if (!feature.kind_assigned) return;
+  if (feature.kind == FeatureKind::kLabelPrimary ||
+      feature.kind == FeatureKind::kLabelSecondary ||
+      feature.kind == FeatureKind::kLabelMuted) {
+    return;
+  }
   const MapPaint paint =
       ResolveFeatureStyle(feature.kind, viewport.zoom, style);
   if (!paint.visible) return;
@@ -46,7 +52,7 @@ void RenderOneFeature(const Feature& feature, const TileScreenMap& map,
         if (path.size() < 2) continue;
         for (size_t i = 0; i + 1 < path.size(); ++i) {
           DrawLineMapped(target, map, path[i].x, path[i].y, path[i + 1].x,
-                         path[i + 1].y, paint.color);
+                         path[i + 1].y, paint.color, paint.width_px);
         }
       }
       break;

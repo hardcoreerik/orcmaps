@@ -20,6 +20,7 @@ add_executable(orcmap_host_tests
     test_feature.cpp
     test_viewport.cpp
     test_clip.cpp
+    test_stroke.cpp
     test_render.cpp
     test_compression.cpp
     ${ORCMAP_ROOT}/src/core/geo.cpp

@@ -1,6 +1,6 @@
 #include "framebuffer_target.hpp"
 
-#include "orcmap/clip.hpp"
+#include "orcmap/stroke.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -10,12 +10,6 @@
 
 namespace orcmap {
 namespace host {
-
-namespace {
-
-int Iabs(int v) { return v < 0 ? -v : v; }
-
-}  // namespace
 
 FramebufferTarget::FramebufferTarget(int width, int height, Color clear)
     : width_(width < 0 ? 0 : width),
@@ -53,26 +47,12 @@ void FramebufferTarget::FillRect(int x, int y, int w, int h, Color color) {
   }
 }
 
-void FramebufferTarget::DrawLine(int x0, int y0, int x1, int y1, Color color) {
-  if (!ClipLineToPixels(&x0, &y0, &x1, &y1, width_, height_)) return;
-  int dx = Iabs(x1 - x0);
-  int sx = x0 < x1 ? 1 : -1;
-  int dy = -Iabs(y1 - y0);
-  int sy = y0 < y1 ? 1 : -1;
-  int err = dx + dy;
-  for (;;) {
-    Put(x0, y0, color);
-    if (x0 == x1 && y0 == y1) break;
-    const int e2 = 2 * err;
-    if (e2 >= dy) {
-      err += dy;
-      x0 += sx;
-    }
-    if (e2 <= dx) {
-      err += dx;
-      y0 += sy;
-    }
-  }
+void FramebufferTarget::DrawLine(int x0, int y0, int x1, int y1, Color color,
+                                 float width_px) {
+  RasterizeCenteredStroke(x0, y0, x1, y1, width_px, width_, height_,
+                          [&](int x, int y, int w, int h) {
+                            FillRect(x, y, w, h, color);
+                          });
 }
 
 void FramebufferTarget::FillPolygon(const int* xy_pairs, size_t n_points,
