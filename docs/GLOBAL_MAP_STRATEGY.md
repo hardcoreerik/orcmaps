@@ -15,15 +15,18 @@ Packs describe geography and content, never a graphics adapter or board.
 M5GFX, LVGL, a native RGB565 framebuffer, and future targets consume the same
 PMTiles/MVT artifacts through OrcMaps core.
 
-No global overview cutoff is selected yet. Candidate ranges such as z0-4,
-z0-6, z0-8, and z0-10 must be generated and compared for size, tile count,
-visible usefulness, host render time, and embedded cost before one is chosen.
+Measured z0-z6, z0-z7, and z0-z8 candidates are 4.61, 9.29, and 16.37 MiB.
+Current evidence recommends z6 for a tiny pack, z7 for a standard pack, and a
+regional handoff at z8. This is not frozen release policy; embedded measurements
+can still change it.
 The first source bundle is reproducibly pinned to 21 official Natural Earth
 5.1.2 archives: land, ocean, lakes, rivers/lake centerlines, admin-0 lines,
 admin-1 lines, and populated places at 110m, 50m, and 10m. It is acquired to
 the gitignored `data/local/world-overview/natural-earth/5.1.2/` path using
-`tools/pack-builder/acquire_world_overview_sources.py`. No overview PMTiles or
-full planet archive has been generated, and no global-render claim is made.
+`tools/pack-builder/acquire_world_overview_sources.py`, then built by
+`build_world_overview.py` into graphics-independent `orcmaps-overview-1` MVT.
+The generic host renderer verifies global rendering. No full-detail planet
+archive has been generated.
 
 A future Pack Service may distribute or generate immutable pack triplets. It
 is optional provisioning only:

@@ -23,14 +23,13 @@ compile proof, `examples/m5stack-tab5` (hardware-verified static
 
 **PARTIAL:** Portable camera controls are implemented and host-tested; hardware
 input bindings and viewport overzoom are not. Integer zoom is 0..31.
-`tools/pack-builder` can reproduce the Springfield pack and acquire the pinned
-Natural Earth 5.1.2 world-overview source bundle; it does not yet build the
-overview PMTiles. Runtime manifest JSON discovery and on-device SHA-256
+`tools/pack-builder` can reproduce the Springfield pack and build pinned
+Natural Earth 5.1.2 world-overview z6/z7/z8 candidates. Runtime manifest JSON discovery and on-device SHA-256
 verification are not implemented.
 
-**EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds` (now
-measured against OpenMapTiles 3.16 Springfield tiles; still not the
-schema).
+**EXPERIMENTAL:** profile-aware feature classification supports measured
+OpenMapTiles 3.16 Springfield tiles and the narrow `orcmaps-overview-1`
+Natural Earth profile; neither is the final general schema.
 
 **MEASURED (HOST):** Springfield / 97477 gzip PMTiles → 1280×720
 `orcsdr-dark` PPM. **MEASURED (TAB5 HARDWARE):** same view on physical
@@ -126,7 +125,7 @@ extract.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **121 test functions, all passing**.
+- Host test suite: **123 test functions, all passing**.
 - `EnumerateVisibleTiles` (unique TileIds, X wrap, Y clamp).
   `TileScreenMap` uses shortest wrapped X delta. Overzoom still rejected.
 - `RenderTarget::DrawLine` takes `width_px` from `MapPaint`. Shared
@@ -164,7 +163,8 @@ extract.
 - Host-only Natural Earth acquisition pins and verifies 21 official archives
   covering seven layers at 110m, 50m, and 10m. Local archives, shapefiles,
   `SOURCE.json`, and `SHA256SUMS.txt` remain under gitignored `data/local/`.
-  No world-overview PMTiles has been built.
+  The reproducible builder produced measured z6/z7/z8 candidates of 4.61,
+  9.29, and 16.37 MiB; see `docs/evidence/WORLD_OVERVIEW_HOST_MEASUREMENTS.md`.
 
 ## What is being worked on
 
@@ -227,7 +227,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 121 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 123 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`
