@@ -1,4 +1,24 @@
-# Regional pack builders (host-only)
+# Pack builders (host-only)
+
+## Natural Earth world-overview sources
+
+`world_overview_sources.json` pins the 21 official Natural Earth 5.1.2
+archives used for the proposed 110m/50m/10m overview tiers. Acquire and
+verify them outside Git with:
+
+```
+python tools/pack-builder/acquire_world_overview_sources.py \
+  --destination data/local/world-overview/natural-earth
+```
+
+Use `--dry-run` to list the destination, total bytes, and URLs without
+network access. The script preserves the ZIPs, extracts the required
+shapefiles, verifies size and SHA-256, and writes local `SOURCE.json` and
+`SHA256SUMS.txt` records. Existing invalid archives are refused unless
+`--force` is explicit. This acquires source data only; it does not build a
+PMTiles pack or select final zoom cutoffs.
+
+## Regional packs
 
 `build_regional_pack.py` extracts a bbox or GeoJSON region from an existing
 PMTiles archive using the official `go-pmtiles` CLI, then writes the immutable

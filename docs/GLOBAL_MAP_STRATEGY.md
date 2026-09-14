@@ -18,8 +18,12 @@ PMTiles/MVT artifacts through OrcMaps core.
 No global overview cutoff is selected yet. Candidate ranges such as z0-4,
 z0-6, z0-8, and z0-10 must be generated and compared for size, tile count,
 visible usefulness, host render time, and embedded cost before one is chosen.
-No full planet archive has been acquired or generated, and no global-render
-claim is made today.
+The first source bundle is reproducibly pinned to 21 official Natural Earth
+5.1.2 archives: land, ocean, lakes, rivers/lake centerlines, admin-0 lines,
+admin-1 lines, and populated places at 110m, 50m, and 10m. It is acquired to
+the gitignored `data/local/world-overview/natural-earth/5.1.2/` path using
+`tools/pack-builder/acquire_world_overview_sources.py`. No overview PMTiles or
+full planet archive has been generated, and no global-render claim is made.
 
 A future Pack Service may distribute or generate immutable pack triplets. It
 is optional provisioning only:

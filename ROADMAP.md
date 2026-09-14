@@ -258,6 +258,8 @@ network access or a remote service.
 
 **Goal:** evaluate, don't assume, whole-world feasibility.
 
+- [x] Official Natural Earth 5.1.2 source bundle acquired and verified for
+      seven layers at 110m, 50m, and 10m; archives stay outside Git
 - [ ] World base pack (low/medium zoom) built and benchmarked
 - [ ] Full-planet pack evaluated against real hardware limits (SD card
       size, FAT32 4 GiB file limit → chunking scheme, per yuiseki precedent)

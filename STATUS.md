@@ -23,8 +23,10 @@ compile proof, `examples/m5stack-tab5` (hardware-verified static
 
 **PARTIAL:** Portable camera controls are implemented and host-tested; hardware
 input bindings and viewport overzoom are not. Integer zoom is 0..31.
-`tools/pack-builder` Springfield script only. Runtime manifest JSON discovery
-and on-device SHA-256 verification are not implemented.
+`tools/pack-builder` can reproduce the Springfield pack and acquire the pinned
+Natural Earth 5.1.2 world-overview source bundle; it does not yet build the
+overview PMTiles. Runtime manifest JSON discovery and on-device SHA-256
+verification are not implemented.
 
 **EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds` (now
 measured against OpenMapTiles 3.16 Springfield tiles; still not the
@@ -159,6 +161,10 @@ extract.
   existing PMTiles archive and emit an immutable archive/manifest/checksum
   triplet. Springfield can also be regenerated from OSM PBF via Planetiler.
   This is provisioning tooling, not runtime discovery or a remote service.
+- Host-only Natural Earth acquisition pins and verifies 21 official archives
+  covering seven layers at 110m, 50m, and 10m. Local archives, shapefiles,
+  `SOURCE.json`, and `SHA256SUMS.txt` remain under gitignored `data/local/`.
+  No world-overview PMTiles has been built.
 
 ## What is being worked on
 
@@ -349,10 +355,12 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Read a numbered `/orcmaps/orcmaps-report-NNNN.txt` file and record the
+1. With approval, build and compare Natural Earth overview PMTiles candidates;
+   source acquisition is complete, but no pack or cutoff exists yet.
+2. Read a numbered `/orcmaps/orcmaps-report-NNNN.txt` file and record the
    exact stage timings.
-2. Continue the ESP32-P4 decode path after the LilyGO baseline exists.
-3. Do not freeze OpenMapTiles as the OrcMaps schema without review.
+3. Continue the ESP32-P4 decode path after the LilyGO baseline exists.
+4. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,
 overlay application features, pack marketplace UI.
@@ -364,8 +372,8 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-`examples/lilygo-tdisplay-s3` and the project-status documents. Tab5
-evidence remains unchanged. OrcSDR integration has not started.
+The Natural Earth acquisition path and project-status documents. Tab5 and
+LilyGO hardware evidence remain unchanged. OrcSDR integration has not started.
 
 ## Notes for the next development session
 

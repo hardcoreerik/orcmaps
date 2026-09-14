@@ -512,6 +512,10 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   and anchor-preserving zoom are implemented and host-tested. Hardware
   touch/button bindings are not implemented yet; adapters must translate
   input into this API rather than create a second coordinate system.
+- World-overview source acquisition is pinned to 21 official Natural Earth
+  5.1.2 archives across 110m, 50m, and 10m. The archives and extracted
+  shapefiles remain gitignored local provisioning inputs; no world-overview
+  PMTiles or final zoom cutoff has been produced.
 
 ## Explicit Non-Goals
 
