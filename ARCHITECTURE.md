@@ -82,6 +82,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Springfield host preview | `tools/pack-inspect/` | HOST-ONLY MEASURED: real OSM → gzip PMTiles → 1280×720. |
 | Springfield demo pack | `examples/m5stack-tab5/test-pack/` | Public OSM-derived PMTiles used on Tab5 (ODbL). |
 | Tab5 example | `examples/m5stack-tab5/` | Hardware-verified static Springfield render (M5Unified + SDMMC Slot 0). See `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. |
+| LilyGO T-Display-S3 example | `examples/lilygo-tdisplay-s3/` | ESP32-S3 build-verified static Springfield demo (M5GFX + 1-bit SDMMC Shield); physical verification pending. |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles`, `tiny.mvt`, `tiny-gzip.pmtiles` | Implemented (synthetic; gzip tile fixture for the decompress→pixels path) |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |
@@ -128,6 +129,8 @@ examples/generic-esp32/  ESP-IDF compile/link smoke test of the portable
 examples/m5gfx/          ESP-IDF + M5GFX compile proof (DisplayTarget).
 examples/host-render/    Host PPM preview (synthetic tiles).
 examples/m5stack-tab5/   Tab5 + SD + OrcMaps hardware demo (M5Unified).
+examples/lilygo-tdisplay-s3/  T-Display-S3 Touch + SD Shield demo
+                      (generic M5GFX device; touch input not used).
 tests/host/           Host-buildable unit tests (no ESP-IDF needed).
 tests/consumer/       External-consumer build gate -- public headers only,
                       see "Consumer integration test" below.
@@ -554,11 +557,11 @@ shipped.
 
 Tab5 Springfield current uncached cold frame ~4.4 s (was 11.3 s before
 the no-text layer filter). Decode+translate ~2.0 s, render ~1.24 s.
-Host ~75 ms
-for the same view. See `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. Not
-production-ready.
-draw. `examples/generic-esp32` proves the component links; it is not a
-performance result. See `docs/PERFORMANCE.md` (placeholder) and
+Host ~75 ms for the same view. See
+`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. The LilyGO ESP32-S3 demo
+builds but has no physical timing yet. These static renders are not
+production-ready. `examples/generic-esp32` proves the component links;
+it is not a performance result. See `docs/PERFORMANCE.md` and
 `ROADMAP.md`.
 
 ## Security / integrity

@@ -1,8 +1,9 @@
 # Springfield / 97477 public demo pack
 
 Exact PMTiles archive used in the first hardware-verified Tab5 render
-(firmware `1427597`, physical PASS). Copy this file; do not regenerate it
-just to run the demo.
+(firmware `1427597`, physical PASS) and reused by the LilyGO
+T-Display-S3 demo. Copy this file; do not regenerate it just to run a
+hardware demo.
 
 | Field | Value |
 |---|---|
@@ -21,6 +22,7 @@ strip on the west edge of the Tab5 image is pack coverage.
 2. Create `/orcmaps/` on the card.
 3. Copy this file to `/orcmaps/springfield.pmtiles` (that name, not
    `springfield-97477.pmtiles`).
-4. Insert the card, flash `examples/m5stack-tab5`.
+4. Insert the card, then flash `examples/m5stack-tab5` or
+   `examples/lilygo-tdisplay-s3` for the matching board.
 
 See `ATTRIBUTION.md` (ODbL / © OpenStreetMap contributors).

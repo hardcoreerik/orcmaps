@@ -30,6 +30,9 @@ visible tiles (X wrap, no overzoom).
 A hardware-verified static Springfield render exists on M5Stack Tab5
 ([`examples/m5stack-tab5`](examples/m5stack-tab5); evidence
 [`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`](docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md)).
+A second Springfield hardware demo for the LilyGO T-Display-S3 Touch +
+SD Shield builds under ESP-IDF 5.5.4; physical verification is pending
+([`examples/lilygo-tdisplay-s3`](examples/lilygo-tdisplay-s3)).
 Not production-ready: no pan/zoom, no labels. FeatureKind mapping is
 experimental. See [`STATUS.md`](STATUS.md).
 
@@ -63,6 +66,7 @@ tools/pack-builder/    Springfield host pack script (Planetiler)
 tools/pack-inspect/    Host inspect + real-geography preview
 tools/pack-verify/     Planned host-side pack verifier
 examples/m5stack-tab5/ Tab5 + SD hardware demo (M5Unified)
+examples/lilygo-tdisplay-s3/T-Display-S3 Touch + SD Shield demo (M5GFX)
 examples/generic-esp32/ESP-IDF compile smoke test (no graphics framework)
 examples/m5gfx/        ESP-IDF + M5GFX DisplayTarget compile proof
 examples/host-render/  Host 1280x720 PPM preview (synthetic tiles)

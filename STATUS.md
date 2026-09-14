@@ -1,6 +1,6 @@
 # OrcMaps Current Status
 
-Last updated: 2026-09-13
+Last updated: 2026-09-14
 
 ## Current development focus
 
@@ -16,7 +16,8 @@ framebuffer, M5GFX `DisplayTarget` (exported `orcmap/m5gfx/` headers),
 host + consumer tests, provenance registry,
 `examples/generic-esp32` (no graphics framework), `examples/m5gfx`
 compile proof, `examples/m5stack-tab5` (hardware-verified static
-Springfield render on Tab5), host pack-inspect,
+Springfield render on Tab5), `examples/lilygo-tdisplay-s3` (ESP32-S3
+build-verified Springfield demo; physical verification pending), host pack-inspect,
 `orcmap::esp_idf::FileByteSource`.
 
 **PARTIAL:** Viewport overzoom is not implemented. Zoom 0..31.
@@ -148,7 +149,9 @@ extract.
 
 ## What is being worked on
 
-Nothing — Tab5 current cold frame ~4.4 s uncached. Not OrcSDR.
+Physical bring-up of the Springfield demo on a LilyGO T-Display-S3 Touch
+with SD Shield. The ESP-IDF 5.5.4 build passes. COM32 did not enter the
+ROM downloader automatically; no device bytes have been written yet.
 
 ## Current blockers
 
@@ -184,8 +187,9 @@ function again.
 
 HOST-ONLY Springfield / 97477 numbers are in `docs/PERFORMANCE.md`.
 A busy z14 tile: ~0.6 ms gzip decompress, ~2.2 ms MVT decode, ~0.7 ms
-FeatureTile copy, ~0.2 ms render; 1280×720 z14 frame ~221 ms. These are
-**not** ESP32 numbers. On-device measurement does not exist.
+FeatureTile copy, ~0.2 ms render; the current quiet 1280×720 z14 host
+frame is ~75 ms. These are **not** ESP32 numbers. Physical Tab5 results
+are ~4.4 s for the same viewport. LilyGO ESP32-S3 timing is pending.
 
 ## Test status
 
@@ -204,6 +208,18 @@ covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`
 "Testing architecture").
+
+LilyGO hardware-demo build:
+
+```
+. C:\Espressif\frameworks\esp-idf-v5.5.4\export.ps1
+cd examples/lilygo-tdisplay-s3
+idf.py set-target esp32s3
+idf.py build
+```
+
+Result: build PASS; `orcmap_lilygo_tdisplay_s3.bin` is 380,432 bytes.
+Flash and physical display/SD/render verification are still pending.
 
 Consumer smoke test (separate CMake project):
 
@@ -305,12 +321,16 @@ manifest entry to point at OrcMaps yet.
 15. GitHub Actions today are Documentation Truth + Data Provenance Truth
     only. Host C++ tests, consumer smoke test, ESP-IDF compile, sanitizers,
     and fuzzing are **not** CI gates yet.
+16. The LilyGO T-Display-S3 uses the existing generic M5GFX
+    `DisplayTarget`; only board bring-up and its 1-bit SDMMC Shield mount
+    belong in the example. Touch input is outside the first static test.
 
 ## Next 3-7 actions
 
-1. Continue ESP32-P4 decode path (current ~4.4 s uncached; decode+translate
-   ~2.0 s, render ~1.24 s).
-2. Do not freeze OpenMapTiles as the OrcMaps schema without review.
+1. Put the LilyGO board in download mode, flash COM32, and capture
+   display/SD/render timing evidence.
+2. Continue the ESP32-P4 decode path after the LilyGO baseline exists.
+3. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,
 overlay application features, pack marketplace UI.
@@ -322,7 +342,8 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — hardware-verified static Tab5 map published. OrcSDR not started.
+`examples/lilygo-tdisplay-s3` and the project-status documents. Tab5
+evidence remains unchanged. OrcSDR integration has not started.
 
 ## Notes for the next development session
 

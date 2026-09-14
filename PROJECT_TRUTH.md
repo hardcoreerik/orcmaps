@@ -199,6 +199,9 @@ treated as a correctness rule, not a preference.
   M5GFX rendering, 1280×720 display.
 - Secondary feasibility target: ESP32-S3, kept realistic by not letting
   core code assume Tab5-specific resources (PSRAM size, display size).
+  `examples/lilygo-tdisplay-s3` now builds the real Springfield pipeline
+  for an ESP32-S3R8 T-Display-S3 Touch + SD Shield; physical verification
+  is still pending.
 - The core (`include/orcmap`, `src/core`, `src/tiles`, `src/render`)
   has **zero** ESP-IDF, M5Stack, M5GFX, LovyanGFX, or other graphics-
   framework dependency today, and must stay that way — this is enforced
@@ -317,13 +320,12 @@ for the machine-readable classification schema. Key rules:
 
 ## Performance Constraints
 
-Not yet measured (no renderer or real pack exists). `docs/PERFORMANCE.md`
-is created but currently a placeholder pending the Lane County vertical
-slice. Real numbers from the yuiseki precedent are cited in
-`docs/FORMAT_DECISION.md` (z13 tile render 33s→8.1s optimized, z0 0.4s,
-~95 KB free heap with no PSRAM) as the bar OrcMaps should beat given
-stronger target hardware (PSRAM-equipped ESP32-P4 vs. that project's
-no-PSRAM ESP32-S3).
+Measured host and physical Tab5 results exist for the bounded Springfield
+pack. The current Tab5 cold frame is ~4.4 s after excluded MVT layers are
+skipped before payload decode; the same view is ~75 ms on the host.
+`docs/PERFORMANCE.md` and
+`docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md` are authoritative. The
+LilyGO ESP32-S3 path is build-verified but not yet physically measured.
 
 ## Memory Constraints
 

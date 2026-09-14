@@ -167,3 +167,6 @@ Label those **ESP32-P4 / TAB5 HARDWARE RESULTS**, not host numbers.
 
 OrcMaps **core** still has `REQUIRES ""` and no M5Unified. The M5GFX
 adapter still has no Tab5 or M5Unified knowledge.
+
+For the smaller ESP32-S3 reference target, see
+`examples/lilygo-tdisplay-s3`.
