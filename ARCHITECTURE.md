@@ -17,7 +17,7 @@ flowchart TD
     Tile["MVT decoder -- IMPLEMENTED, schema-agnostic"]
     Features["OrcMaps Feature / Geometry -- IMPLEMENTED"]
     Style["orcmap::MapStyle / ResolveFeatureStyle -- IMPLEMENTED"]
-    Viewport["Viewport -- PARTIAL"]
+    Viewport["Viewport -- enumerate + X wrap; no overzoom"]
     Cache["Rendered Tile Cache -- NOT IMPLEMENTED"]
     Core["Renderer core -- IMPLEMENTED (host proof)"]
     Host["Host framebuffer -- IMPLEMENTED"]
@@ -44,7 +44,8 @@ flowchart TD
 Implemented today: `Pack -> Source -> Reader` (host-tested), bounded
 `DecompressPayload` for kNone/kGzip (host-tested), schema-agnostic
 `MVT decode` (host-tested), MVT → OrcMaps `FeatureTile` translation
-(host-tested), `Style` (host-tested), a PARTIAL Viewport, a generic
+(host-tested), `Style` (host-tested), Viewport (enumerate + wrap, no
+overzoom), a generic
 `RenderTarget` + renderer core, a host framebuffer proof, and an optional
 M5GFX `DisplayTarget` (no MVT types, no map semantics). FeatureKind
 mapping is EXPERIMENTAL, not the tile-content schema.
@@ -65,7 +66,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | MVT → Feature translation | `include/orcmap/mvt_translate.hpp`, `src/tiles/mvt_translate.cpp` | Implemented (deep copy; does not assign FeatureKind) |
 | Experimental FeatureKind heuristic | `include/orcmap/experimental/mvt_classify.hpp`, `src/tiles/mvt_classify_experimental.cpp` | EXPERIMENTAL (not the tile-content schema; not stable API) |
 | `orcmap::MapStyle` / style system | `include/orcmap/style.hpp`, `include/orcmap/color.hpp`, `include/orcmap/cache_key.hpp`, `src/render/style.cpp` | Implemented |
-| Viewport | `include/orcmap/viewport.hpp`, `src/core/viewport.cpp` | PARTIAL (prepared `TileScreenMap`; no overzoom, no visible-tile enumerator, no antimeridian wrap) |
+| Viewport | `include/orcmap/viewport.hpp`, `src/core/viewport.cpp` | Implemented: `EnumerateVisibleTiles`, wrapped X, clamped Y. No overzoom. |
 | `RenderTarget` | `include/orcmap/render_target.hpp` | Implemented (immediate primitives; no command buffer) |
 | Renderer core | `include/orcmap/renderer.hpp`, `src/render/renderer.cpp`, `src/render/clip.cpp` | Implemented (host-proof: ClearMapBackground + per-tile RenderFeatureTile). Not a complete map engine. |
 | Host framebuffer | `adapters/host/framebuffer_target.{hpp,cpp}` | Implemented (host only; RGBA8 + optional PPM) |
@@ -73,7 +74,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Overlay primitives | `src/overlays/` | Not implemented (empty dir) |
 | Tile/rendered-tile cache | `src/cache/` | Not implemented (empty dir); `RenderedTileCacheKey` shape exists in `include/orcmap/cache_key.hpp` |
 | Pack builder | `tools/pack-builder/` | PARTIAL: Springfield/97477 host pack script (Planetiler, not a runtime dep) |
-| Pack inspector | `tools/pack-inspect/` | Implemented (host). Preview visible-tile walk is scaffolding, not Viewport API. |
+| Pack inspector | `tools/pack-inspect/` | Implemented (host). Uses `EnumerateVisibleTiles`. |
 | Pack verifier | `tools/pack-verify/` | Not implemented (empty dir) |
 | Generic ESP32 example | `examples/generic-esp32/` | PARTIAL: ESP-IDF compile/link smoke test of the portable core (no graphics framework) |
 | M5GFX example | `examples/m5gfx/` | PARTIAL: ESP-IDF compile proof of DisplayTarget + synthetic FeatureTile (M5GFX, no M5Unified) |
@@ -163,11 +164,11 @@ docs/                 Architecture/decision/porting/licensing documents.
    decision.
 7. **Implemented (host proof):** `ClearMapBackground` once per frame,
    then `RenderFeatureTile` per source tile → `RenderTarget` (host
-   framebuffer). Viewport is PARTIAL. M5GFX DisplayTarget consumes this
-   seam.
-8. **Not yet implemented:** overzoom, antimeridian wrap, visible-tile
-   enumeration, polygon holes, line width, tile cache, pack discovery,
-   Brotli/zstd tile compression, OrcSDR integration.
+   framebuffer). Viewport enumerates unique source tiles (X wrap, Y
+   clamp). Overzoom is rejected. M5GFX DisplayTarget consumes this seam.
+8. **Not yet implemented:** overzoom, polygon holes, text labels, tile
+   cache, pack discovery, Brotli/zstd tile compression, OrcSDR
+   integration.
 
 ## Map pack / archive layer
 
@@ -294,10 +295,11 @@ rectangle by `width/2`. Polygon scanline intercepts use `int64_t`.
 interface: `FillRect`, `DrawPoint`, `DrawLine(..., width_px)`,
 `FillPolygon`. No command buffer. Color is `orcmap::Color` (RGBA8).
 
-`Viewport` (`include/orcmap/viewport.hpp`) is **PARTIAL**: center lat/lon,
-zoom, output size, `tile_size_px`, and a prepared `TileScreenMap`. No
-visible-tile enumerator, no overzoom, no antimeridian wrap
-(`tile.x - center.x` is a raw subtract). Zoom is 0..31.
+`Viewport` (`include/orcmap/viewport.hpp`): center lat/lon, zoom, output
+size, `tile_size_px`, prepared `TileScreenMap` with shortest wrapped X
+delta, and `EnumerateVisibleTiles` (unique TileIds, north-to-south then
+west-to-east, X wraps, Y clamped). Overzoom is still rejected
+(`tile.z` must equal `viewport.zoom`). Zoom is 0..31.
 
 `orcmap::host::FramebufferTarget` is the first target (RGBA8 buffer, optional
 P6 PPM). It is host-only (`adapters/host/`), not part of the ESP-IDF

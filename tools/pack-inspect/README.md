@@ -1,8 +1,8 @@
 # pack-inspect (host-only)
 
 Inspect a PMTiles archive through the real OrcMaps pipeline, or render a
-1280×720 preview. Visible-tile enumeration here is **preview scaffolding**,
-not the production Viewport API.
+1280×720 preview. Visible tiles come from `orcmap::EnumerateVisibleTiles`. Pack misses are
+skipped (`GetTile` false), not enumeration failures.
 
 ```
 cmake -S tools/pack-inspect -B build-pack-inspect -G "Visual Studio 18 2026"

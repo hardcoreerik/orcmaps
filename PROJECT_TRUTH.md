@@ -165,7 +165,8 @@ distribution under the documented source terms").
 - **Rendering: vector tiles decoded once, cached as RGB565** (RAM/PSRAM
   first, optional SD-backed cache second) — the hybrid approach, matching
   the yuiseki precedent and ORCMAP1's own informal sprite-cache pattern in
-  `adsb_dashboard.cpp`. Renderer core + Feature model + PARTIAL Viewport
+  `adsb_dashboard.cpp`. Renderer core + Feature model + Viewport
+  (enumerate + wrap; no overzoom)
   exist. Rendered-tile cache does not. `adapters/m5gfx/DisplayTarget` is a
   `RenderTarget`, not the renderer architecture — see STATUS.md.
 - **Projection: standard Web Mercator tile math**
@@ -225,8 +226,9 @@ Host-proof renderer exists: `ClearMapBackground` once per frame, then
 from `ResolveFeatureStyle()`. Projection uses a prepared `TileScreenMap`
 (Mercator once per tile, multiply-add per vertex). `orcmap::Color` is
 plain RGBA8. Unclassified features are skipped. Zoom mismatch returns
-false. This is not a complete map engine (no overzoom, no antimeridian
-wrap, no holes, 1px strokes).
+false. This is not a complete map engine (no overzoom, no holes, no
+text labels). Visible tiles are enumerated with wrapped X. Line width
+comes from `MapPaint`.
 
 `adapters/m5gfx/DisplayTarget` is a `RenderTarget` over LovyanGFX
 (RGB565 in the adapter only). It must not implement map semantics.

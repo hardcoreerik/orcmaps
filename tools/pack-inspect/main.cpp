@@ -365,33 +365,7 @@ void PrintTileReport(uint8_t z, uint32_t x, uint32_t y, const TileStats& s) {
   }
 }
 
-// Preview scaffolding: tiles whose [x,x+1)x[y,y+1) overlap the viewport.
-// Not production Viewport API (no overzoom, no antimeridian wrap).
-std::vector<orcmap::TileId> PreviewVisibleTiles(const orcmap::Viewport& vp) {
-  std::vector<orcmap::TileId> out;
-  if (!orcmap::ZoomIsValid(vp.zoom) || vp.tile_size_px <= 0) return out;
-  const orcmap::TileCoord c = orcmap::LatLonToTileCoord(
-      vp.center_lat_deg, vp.center_lon_deg, vp.zoom);
-  const double ts = static_cast<double>(vp.tile_size_px);
-  const double left = c.x - static_cast<double>(vp.width_px) * 0.5 / ts;
-  const double top = c.y - static_cast<double>(vp.height_px) * 0.5 / ts;
-  const double right = c.x + static_cast<double>(vp.width_px) * 0.5 / ts;
-  const double bottom = c.y + static_cast<double>(vp.height_px) * 0.5 / ts;
-  const uint32_t n = orcmap::TilesPerAxis(vp.zoom);
-  const int x0 = static_cast<int>(std::floor(left));
-  const int y0 = static_cast<int>(std::floor(top));
-  const int x1 = static_cast<int>(std::floor(right));
-  const int y1 = static_cast<int>(std::floor(bottom));
-  for (int y = y0; y <= y1; ++y) {
-    if (y < 0 || static_cast<uint32_t>(y) >= n) continue;
-    for (int x = x0; x <= x1; ++x) {
-      if (x < 0 || static_cast<uint32_t>(x) >= n) continue;
-      out.push_back(orcmap::TileId{vp.zoom, static_cast<uint32_t>(x),
-                                   static_cast<uint32_t>(y)});
-    }
-  }
-  return out;
-}
+
 
 int CmdHeader(const std::string& path) {
   orcmap::host::FileByteSource source(path);
@@ -506,10 +480,19 @@ int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
   vp.height_px = height;
   vp.tile_size_px = 256;
 
-  const std::vector<orcmap::TileId> tiles = PreviewVisibleTiles(vp);
-  std::printf("preview lat=%.6f lon=%.6f zoom=%u %dx%d style=%s tiles=%zu "
-              "(preview scaffolding)\n",
-              lat, lon, zoom, width, height, style.id, tiles.size());
+  using Clock = std::chrono::steady_clock;
+  std::vector<orcmap::TileId> tiles;
+  const auto e0 = Clock::now();
+  if (!orcmap::EnumerateVisibleTiles(vp, &tiles)) {
+    std::fprintf(stderr, "EnumerateVisibleTiles failed\n");
+    return 1;
+  }
+  const double enumerate_ms =
+      std::chrono::duration<double, std::milli>(Clock::now() - e0).count();
+  std::printf("preview lat=%.6f lon=%.6f zoom=%u %dx%d style=%s "
+              "visible_tiles=%zu enumerate_ms=%.3f\n",
+              lat, lon, zoom, width, height, style.id, tiles.size(),
+              enumerate_ms);
 
   orcmap::host::FramebufferTarget fb(width, height);
   if (!orcmap::ClearMapBackground(vp, style, &fb)) return 1;
@@ -517,9 +500,9 @@ int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
   std::vector<size_t> stored;
   std::vector<size_t> raw;
   size_t present = 0;
+  size_t missing = 0;
   double lookup_sum = 0, decomp_sum = 0, decode_sum = 0, translate_sum = 0,
          classify_sum = 0, render_sum = 0, report_sum = 0;
-  using Clock = std::chrono::steady_clock;
   const auto frame0 = Clock::now();
   for (const orcmap::TileId& tile : tiles) {
     TileStats s = LoadTile(&reader, tile.z, tile.x, tile.y, true);
@@ -529,10 +512,15 @@ int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
     } else if (s.present) {
       std::printf("z=%u x=%u y=%u stored=%zu raw=%zu features=%zu\n", tile.z,
                   tile.x, tile.y, s.stored, s.raw, s.features);
+    } else {
+      std::printf("z=%u x=%u y=%u missing\n", tile.z, tile.x, tile.y);
     }
     report_sum +=
         std::chrono::duration<double, std::milli>(Clock::now() - p0).count();
-    if (!s.present) continue;
+    if (!s.present) {
+      ++missing;
+      continue;
+    }
     ++present;
     stored.push_back(s.stored);
     raw.push_back(s.raw);
@@ -563,14 +551,16 @@ int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
       std::chrono::duration<double, std::milli>(Clock::now() - w0).count();
   const double frame_ms =
       std::chrono::duration<double, std::milli>(Clock::now() - frame0).count();
-  const double accounted = lookup_sum + decomp_sum + decode_sum + translate_sum +
-                           classify_sum + render_sum + report_sum + write_ms;
-  std::printf("wrote %s present_tiles=%zu/%zu HOST_frame_ms=%.3f\n", out.c_str(),
-              present, tiles.size(), frame_ms);
+  const double accounted = enumerate_ms + lookup_sum + decomp_sum + decode_sum +
+                           translate_sum + classify_sum + render_sum +
+                           report_sum + write_ms;
+  std::printf("wrote %s visible=%zu found=%zu missing=%zu HOST_frame_ms=%.3f\n",
+              out.c_str(), tiles.size(), present, missing, frame_ms);
   std::printf("HOST ONLY — NOT ESP32 PERFORMANCE\n");
-  std::printf("HOST ms lookup=%.3f decompress=%.3f decode=%.3f translate=%.3f "
-              "classify=%.3f render=%.3f report=%.3f write_ppm=%.3f "
-              "accounted=%.3f unaccounted=%.3f\n",
+  std::printf("HOST ms enumerate=%.3f lookup=%.3f decompress=%.3f decode=%.3f "
+              "translate=%.3f classify=%.3f render=%.3f report=%.3f "
+              "write_ppm=%.3f accounted=%.3f unaccounted=%.3f\n",
+              enumerate_ms,
               lookup_sum, decomp_sum, decode_sum, translate_sum, classify_sum,
               render_sum, report_sum, write_ms, accounted, frame_ms - accounted);
   if (!stored.empty()) {

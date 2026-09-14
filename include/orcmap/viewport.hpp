@@ -1,18 +1,20 @@
 #pragma once
 
+#include <vector>
+
 #include "orcmap/geo.hpp"
 
 namespace orcmap {
 
-// Minimal map viewport: center, zoom, and output size. All geographic /
-// tile / screen transform math lives here, not in a graphics adapter.
+// Map viewport: center, zoom, and output size. Geographic / tile / screen
+// transform math lives here, not in a graphics adapter.
 //
-// PARTIAL:
-// - Overzoom (source tile z != viewport zoom) is rejected, not guessed.
-// - Antimeridian wrap is not applied: (tile.x - center.x) is a raw
-//   subtract. Shortest-world-distance wrap is a later Viewport slice
-//   together with visible-tile enumeration. This struct does not bake in
-//   a layout that would prevent that.
+// Overzoom (source tile z != viewport zoom) is rejected, not guessed.
+// X wraps the world (antimeridian). Y is clamped, never wrapped.
+//
+// Unique TileIds only: a tile that would appear twice under wrapping is
+// returned once. Extremely wide views of a wrapped world are not an
+// infinite scene graph -- see EnumerateVisibleTiles.
 //
 // tile_size_px is screen pixels per map tile at `zoom` (Web Mercator
 // convention defaults to 256). Tests may set it equal to the framebuffer
@@ -40,6 +42,20 @@ struct TileScreenMap {
 
 bool MakeTileScreenMap(const Viewport& viewport, TileId tile, uint32_t extent,
                        TileScreenMap* out);
+
+// Unique Web Mercator source tiles that intersect the viewport at
+// viewport.zoom (no overzoom). Order: north-to-south, then west-to-east
+// in screen space (wrapped X increases to the right).
+//
+// X indices wrap in [0, 2^zoom). Y indices outside [0, 2^zoom) are
+// dropped, not wrapped. Returns false and clears `out` if `out` is null,
+// zoom is invalid, or width/height/tile_size_px are <= 0.
+//
+// Does not consult map storage: a returned tile may be absent from a
+// pack. Duplicate TileIds are never emitted (z0 + a wide viewport yields
+// one 0/0/0, not five). A unique TileId is not instantiated at multiple
+// world copies; that is out of scope for embedded viewports.
+bool EnumerateVisibleTiles(const Viewport& viewport, std::vector<TileId>* out);
 
 // Cheap path after MakeTileScreenMap. Writes saturated int screen coords
 // (non-finite maps to 0). `map.valid` must be true.

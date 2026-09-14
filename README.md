@@ -25,7 +25,8 @@ translation, and the style system. An ESP-IDF compile/link smoke test
 exists at [`examples/generic-esp32`](examples/generic-esp32) and does
 **not** require M5GFX. A host framebuffer render proof exists (no M5GFX).
 M5GFX `DisplayTarget` is an optional exported adapter
-(`#include "orcmap/m5gfx/display_target.hpp"`). Viewport is PARTIAL.
+(`#include "orcmap/m5gfx/display_target.hpp"`). Viewport enumerates
+visible tiles (X wrap, no overzoom).
 Not yet built: overlays, cache, and a real on-device map draw with
 production packs. FeatureKind mapping is experimental, not a finalized
 tile schema. See [`STATUS.md`](STATUS.md) for the live
@@ -49,7 +50,7 @@ OrcSDR prototype this project supersedes.
 
 ```
 include/orcmap/        Public headers — the portable API
-src/core/              Geo math, tile addressing, PARTIAL Viewport
+src/core/              Geo math, tile addressing, Viewport enumeration
 src/storage/           Reserved; ByteSource interface lives in include/orcmap/
 src/tiles/             PMTiles reader, MVT decoder, bounded gzip decompress, MVT→Feature translation
 src/render/            Style system + FeatureTile renderer (host proof)

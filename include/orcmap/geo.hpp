@@ -23,6 +23,11 @@ struct TileId {
   uint8_t z;
   uint32_t x;
   uint32_t y;
+
+  constexpr bool operator==(const TileId& other) const {
+    return z == other.z && x == other.x && y == other.y;
+  }
+  constexpr bool operator!=(const TileId& other) const { return !(*this == other); }
 };
 
 // Fractional tile-space coordinates at a given zoom: integer part is the

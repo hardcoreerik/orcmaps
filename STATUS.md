@@ -17,8 +17,7 @@ host + consumer tests, provenance registry,
 `examples/generic-esp32` (no graphics framework), `examples/m5gfx`
 compile proof, host pack-inspect.
 
-**PARTIAL:** Viewport (prepared TileScreenMap; no overzoom, no
-antimeridian wrap, no visible-tile enumerator). Zoom 0..31.
+**PARTIAL:** Viewport overzoom is not implemented. Zoom 0..31.
 `tools/pack-builder` Springfield script only.
 
 **EXPERIMENTAL:** `orcmap::experimental::AssignFeatureKinds` (now
@@ -30,7 +29,7 @@ schema).
 validated. No on-device map exists.
 
 **PLANNED:** `adapters/esp_idf` ByteSource, text labels, polygon holes,
-overzoom, visible-tile enumeration. Brotli/zstd stay unsupported.
+overzoom. Brotli/zstd stay unsupported.
 
 **NOT FROZEN:** tile-content schema / stable FeatureKind mapping. Do not
 finalize OpenMapTiles, Shortbread, or a custom schema from this one
@@ -109,7 +108,9 @@ extract.
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **91 test functions, all passing**.
+- Host test suite: **101 test functions, all passing**.
+- `EnumerateVisibleTiles` (unique TileIds, X wrap, Y clamp).
+  `TileScreenMap` uses shortest wrapped X delta. Overzoom still rejected.
 - `RenderTarget::DrawLine` takes `width_px` from `MapPaint`. Shared
   stroke helper (`include/orcmap/stroke.hpp`). Label FeatureKinds are
   skipped (no placeholder dots).
@@ -143,16 +144,15 @@ extract.
 
 ## What is being worked on
 
-Nothing — shared line-width + label-skip slice at a stopping point.
-Not OrcSDR. Schema not frozen.
+Nothing — visible-tile enumeration at a stopping point. Not OrcSDR.
 
 ## Current blockers
 
 - M5GFX `DisplayTarget` exists; there is no on-device visual verification
   in this repo yet (compile proof + host pixels only).
 - Brotli/zstd tile compression is unsupported (`DecompressPayload` fails).
-- Viewport is PARTIAL (no overzoom, no antimeridian wrap, no visible-tile
-  set). Polygon holes are not subtracted. Text labels are not drawn.
+- Viewport enumerates visible tiles and wraps X; overzoom is still
+  rejected. Polygon holes are not subtracted. Text labels are not drawn.
 - No on-device pack open (`adapters/esp_idf` ByteSource) and no Tab5
   pixels. Host Springfield image is not an on-device map.
 - Several data sources are blocked on primary-source verification: NOAA
@@ -197,7 +197,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 91 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 101 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`
@@ -306,10 +306,9 @@ manifest entry to point at OrcMaps yet.
 
 ## Next 3-7 actions
 
-1. Production Viewport visible-tile enumeration (preview scaffolding
-   should not stay the tile picker).
-2. `adapters/esp_idf` ByteSource and the same PMTiles archive from SD.
-3. Do not freeze OpenMapTiles as the OrcMaps schema without review.
+1. `adapters/esp_idf` ByteSource and the same Springfield PMTiles archive
+   from SD (enumeration + renderer are host-proven).
+2. Do not freeze OpenMapTiles as the OrcMaps schema without review.
 
 Do not do this tranche: OrcSDR integration, a second graphics framework,
 overlay application features, pack marketplace UI.
@@ -321,8 +320,7 @@ workflow as their CI counterparts.
 
 ## Files / areas currently in motion
 
-None — line-width RenderTarget contract at a stopping point.
-OrcSDR not started.
+None — visible-tile enumeration at a stopping point. OrcSDR not started.
 
 ## Notes for the next development session
 
