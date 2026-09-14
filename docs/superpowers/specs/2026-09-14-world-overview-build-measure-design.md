@@ -22,7 +22,9 @@ cutoffs without publishing or hardware testing.
 
 ## Pack profile
 
-The checked-in Planetiler YAML profile is `orcmaps-overview-1`. It reads the
+Planetiler 0.10.2's YAML configuration cannot set a feature maximum zoom, so
+it cannot prevent 110m and 50m geometry from leaking into higher zooms. The
+checked-in minimal Java profile is therefore `orcmaps-overview-1`. It reads the
 seven selected Natural Earth themes at each of three scales and emits five
 generic MVT layers:
 
@@ -44,7 +46,8 @@ reinterpret or independently assert geopolitical positions.
 `build_world_overview.py` validates all 21 source archive hashes and required
 shapefile components, validates the Planetiler and Java versions, refuses
 existing outputs unless `--force` is explicit, and invokes Planetiler without
-`--download` to make `world-overview-z8.pmtiles`. It then invokes a caller-
+network flags to compile/run the profile and make `world-overview-z8.pmtiles`.
+It then invokes a caller-
 supplied, version-verified go-pmtiles v1.28.2 executable to extract z0-z6 and
 z0-z7.
 

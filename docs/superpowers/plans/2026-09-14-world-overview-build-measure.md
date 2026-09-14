@@ -4,7 +4,7 @@
 
 **Goal:** Build, render, and measure local z6/z7/z8 Natural Earth overview candidates while keeping OrcMaps graphics-adapter independent.
 
-**Architecture:** A small Planetiler YAML profile emits `orcmaps-overview-1` MVT into one z8 master; a standard-library Python orchestrator verifies fixed local inputs and invokes pinned host-only tools, then go-pmtiles derives z6/z7. OrcMaps adds one centralized profile predicate and profile-aware experimental classification, while existing generic host rendering supplies visual and timing evidence.
+**Architecture:** A small Planetiler Java profile emits `orcmaps-overview-1` MVT into one z8 master with exact per-source maximum zooms; a standard-library Python orchestrator verifies fixed local inputs and invokes pinned host-only tools, then go-pmtiles derives z6/z7. OrcMaps adds one centralized profile predicate and profile-aware experimental classification, while existing generic host rendering supplies visual and timing evidence.
 
 **Tech Stack:** C++17 OrcMaps core/tests, Python standard library, Planetiler 0.10.2, Java 21, go-pmtiles v1.28.2, PMTiles v3/MVT/gzip.
 
@@ -48,7 +48,8 @@
 ### Task 2: Add the profile and reproducible builder
 
 **Files:**
-- Create: `tools/pack-builder/orcmaps-overview-1.yml`
+- Create: `tools/pack-builder/WorldOverviewProfile.java`
+- Create: `tools/pack-builder/world_overview_profile.json`
 - Create: `tools/pack-builder/build_world_overview.py`
 - Create: `tests/test_world_overview_builder.py`
 - Modify: `tools/pack-builder/README.md`
@@ -59,10 +60,10 @@
 
 - [ ] Write tests with temporary source records/files and the committed tiny PMTiles fixture that prove hash/component rejection, the exact 110m/50m/10m zoom mapping, five required output layers, deterministic world identity, overwrite refusal, local-only commands, archive distributions, and manifest/candidate metadata.
 - [ ] Run the targeted Python tests and verify each new behavior fails for the intended missing implementation.
-- [ ] Add the smallest declarative YAML profile, using argument-based local paths and no URLs.
-- [ ] Implement the standard-library builder to validate inputs/tools, build z8 once, derive z6/z7, and write sidecars/evidence without networking.
+- [ ] Add the smallest Java profile plus JSON source table, using caller-supplied local paths and no URLs; compile it against the pinned Planetiler JAR.
+- [ ] Implement the standard-library builder to validate inputs/tools, compile/run the profile, build z8 once, derive z6/z7, and write sidecars/evidence without networking.
 - [ ] Run targeted tests until green, then all Python tests.
-- [ ] Run Planetiler's profile verifier against the committed YAML using only controlled local inputs.
+- [ ] Compile the profile and verify its declared source/zoom/layer table without reading network inputs.
 - [ ] Commit the focused profile/builder/test change.
 
 ### Task 3: Provision tools and build candidates locally

@@ -143,3 +143,23 @@ cmake --build build-pack-inspect --config Release
 build-pack-inspect/Release/orcmap_pack_inspect.exe header data/local/springfield-97477.pmtiles
 build-pack-inspect/Release/orcmap_pack_inspect.exe preview data/local/springfield-97477.pmtiles --out data/local/springfield-97477-orcsdr-dark.ppm
 ```
+
+## Natural Earth world overview
+
+`build_world_overview.py` builds one z0-z8 master from the already provisioned
+Natural Earth 5.1.2 files, then uses official go-pmtiles v1.28.2 to derive z7
+and z6 candidates. It validates the local source hashes, source record, Java,
+Planetiler, and go-pmtiles versions before running. It never downloads data or
+tools.
+
+```powershell
+python tools/pack-builder/build_world_overview.py `
+  --source-root data/local/world-overview/natural-earth/5.1.2 `
+  --planetiler-jar data/local/planetiler.jar `
+  --pmtiles-cli data/local/tools/go-pmtiles/v1.28.2/pmtiles.exe `
+  --dry-run
+```
+
+Remove `--dry-run` to build. Existing immutable outputs are refused unless
+`--force` is explicit. PMTiles, manifests, checksums, compiled classes, and
+renders remain under ignored `data/local/world-overview/build/`.
