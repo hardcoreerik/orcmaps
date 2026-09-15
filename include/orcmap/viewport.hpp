@@ -62,6 +62,17 @@ bool FitBounds(Viewport* viewport, const GeoBounds& bounds, int padding_px);
 // (bounds too small relative to the screen); callers should then fall back
 // to FitBounds, which always succeeds for valid bounds.
 bool FillBounds(Viewport* viewport, const GeoBounds& bounds);
+
+// Query form of FillBounds: the smallest zoom at which `bounds` fully covers
+// this viewport's width/height, WITHOUT moving the camera. Use it to derive a
+// zoom-out floor for a UI control -- below this zoom the screen must show
+// empty area, because no amount of panning can cover it from these bounds.
+//
+// Ignores any pack min_zoom/max_zoom; that clamp belongs to the caller, which
+// knows what is actually installed. Returns false when no zoom up to the
+// maximum can cover the viewport.
+bool MinFillZoom(const Viewport& viewport, const GeoBounds& bounds,
+                 uint8_t* out_zoom);
 bool ZoomAtScreenPoint(Viewport* viewport, double screen_x, double screen_y,
                        int zoom_delta);
 

@@ -450,6 +450,52 @@ uint8_t ActiveMaxZoom() {
   return 7;
 }
 
+// Zoom-out floor, derived from what is actually installed and from THIS
+// display's width/height -- not a per-board constant.
+//
+// Below this zoom no installed pack can cover 1280x600, so the screen is
+// guaranteed to show empty area however the user pans: the map visibly stops
+// filling. That is what "zooming out does not redraw to the full screen"
+// actually was -- the Springfield extract is 0.095 deg x 0.06 deg, which
+// covers 86.5% of this viewport at z14, 35.0% at z13, 8.8% at z12 and
+// effectively nothing below that. No render or clear step was failing.
+//
+// The floor is a property of the catalogue, so provisioning fixes it: with
+// the z0-7 world overview on the card the floor drops to z0 and the zoom-out
+// button reaches the whole globe. `g_zoom_floor_reason` records which case
+// produced the number so the UI can say so instead of just going inert.
+uint8_t g_zoom_floor = 0;
+const char* g_zoom_floor_reason = "";
+
+void RecomputeZoomFloor() {
+  orcmap::Viewport probe = g_viewport;
+  probe.width_px = g_map_w;
+  probe.height_px = g_map_h;
+
+  bool have = false;
+  uint8_t floor_zoom = 0;
+  for (const orcmap::PackManifest& m : g_catalog.Packs()) {
+    uint8_t fill = 0;
+    if (!orcmap::MinFillZoom(probe, m.bounds, &fill)) continue;
+    // A pack cannot serve a zoom it does not store.
+    if (fill > m.max_zoom) continue;
+    if (fill < m.min_zoom) fill = m.min_zoom;
+    if (!have || fill < floor_zoom) {
+      floor_zoom = fill;
+      have = true;
+    }
+  }
+
+  if (!have) {
+    g_zoom_floor = 0;
+    g_zoom_floor_reason = "no pack fills this screen";
+    return;
+  }
+  g_zoom_floor = floor_zoom;
+  g_zoom_floor_reason =
+      floor_zoom == 0 ? "" : "wider view needs a lower-zoom pack";
+}
+
 // ---------------------------------------------------------------------------
 // Rendering: the map frame goes through the shared harness pipeline, then
 // chrome is drawn. Chrome is never inside the measured region.
@@ -578,9 +624,16 @@ void DrawInfoPanel() {
   std::snprintf(line, sizeof(line), "Center: %.4f, %.4f", center.lat_deg,
                 center.lon_deg);
   put(kChromeDim, line);
-  std::snprintf(line, sizeof(line), "Zoom: %u  (max %u)",
-                orcmap::GetZoom(g_viewport), ActiveMaxZoom());
+  std::snprintf(line, sizeof(line), "Zoom: %u  (min %u, max %u)",
+                orcmap::GetZoom(g_viewport), g_zoom_floor, ActiveMaxZoom());
   put(kChromeDim, line);
+  if (g_zoom_floor > 0) {
+    // Says why the zoom-out button stops, so an inert control reads as a
+    // coverage limit rather than a broken redraw.
+    std::snprintf(line, sizeof(line), "Zoom-out limit: %s",
+                  g_zoom_floor_reason);
+    put(kChromeWarn, line);
+  }
   std::snprintf(line, sizeof(line), "Style: %s", g_style->id);
   put(kChromeDim, line);
   std::snprintf(line, sizeof(line), "Frame: %.0f ms  tiles %u/%u",
@@ -753,13 +806,19 @@ void HandleButtonTap(int x, int y) {
     if (g_world.manifest != nullptr) {
       FocusPack(*g_world.manifest);
     } else {
-      orcmap::SetZoom(&g_viewport, 0);
+      orcmap::SetZoom(&g_viewport, g_zoom_floor);
       orcmap::SetCenter(&g_viewport, 20.0, 0.0);
     }
     Redraw();
   } else if (HitButton(x, y, 190, 90)) {  // -
-    orcmap::ZoomOut(&g_viewport);
-    Redraw();
+    // Symmetric with the `+` clamp below. `+` stops where the pack has no
+    // more detail; `-` stops where no installed pack can still cover this
+    // display, which is the point past which the map stops filling the
+    // screen. Both limits are derived, neither is a board constant.
+    if (orcmap::GetZoom(g_viewport) > g_zoom_floor) {
+      orcmap::ZoomOut(&g_viewport);
+      Redraw();
+    }
   } else if (HitButton(x, y, 290, 90)) {  // +
     // Overzoom is rejected by the viewport, so stop at the active pack's
     // max zoom instead of producing an empty frame.
@@ -902,6 +961,9 @@ extern "C" void app_main() {
   g_viewport.width_px = g_map_w;
   g_viewport.height_px = g_map_h;
   g_viewport.tile_size_px = 256;
+  // Depends only on the catalogue and this display's map area, both fixed
+  // from here on, so it is computed once.
+  RecomputeZoomFloor();
   // Start on whichever installed pack can actually show something, framed
   // by the engine from that pack's own bounds. The example supplies only
   // the viewport size -- centre and zoom are derived, so this is correct
@@ -910,7 +972,7 @@ extern "C" void app_main() {
       have_world ? g_world.manifest : g_regional.manifest;
   if (initial == nullptr || !FocusPack(*initial)) {
     orcmap::SetCenter(&g_viewport, 20.0, 0.0);
-    orcmap::SetZoom(&g_viewport, 0);
+    orcmap::SetZoom(&g_viewport, g_zoom_floor);
   }
 
   vTaskDelay(pdMS_TO_TICKS(600));

@@ -391,6 +391,51 @@ void TestFillBoundsRejectsUnfillableBounds() {
   ORCMAP_EXPECT_TRUE(!orcmap::FillBounds(nullptr, {-1.0, -1.0, 1.0, 1.0}));
 }
 
+void TestMinFillZoomAgreesWithFillBoundsWithoutMoving() {
+  // The query form must report exactly the zoom FillBounds would pick, and
+  // must not touch the camera -- a UI derives a zoom-out floor from it while
+  // the user stays where they are.
+  const orcmap::GeoBounds springfield{-123.055, 44.030, -122.960, 44.090};
+  orcmap::Viewport v = MakeView(10.0, 20.0, 9, 1280, 600, 256);
+  uint8_t floor_zoom = 0;
+  ORCMAP_EXPECT_TRUE(orcmap::MinFillZoom(v, springfield, &floor_zoom));
+  ORCMAP_EXPECT_EQ(static_cast<int>(v.zoom), 9);
+  ORCMAP_EXPECT_NEAR(v.center_lat_deg, 10.0, 1e-9);
+  ORCMAP_EXPECT_NEAR(v.center_lon_deg, 20.0, 1e-9);
+
+  orcmap::Viewport filled = v;
+  ORCMAP_EXPECT_TRUE(orcmap::FillBounds(&filled, springfield));
+  ORCMAP_EXPECT_EQ(static_cast<int>(floor_zoom),
+                   static_cast<int>(filled.zoom));
+}
+
+void TestMinFillZoomFloorIsScreenAndCoverageDependent() {
+  // A whole-world pack still cannot cover a 1280 px-wide screen at z0: one
+  // z0 tile is 256 px. The floor is therefore a real limit, not an
+  // off-by-one -- and a small screen has a lower floor than a large one.
+  const orcmap::GeoBounds world{-180.0, -85.0, 180.0, 85.0};
+  orcmap::Viewport tab5 = MakeView(0.0, 0.0, 0, 1280, 600, 256);
+  orcmap::Viewport lilygo = MakeView(0.0, 0.0, 0, 320, 170, 256);
+  uint8_t tab5_floor = 99;
+  uint8_t lilygo_floor = 99;
+  ORCMAP_EXPECT_TRUE(orcmap::MinFillZoom(tab5, world, &tab5_floor));
+  ORCMAP_EXPECT_TRUE(orcmap::MinFillZoom(lilygo, world, &lilygo_floor));
+  ORCMAP_EXPECT_TRUE(tab5_floor > 0);
+  ORCMAP_EXPECT_TRUE(lilygo_floor < tab5_floor);
+
+  // A tiny extract yields a much higher floor on the same screen, which is
+  // exactly why zooming out below it cannot fill the display.
+  const orcmap::GeoBounds springfield{-123.055, 44.030, -122.960, 44.090};
+  uint8_t extract_floor = 0;
+  ORCMAP_EXPECT_TRUE(orcmap::MinFillZoom(tab5, springfield, &extract_floor));
+  ORCMAP_EXPECT_TRUE(extract_floor > tab5_floor);
+
+  uint8_t unused = 0;
+  ORCMAP_EXPECT_TRUE(!orcmap::MinFillZoom(tab5, {0.0, 0.0, 0.0, 0.0},
+                                          &unused));
+  ORCMAP_EXPECT_TRUE(!orcmap::MinFillZoom(tab5, springfield, nullptr));
+}
+
 void TestProjectionRoundTripAfterPanAndZoom() {
   orcmap::Viewport v = MakeView(44.05, -123.022, 14, 320, 170, 256);
   ORCMAP_EXPECT_TRUE(orcmap::PanByPixels(&v, 17.0, -9.0));
@@ -443,6 +488,8 @@ void RunViewportTests() {
   TestFillBoundsCentresAndCoversViewport();
   TestFillBoundsIsScreenDependent();
   TestFillBoundsRejectsUnfillableBounds();
+  TestMinFillZoomAgreesWithFillBoundsWithoutMoving();
+  TestMinFillZoomFloorIsScreenAndCoverageDependent();
   TestFitBoundsWorldOregonAndSpringfield();
   TestProjectionRoundTripAfterPanAndZoom();
   TestZoomAtScreenPointPreservesAnchor();

@@ -11,7 +11,7 @@ Implemented controls:
 - `SetViewportSize`
 - `PanByPixels`
 - `GetVisibleBounds`
-- `FitBounds` / `FillBounds`
+- `FitBounds` / `FillBounds` / `MinFillZoom`
 - `ProjectLatLon` / `ScreenToLatLon`
 - `ZoomAtScreenPoint`
 
@@ -43,6 +43,21 @@ sized map without a per-board centre or zoom constant. The same pack framed
 on a 1280x600 display and a 320x170 display yields the same centre and
 different zooms.
 
+`MinFillZoom` is the query form of `FillBounds`: it reports the zoom
+`FillBounds` would choose **without moving the camera**. Applications use it to
+derive a zoom-out floor for a UI control, because below that zoom the screen
+must show empty area no matter how the user pans — the installed bounds simply
+cannot cover the display. It ignores pack `min_zoom`/`max_zoom`; clamping to
+what is actually stored belongs to the caller, which knows the catalogue.
+
+The floor is a real limit and not an off-by-one: one z0 tile is 256 px, so even
+a whole-world pack cannot cover a 1280 px-wide map area until z3. A small
+extract yields a much higher floor on the same screen — the 0.095 deg x
+0.06 deg Springfield extract first covers 1280x600 at z15, and covers 86.5% of
+it at z14, 35.0% at z13 and 8.8% at z12. A UI that lets zoom-out run past the
+floor is not failing to redraw; it is correctly showing that no installed pack
+reaches that far out. Provisioning, not rendering, is what lowers the floor.
+
 `ZoomAtScreenPoint` preserves the geographic point below the supplied screen
 coordinate. This is the portable behavior needed by touch, mouse-wheel, and
 button-driven map applications; no UI widgets live in OrcMaps core.
@@ -50,6 +65,8 @@ button-driven map applications; no UI widgets live in OrcMaps core.
 Host tests cover z0 world bounds, repeated zoom limits, antimeridian pan,
 Mercator clamping, world/Oregon/Springfield fit, `FillBounds` centring and
 genuine coverage, `FillBounds` screen-dependence across two display sizes,
-unfillable bounds, tiny displays, projection round trips, and anchored zoom.
+unfillable bounds, tiny displays, projection round trips, anchored zoom,
+`MinFillZoom` agreeing with `FillBounds` while leaving the camera untouched,
+and floors that rise as coverage shrinks or the screen grows.
 Touch drag/zoom bindings are physically exercised by the Tab5 demo; no
 automated physical touch-control test exists.

@@ -205,10 +205,11 @@ bool FitBounds(Viewport* viewport, const GeoBounds& bounds, int padding_px) {
   return SetCenter(viewport, center.lat_deg, center_lon);
 }
 
-bool FillBounds(Viewport* viewport, const GeoBounds& bounds) {
-  if (viewport == nullptr || !ValidBounds(bounds) ||
-      viewport->tile_size_px <= 0 || viewport->width_px <= 0 ||
-      viewport->height_px <= 0) {
+bool MinFillZoom(const Viewport& viewport, const GeoBounds& bounds,
+                 uint8_t* out_zoom) {
+  if (out_zoom == nullptr || !ValidBounds(bounds) ||
+      viewport.tile_size_px <= 0 || viewport.width_px <= 0 ||
+      viewport.height_px <= 0) {
     return false;
   }
 
@@ -217,7 +218,6 @@ bool FillBounds(Viewport* viewport, const GeoBounds& bounds) {
   if (bounds.min_lon_deg == -180.0 && bounds.max_lon_deg == 180.0) {
     lon_span = 360.0;
   }
-  const double center_lon = WrapLongitudeDeg(bounds.min_lon_deg + lon_span * 0.5);
   const double north_y = LatLonToTileCoord(bounds.max_lat_deg, 0.0, 0).y;
   const double south_y = LatLonToTileCoord(bounds.min_lat_deg, 0.0, 0).y;
   const double y_span = south_y - north_y;
@@ -228,22 +228,40 @@ bool FillBounds(Viewport* viewport, const GeoBounds& bounds) {
   for (int zoom = 0; zoom <= kMaxZoom; ++zoom) {
     const double scale =
         static_cast<double>(TilesPerAxis(static_cast<uint8_t>(zoom))) *
-        viewport->tile_size_px;
+        viewport.tile_size_px;
     const bool covers_width =
-        static_cast<double>(viewport->width_px) <= lon_span / 360.0 * scale;
+        static_cast<double>(viewport.width_px) <= lon_span / 360.0 * scale;
     const bool covers_height =
-        static_cast<double>(viewport->height_px) <= y_span * scale;
+        static_cast<double>(viewport.height_px) <= y_span * scale;
     if (covers_width && covers_height) {
-      SetZoom(viewport, zoom);
-      const double n = static_cast<double>(TilesPerAxis(viewport->zoom));
-      const LatLon center = TileCoordToLatLon(
-          {LatLonToTileCoord(0.0, center_lon, viewport->zoom).x,
-           (north_y + south_y) * 0.5 * n},
-          viewport->zoom);
-      return SetCenter(viewport, center.lat_deg, center_lon);
+      *out_zoom = static_cast<uint8_t>(zoom);
+      return true;
     }
   }
   return false;
+}
+
+bool FillBounds(Viewport* viewport, const GeoBounds& bounds) {
+  if (viewport == nullptr) return false;
+  uint8_t zoom = 0;
+  if (!MinFillZoom(*viewport, bounds, &zoom)) return false;
+
+  double lon_span = bounds.max_lon_deg - bounds.min_lon_deg;
+  if (lon_span < 0.0) lon_span += 360.0;
+  if (bounds.min_lon_deg == -180.0 && bounds.max_lon_deg == 180.0) {
+    lon_span = 360.0;
+  }
+  const double center_lon = WrapLongitudeDeg(bounds.min_lon_deg + lon_span * 0.5);
+  const double north_y = LatLonToTileCoord(bounds.max_lat_deg, 0.0, 0).y;
+  const double south_y = LatLonToTileCoord(bounds.min_lat_deg, 0.0, 0).y;
+
+  if (!SetZoom(viewport, zoom)) return false;
+  const double n = static_cast<double>(TilesPerAxis(viewport->zoom));
+  const LatLon center = TileCoordToLatLon(
+      {LatLonToTileCoord(0.0, center_lon, viewport->zoom).x,
+       (north_y + south_y) * 0.5 * n},
+      viewport->zoom);
+  return SetCenter(viewport, center.lat_deg, center_lon);
 }
 
 bool ZoomAtScreenPoint(Viewport* viewport, double screen_x, double screen_y,

@@ -1,8 +1,9 @@
 # Tab5 interactive OrcMaps demo — hardware evidence
 
 **This is a real physical M5Stack Tab5 result, not a host simulation.**
-Status: **hardware-verified interactive demo**. Two runs recorded below: the
-first exposed a framing bug, the second confirms the fix.
+Status: **hardware-verified interactive demo**. Three runs recorded below: the
+first exposed a framing bug, the second confirms that fix, and the third
+follows a user report that zooming out stopped filling the screen.
 
 ## Device and build
 
@@ -92,6 +93,78 @@ refused. An earlier iteration showed a blocking `DETAIL NOT INSTALLED FOR THIS
 VIEW` message at z14, which discarded a view that was 86.5% real data -- worse
 than the original demo. That was reverted.
 
+## Zoom-out fill investigation (third hardware run)
+
+User report while using the flashed demo: *"Zooming in and out does not always
+redraw the map to the full 1280x720 of the tab. at Z13 and lower it doesnt
+fill."*
+
+**This was not a redraw or clear defect.** `ClearMapBackground` fills the whole
+target and the background rule is visible at every zoom, so each frame was
+painted in full. What varied was how much of the painted area contained map
+data. Measured against the only pack installed on this card (the Springfield
+extract, 0.095 deg x 0.06 deg) on the 1280x600 map area:
+
+| zoom | viewport lon span | pack coverage of screen |
+|---:|---:|---:|
+| 15 | 0.0549 | **100%** |
+| 14 | 0.1099 | 86.5% |
+| 13 | 0.2197 | 35.0% |
+| 12 | 0.4395 | 8.8% |
+| 11 | 0.8789 | 2.2% |
+| <= 10 | >= 1.7578 | < 1% |
+
+So z13 was the zoom at which the shrinking island of real data became obvious,
+which matches the report exactly. `ZoomOut` had **no lower clamp** at all, so
+the button kept descending toward a screen that was almost entirely background.
+
+Two contributing facts, both already recorded as gaps: the world overview pack
+is absent from this card, and it stops at z7 regardless, so zooms 8-12 have no
+installed coverage for this area at any time.
+
+Fix, keeping the limit engine-derived rather than a per-board constant:
+
+- `orcmap::MinFillZoom()` added as the query form of `FillBounds` — the zoom
+  `FillBounds` would pick, without moving the camera.
+- The demo derives a zoom floor from the catalogue and this display's map area
+  (`RecomputeZoomFloor`), clamping each pack's fill zoom to what it stores, and
+  `-` now stops there. This is symmetric with the existing `+` clamp at the
+  active pack's `max_zoom`.
+- The info panel reports `Zoom: n (min f, max m)` plus the reason, so a control
+  that stops moving reads as a coverage limit instead of a broken redraw.
+
+On this card the floor is **z15**, so `-` is inert — the honest consequence of
+a card holding one small extract. With the built z0-7 world overview copied to
+`/orcmaps/world-overview.pmtiles` the floor drops to **z3** (one z0 tile is
+256 px, so 1280 px of map area is not covered by the whole world until z3).
+Provisioning, not rendering, is what unlocks zoom-out here.
+
+Third run, same device and card, after the fix:
+
+| Field | Value |
+|---|---:|
+| firmware | `orcmap_m5stack_tab5.bin`, 639,248 bytes (39% of app partition free) |
+| app version | `4184fb4-dirty` |
+| centre | 44.060008, -123.007500 |
+| zoom | 15 (engine-derived), floor z15, max z15 |
+| tiles visible / present / missing | 18 / 18 / **0** |
+| features | 1,394 |
+| bytes stored / decompressed | 429,855 / 655,589 |
+| lookup / inflate / decode | 276.746 / 70.619 / 448.215 ms |
+| translate / classify / render | 114.815 / 2.363 / 289.947 ms |
+| **frame total** | **1,301.201 ms** |
+| internal min / largest | 145,019 / 253,952 |
+| PSRAM min / largest | 29,352,660 / 29,360,128 |
+| report file | `/sd/orcmaps/orcmaps-benchmark-0013.jsonl` |
+| result | PASS |
+
+Unchanged from the second run within noise (1,301.201 ms vs 1,299.126 ms); the
+fix touches control limits, not the render pipeline.
+
+**Not yet recorded:** the clamped `-` button and the new info-panel reason line
+have not been physically photographed, and the z3 floor with a world pack
+installed is arithmetic plus a host test, not a hardware observation.
+
 ## Comparability warning
 
 This is **not** directly comparable to the earlier ~4.4 s (previously 11.3 s)
@@ -136,6 +209,7 @@ scenarios bind their pack explicitly rather than relaxing any coverage rule.
 | Measured frame emitted (serial + numbered SD JSONL) | PASS |
 | Full-coverage render at engine-derived zoom | PASS (18/18 tiles, z15) |
 | Centre matches extract centre | PASS (44.060008, -123.007500) |
+| Catalogue-derived zoom-out floor | IMPLEMENTED, z15 on this card, NOT PHOTOGRAPHED |
 | Partial-coverage rendering + label | IMPLEMENTED, NOT YET PHOTOGRAPHED |
 | Touch pan / zoom / style / info physically exercised | NOT YET RECORDED |
 | World -> regional transition on device | NOT YET RECORDED (world pack absent) |
