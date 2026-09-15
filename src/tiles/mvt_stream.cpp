@@ -171,6 +171,36 @@ bool StreamMvtTile(Compression compression, CompressedChunkReader reader,
                    const MvtStreamOptions& options,
                    MvtStreamScratch* scratch) {
   if (scratch == nullptr || options.feature_sink == nullptr) return false;
+
+  // Trim on EVERY exit, including a failed tile and a thrown bad_alloc.
+  //
+  // This was originally a few lines at the end of the function, and that was
+  // a bug with teeth: on a board where a dense tile runs out of memory, the
+  // exception unwound straight past the trim, so the scratch kept whatever
+  // huge geometry it had grown. Free heap fell from 137,676 bytes to 3,364
+  // after one frame and every later tile was refused. Reuse inside a tile is
+  // worth having; carrying it out of a tile -- especially a failed one -- is
+  // not.
+  struct TrimOnExit {
+    MvtStreamScratch* scratch;
+    ~TrimOnExit() {
+      size_t retained_points = 0;
+      for (const Path& path : scratch->feature.geometry.paths) {
+        retained_points += path.capacity();
+      }
+      if (retained_points > kRetainedGeometryPoints) {
+        std::vector<Path>().swap(scratch->feature.geometry.paths);
+      }
+      if (scratch->feature_bytes.capacity() > kMaxRetainedFeatureBytes) {
+        std::vector<uint8_t> trimmed(scratch->feature_bytes);
+        trimmed.swap(scratch->feature_bytes);
+      }
+      // Layer tables belong to one tile only.
+      scratch->layers.clear();
+      scratch->layers.shrink_to_fit();
+    }
+  } trim{scratch};
+
   scratch->layers.clear();
 
   // PASS 1: tables only.
@@ -222,20 +252,6 @@ bool StreamMvtTile(Compression compression, CompressedChunkReader reader,
       return false;
     }
   }
-  // Release oversized buffers now that the tile is done. Within a tile the
-  // retained capacity is what keeps a dense tile from churning; across
-  // tiles it would simply hold memory the next tile needs.
-  size_t retained_points = 0;
-  for (const Path& path : scratch->feature.geometry.paths) {
-    retained_points += path.capacity();
-  }
-  if (retained_points > kRetainedGeometryPoints) {
-    std::vector<Path>().swap(scratch->feature.geometry.paths);
-  }
-  if (scratch->feature_bytes.capacity() > kMaxRetainedFeatureBytes) {
-    std::vector<uint8_t>(scratch->feature_bytes).swap(scratch->feature_bytes);
-  }
-
   // Both passes must agree on the layer count, or the tile changed under us.
   return layer_index == scratch->layers.size();
 }

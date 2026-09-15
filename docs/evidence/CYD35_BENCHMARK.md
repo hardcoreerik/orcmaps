@@ -450,3 +450,57 @@ point representation (both types are two int32s while an extent fits an
 int16), or build packs whose features are sized for a 480x320 screen. The
 first is an engine change worth doing anyway; the second is the reason these
 particular packs were never right for this hardware.
+
+## Removing the command intermediate: Oregon 8 of 9, Springfield renders
+
+Profiling the memory path again found an intermediate I had not accounted
+for. `ParseFeatureFields` expanded the packed geometry command stream into a
+`std::vector<uint32_t>` — **one uint32 per varint, about 18,000 of them for
+the densest feature in these packs, roughly 72 KiB** — which then coexisted
+with both the staged feature bytes and the decoded points.
+
+`DecodeGeometryFromPacked` now decodes the command stream straight from the
+tile bytes through a varint cursor, so that intermediate never exists. The
+collected-vector path is kept only for the unpacked encoding (which no real
+writer emits) and is selected automatically.
+
+### A bug with teeth: the trim had to be exception-safe
+
+The inter-tile trim was a few lines at the end of `StreamMvtTile`. On this
+board a dense tile runs out of memory and throws, and the exception unwound
+**straight past the trim** — so the scratch kept whatever oversized geometry
+it had grown at the moment of failure. Free heap fell from 138,628 bytes to
+**3,364** after a single frame and every later tile was refused, which read
+as a regression from the change that was actually helping.
+
+It is an RAII guard now, so it runs on success, on failure, and on unwind.
+Reuse within a tile is worth having; carrying it out of a tile — especially a
+failed one — is not.
+
+### Measured on the device
+
+| | previous | now |
+|---|---|---|
+| world z1 | 4 of 4, 632 features | **4 of 4, 632 features** |
+| oregon z7 | 7 of 9, 641 features | **8 of 9, 756 features** |
+| springfield z13 | 0 of 6 | **2 of 6, 534 features** |
+| free heap | 121,284 | 138,628 |
+
+Springfield z13 renders for the first time. Oregon is one tile short of
+complete.
+
+### Honest caveat: this now runs at the edge
+
+`internal_min` dips to **432 bytes**. Nothing crashed across these runs, and
+an out-of-memory tile is still a recorded skip rather than a fault, but a
+few hundred bytes of headroom is not a margin — the SD stack and display
+driver allocate too. The heap floor guards the *start* of a tile; the peak
+happens during it, so the floor cannot prevent this on its own.
+
+The remaining lever is the point representation: `Point` and `MvtPoint` are
+each two `int32`s, while an MVT extent of 4096 (plus the buffer a tile
+carries) fits comfortably in an `int16`. Halving them would halve every
+decoded geometry, which is the dominant cost in the tiles that still fail —
+and would restore real headroom rather than spending the last of it. It
+needs a range check so an unusual extent is refused rather than silently
+truncated.

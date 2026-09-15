@@ -257,13 +257,118 @@ bool DecodeGeometryInto(const std::vector<uint32_t>& commands,
   return true;
 }
 
+// Reads the geometry command stream straight out of its packed bytes,
+// decoding as it goes.
+//
+// The collected-commands version of this held one uint32 per varint: about
+// 18,000 of them -- 72 KiB -- for the densest feature in this project's
+// packs, on top of the decoded points themselves. On a board with ~100 KiB
+// of usable heap that intermediate was the difference between drawing a tile
+// and refusing it.
+class PackedVarints {
+ public:
+  PackedVarints(const uint8_t* data, size_t length)
+      : data_(data), length_(length) {}
+
+  bool AtEnd() const { return pos_ >= length_; }
+
+  bool Next(uint32_t* out) {
+    uint64_t result = 0;
+    int shift = 0;
+    while (pos_ < length_) {
+      const uint8_t byte = data_[pos_++];
+      result |= static_cast<uint64_t>(byte & 0x7f) << shift;
+      if ((byte & 0x80) == 0) {
+        *out = static_cast<uint32_t>(result);
+        return true;
+      }
+      shift += 7;
+      if (shift > 63) return false;
+    }
+    return false;
+  }
+
+ private:
+  const uint8_t* data_;
+  size_t length_;
+  size_t pos_ = 0;
+};
+
+// As DecodeGeometryInto, but pulling commands from packed bytes. Same
+// command semantics; the ring reuse is identical.
+template <typename RingVector>
+bool DecodeGeometryFromPacked(const uint8_t* data, size_t length,
+                              MvtGeomType geom_type, RingVector* out) {
+  using RingType = typename RingVector::value_type;
+  using PointType = typename RingType::value_type;
+
+  size_t used = 0;
+  const auto open_ring = [&]() -> RingType& {
+    if (used < out->size()) {
+      (*out)[used].clear();
+    } else {
+      out->emplace_back();
+    }
+    return (*out)[used++];
+  };
+
+  PackedVarints in(data, length);
+  int32_t cx = 0, cy = 0;
+  uint32_t cmd_int = 0;
+  while (!in.AtEnd()) {
+    if (!in.Next(&cmd_int)) return false;
+    const uint32_t cmd_id = cmd_int & 0x7;
+    const uint32_t count = cmd_int >> 3;
+
+    if (cmd_id == 1) {  // MoveTo
+      if (geom_type == MvtGeomType::kPoint) {
+        if (used == 0) open_ring();
+        RingType& ring = (*out)[used - 1];
+        for (uint32_t k = 0; k < count; ++k) {
+          uint32_t dx = 0, dy = 0;
+          if (!in.Next(&dx) || !in.Next(&dy)) return false;
+          cx += static_cast<int32_t>(ZigZagDecode(dx));
+          cy += static_cast<int32_t>(ZigZagDecode(dy));
+          ring.push_back(PointType{cx, cy});
+        }
+      } else {
+        for (uint32_t k = 0; k < count; ++k) {
+          uint32_t dx = 0, dy = 0;
+          if (!in.Next(&dx) || !in.Next(&dy)) return false;
+          cx += static_cast<int32_t>(ZigZagDecode(dx));
+          cy += static_cast<int32_t>(ZigZagDecode(dy));
+          open_ring().push_back(PointType{cx, cy});
+        }
+      }
+    } else if (cmd_id == 2) {  // LineTo
+      if (used == 0) return false;
+      RingType& ring = (*out)[used - 1];
+      for (uint32_t k = 0; k < count; ++k) {
+        uint32_t dx = 0, dy = 0;
+        if (!in.Next(&dx) || !in.Next(&dy)) return false;
+        cx += static_cast<int32_t>(ZigZagDecode(dx));
+        cy += static_cast<int32_t>(ZigZagDecode(dy));
+        ring.push_back(PointType{cx, cy});
+      }
+    } else if (cmd_id == 7) {  // ClosePath
+      if (used == 0 || count != 1) return false;
+    } else {
+      return false;
+    }
+  }
+  out->resize(used);
+  return true;
+}
+
 // --- Feature ---------------------------------------------------------------
 
 // Walks one Feature message's fields into `id`, `type` and the two packed
 // arrays. Shared by both destinations so the wire handling exists once.
 bool ParseFeatureFields(const uint8_t* data, size_t length, uint64_t* id,
                         MvtGeomType* type, std::vector<uint32_t>* tags_out,
-                        std::vector<uint32_t>* geometry_out) {
+                        std::vector<uint32_t>* geometry_out,
+                        const uint8_t** packed_geometry,
+                        size_t* packed_geometry_len) {
   Reader r{data, length};
   std::vector<uint32_t>& tags = *tags_out;
   std::vector<uint32_t>& geometry_commands = *geometry_out;
@@ -271,6 +376,10 @@ bool ParseFeatureFields(const uint8_t* data, size_t length, uint64_t* id,
   geometry_commands.clear();
   *id = 0;
   *type = MvtGeomType::kUnknown;
+  if (packed_geometry != nullptr) {
+    *packed_geometry = nullptr;
+    *packed_geometry_len = 0;
+  }
 
   while (!r.AtEnd()) {
     uint32_t field_number, wire_type;
@@ -314,11 +423,33 @@ bool ParseFeatureFields(const uint8_t* data, size_t length, uint64_t* id,
           const uint8_t* packed_data;
           size_t packed_len;
           if (!r.ReadLengthDelimited(&packed_data, &packed_len)) return false;
-          Reader packed{packed_data, packed_len};
-          while (!packed.AtEnd()) {
-            uint64_t v;
-            if (!packed.ReadVarint(&v)) return false;
-            geometry_commands.push_back(static_cast<uint32_t>(v));
+          // Packed is the encoding every real writer emits. Remember the
+          // range so the caller can decode it in place; expanding it into a
+          // uint32 per varint is the intermediate this avoids. A second
+          // packed run would break in-place decoding, so that falls back to
+          // collection below.
+          if (packed_geometry != nullptr && *packed_geometry == nullptr &&
+              geometry_commands.empty()) {
+            *packed_geometry = packed_data;
+            *packed_geometry_len = packed_len;
+          } else {
+            if (packed_geometry != nullptr && *packed_geometry != nullptr) {
+              // Two packed runs: expand the first, then continue collecting.
+              Reader first{*packed_geometry, *packed_geometry_len};
+              while (!first.AtEnd()) {
+                uint64_t v;
+                if (!first.ReadVarint(&v)) return false;
+                geometry_commands.push_back(static_cast<uint32_t>(v));
+              }
+              *packed_geometry = nullptr;
+              *packed_geometry_len = 0;
+            }
+            Reader packed{packed_data, packed_len};
+            while (!packed.AtEnd()) {
+              uint64_t v;
+              if (!packed.ReadVarint(&v)) return false;
+              geometry_commands.push_back(static_cast<uint32_t>(v));
+            }
           }
         } else if (wire_type == 0) {
           uint64_t v;
@@ -342,8 +473,10 @@ bool DecodeFeature(const uint8_t* data, size_t length,
                    const std::vector<MvtValue>& layer_values, MvtFeature* out) {
   std::vector<uint32_t> tags;
   std::vector<uint32_t> geometry_commands;
+  const uint8_t* packed = nullptr;
+  size_t packed_len = 0;
   if (!ParseFeatureFields(data, length, &out->id, &out->geom_type, &tags,
-                          &geometry_commands)) {
+                          &geometry_commands, &packed, &packed_len)) {
     return false;
   }
   for (size_t t = 0; t < tags.size(); t += 2) {
@@ -355,6 +488,10 @@ bool DecodeFeature(const uint8_t* data, size_t length,
     out->attribute_keys.push_back(layer_keys[key_index]);
     out->attribute_values.push_back(layer_values[value_index]);
   }
+  if (packed != nullptr) {
+    return DecodeGeometryFromPacked(packed, packed_len, out->geom_type,
+                                    &out->geometry);
+  }
   return DecodeGeometryInto(geometry_commands, out->geom_type, &out->geometry);
 }
 
@@ -365,8 +502,10 @@ bool DecodeFeatureAsFeature(const uint8_t* data, size_t length,
                             FeatureParseScratch* scratch, Feature* out) {
   if (scratch == nullptr || out == nullptr) return false;
   MvtGeomType type = MvtGeomType::kUnknown;
+  const uint8_t* packed = nullptr;
+  size_t packed_len = 0;
   if (!ParseFeatureFields(data, length, &out->id, &type, &scratch->tags,
-                          &scratch->geometry)) {
+                          &scratch->geometry, &packed, &packed_len)) {
     return false;
   }
 
@@ -397,7 +536,13 @@ bool DecodeFeatureAsFeature(const uint8_t* data, size_t length,
     default: out->geometry.type = GeomType::kUnknown; break;
   }
   // Rings are reused in place by the decoder, so the Paths keep their point
-  // buffers between features.
+  // buffers between features. The packed path decodes the command stream
+  // straight from the tile bytes, which is what keeps a dense feature's
+  // 72 KiB command intermediate from existing at all.
+  if (packed != nullptr) {
+    return DecodeGeometryFromPacked(packed, packed_len, type,
+                                    &out->geometry.paths);
+  }
   return DecodeGeometryInto(scratch->geometry, type, &out->geometry.paths);
 }
 
