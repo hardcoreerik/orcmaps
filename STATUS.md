@@ -302,7 +302,7 @@ python -m unittest discover -s tests -p 'test_data_provenance.py'
 ```
 
 Results as of this writing: both checkers report `0 errors` against the
-real repository; 24 documentation-truth unit tests pass, 28
+real repository; 24 documentation-truth unit tests pass, 34
 data-provenance unit tests pass. These Python counts **are** now verified
 by Documentation Truth (`_check_python_test_count`), which recounts every
 `tests/test_*.py` suite and fails on a stale number. That check exists

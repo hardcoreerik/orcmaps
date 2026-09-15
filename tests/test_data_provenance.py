@@ -188,6 +188,82 @@ class DataProvenanceTests(unittest.TestCase):
         )
         self.assertEqual([], self.report().errors)
 
+    def openmaptiles_manifest(self, **overrides):
+        """A well-formed OpenMapTiles-schema manifest, complete by default."""
+        manifest = {
+            "pack_class": "open",
+            "schema_version": "openmaptiles-3.16",
+            "sources": [
+                {"provenance_id": "example-source"},
+                {"provenance_id": "openmaptiles"},
+            ],
+            "required_attribution": [
+                "© OpenMapTiles",
+                "© OpenStreetMap contributors",
+            ],
+            "attribution_links": [
+                "https://openmaptiles.org/",
+                "https://www.openstreetmap.org/copyright",
+            ],
+        }
+        manifest.update(overrides)
+        return manifest
+
+    def write_openmaptiles_pair(self, **overrides):
+        self.write_record("example-source.json", valid_record())
+        self.write_record("openmaptiles.json", valid_record(id="openmaptiles"))
+        self.write_manifest("example.manifest.json",
+                            self.openmaptiles_manifest(**overrides))
+
+    def test_complete_openmaptiles_manifest_passes(self):
+        self.write_openmaptiles_pair()
+        self.assertEqual([], self.report().errors)
+
+    def test_openmaptiles_schema_requires_openmaptiles_provenance(self):
+        # The real defect this gate exists to catch: an OpenMapTiles-schema
+        # pack crediting only the underlying data source.
+        self.write_openmaptiles_pair(
+            sources=[{"provenance_id": "example-source"}])
+        self.assertTrue(any(item.code == "missing-schema-provenance"
+                            for item in self.report().errors))
+
+    def test_openmaptiles_schema_requires_visible_credit(self):
+        self.write_openmaptiles_pair(
+            required_attribution=["© OpenStreetMap contributors"])
+        self.assertTrue(any(item.code == "missing-schema-attribution"
+                            for item in self.report().errors))
+
+    def test_openmaptiles_schema_requires_attribution_link(self):
+        self.write_openmaptiles_pair(
+            attribution_links=["https://www.openstreetmap.org/copyright"])
+        self.assertTrue(any(item.code == "missing-schema-attribution-link"
+                            for item in self.report().errors))
+
+    def test_double_encoded_attribution_is_rejected(self):
+        # "(c)" written as UTF-8 then re-read as Latin-1 becomes "A(c)". It
+        # reaches the device screen, so it is a compliance bug.
+        self.write_openmaptiles_pair(
+            required_attribution=["Â© OpenMapTiles",
+                                  "Â© OpenStreetMap contributors"])
+        self.assertTrue(any(item.code == "mangled-attribution-encoding"
+                            for item in self.report().errors))
+
+    def test_orcmaps_overview_schema_owes_no_openmaptiles_credit(self):
+        # Natural Earth through an OrcMaps schema must NOT be forced to
+        # credit OpenMapTiles.
+        self.write_record("example-source.json", valid_record())
+        self.write_manifest(
+            "example.manifest.json",
+            {
+                "pack_class": "clean",
+                "schema_version": "orcmaps-overview-1",
+                "sources": [{"provenance_id": "example-source"}],
+                "required_attribution": [],
+                "attribution_links": [],
+            },
+        )
+        self.assertEqual([], self.report().errors)
+
     def test_invalid_manifest_json_fails(self):
         self.write_record("example-source.json", valid_record())
         path = self.root / "data" / "packs" / "broken.manifest.json"

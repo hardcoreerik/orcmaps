@@ -1,0 +1,29 @@
+{
+  "id": "openmaptiles",
+  "name": "OpenMapTiles schema and tile grant",
+  "publisher": "OpenMapTiles team / MapTiler",
+  "source": {
+    "url": "https://github.com/openmaptiles/openmaptiles/#license",
+    "retrieved": "2026-09-14"
+  },
+  "rights": {
+    "license": "CC BY 4.0 grant from the OpenMapTiles team covering vector tiles produced with the OpenMapTiles schema; requires visible credit",
+    "license_class": "PERMISSIVE_ATTRIBUTION",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true,
+    "modification_allowed": true,
+    "attribution_required": true,
+    "share_alike_required": false,
+    "source_disclosure_required": false
+  },
+  "evidence": {
+    "rights_url": "https://github.com/openmaptiles/openmaptiles/#license",
+    "reviewed_date": "2026-09-14",
+    "confidence": "CONFIRMED"
+  },
+  "policy": {
+    "official_pack_allowed": true,
+    "clean_pack_allowed": false
+  },
+  "notes": "This record covers the SCHEMA/TILE-PRODUCTION layer, not map data. It applies to any pack whose schema_version starts with 'openmaptiles-', and NOT to the Natural Earth-only 'orcmaps-overview-1' profile, which uses an OrcMaps schema and carries no OpenMapTiles obligation. Required credit form: '(c) OpenMapTiles' linking to https://openmaptiles.org/ ALONGSIDE the underlying data credit '(c) OpenStreetMap contributors' linking to https://www.openstreetmap.org/copyright -- both are required, neither replaces the other, because they cover different layers (tile production vs the underlying database). Planetiler 0.10.2 prints this obligation in its own build output: 'Generated vector tiles are produced work of OpenStreetMap data. Such tiles are reusable under CC-BY license granted by OpenMapTiles team' and 'Maps made with these vector tiles must display a visible credit'. Verified 2026-09-14 against the OpenMapTiles license statement and the Planetiler build output for our own Oregon z1-13 build. Attribution is the only obligation: CC-BY imposes no share-alike, so it does not affect the OrcMaps engine's own license -- see DATA_AND_LICENSING.md 'Code and data are different intellectual-property layers'. The OSM database underneath keeps its separate ODbL share-alike obligation; see the 'openstreetmap' record."
+}

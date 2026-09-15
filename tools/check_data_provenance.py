@@ -331,8 +331,77 @@ def _check_pack_manifests(
                 )
                 ok = False
 
+        if not _check_schema_attribution(manifest, rel, report):
+            ok = False
+
     if checked and ok:
         report.passes.append(f"All {checked} committed pack manifest(s) reference approved sources")
+
+
+# Obligations that come from the TILE SCHEMA rather than from the map data.
+# A pack built with the OpenMapTiles schema carries the OpenMapTiles CC-BY
+# credit in addition to the underlying data credit; the two cover different
+# layers and neither substitutes for the other. The OrcMaps-native
+# 'orcmaps-overview-1' profile deliberately has no entry here: it is Natural
+# Earth through an OrcMaps schema and owes OpenMapTiles nothing.
+SCHEMA_ATTRIBUTION_REQUIREMENTS = {
+    "openmaptiles-": {
+        "provenance_id": "openmaptiles",
+        "credit_substring": "OpenMapTiles",
+        "link": "https://openmaptiles.org/",
+    },
+}
+
+
+def _check_schema_attribution(manifest: dict, rel: str, report: Report) -> bool:
+    """Enforce schema-derived attribution. Returns True when nothing applies."""
+    schema = manifest.get("schema_version")
+    if not isinstance(schema, str):
+        return True
+    for prefix, need in SCHEMA_ATTRIBUTION_REQUIREMENTS.items():
+        if not schema.startswith(prefix):
+            continue
+        ids = {
+            source.get("provenance_id")
+            for source in manifest.get("sources", [])
+            if isinstance(source, dict)
+        }
+        if need["provenance_id"] not in ids:
+            report.add(
+                "ERROR", "missing-schema-provenance", rel,
+                f"schema_version '{schema}' requires a source with provenance_id "
+                f"'{need['provenance_id']}'",
+            )
+            return False
+        credits = manifest.get("required_attribution")
+        if not isinstance(credits, list) or not any(
+            isinstance(c, str) and need["credit_substring"] in c for c in credits
+        ):
+            report.add(
+                "ERROR", "missing-schema-attribution", rel,
+                f"schema_version '{schema}' requires a visible "
+                f"'{need['credit_substring']}' credit in required_attribution",
+            )
+            return False
+        links = manifest.get("attribution_links")
+        if not isinstance(links, list) or need["link"] not in links:
+            report.add(
+                "ERROR", "missing-schema-attribution-link", rel,
+                f"schema_version '{schema}' requires {need['link']} in "
+                "attribution_links",
+            )
+            return False
+        # Mojibake check: '©' written as UTF-8 then re-read as Latin-1 shows
+        # up as 'Â©'. It reaches the device's screen, so it is a compliance
+        # bug, not a cosmetic one.
+        for credit in credits:
+            if isinstance(credit, str) and "Â" in credit:
+                report.add(
+                    "ERROR", "mangled-attribution-encoding", rel,
+                    f"attribution text is double-encoded (contains U+00C2): {credit!r}",
+                )
+                return False
+    return True
 
 
 def run_checks(root: Path) -> Report:

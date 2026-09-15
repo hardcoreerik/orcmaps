@@ -93,10 +93,67 @@ def validate_provenance(args: argparse.Namespace) -> None:
         raise ValueError(f"source requires local attribution text: {args.provenance_id}")
 
 
+# Obligations that come from the TILE SCHEMA, not the map data. A pack built
+# with the OpenMapTiles schema carries the OpenMapTiles CC-BY credit as well
+# as the underlying data credit: they cover different layers (tile production
+# vs the source database) and neither replaces the other. Planetiler prints
+# this requirement in its own build output. Keep this table in sync with
+# SCHEMA_ATTRIBUTION_REQUIREMENTS in tools/check_data_provenance.py, which
+# fails the build if an emitted manifest omits any of it.
+#
+# The OrcMaps-native 'orcmaps-overview-1' profile is deliberately absent: it
+# is Natural Earth through an OrcMaps schema and owes OpenMapTiles nothing.
+SCHEMA_ATTRIBUTION = {
+    "openmaptiles-": {
+        "provenance_id": "openmaptiles",
+        "credit": "© OpenMapTiles",
+        "link": "https://openmaptiles.org/",
+        "source_version": "openmaptiles schema via Planetiler",
+    },
+}
+
+
+def schema_obligation(schema_version: str) -> dict | None:
+    for prefix, need in SCHEMA_ATTRIBUTION.items():
+        if schema_version.startswith(prefix):
+            return need
+    return None
+
+
+def apply_schema_attribution(args: argparse.Namespace) -> list[dict]:
+    """Return the manifest `sources` list, adding schema-derived obligations.
+
+    Mutates args.attribution / args.attribution_link so the emitted manifest
+    carries every credit the schema requires. Credits are prepended, because
+    the conventional form leads with the tile-production credit:
+    "(c) OpenMapTiles (c) OpenStreetMap contributors".
+    """
+    sources = [{"provenance_id": args.provenance_id,
+                "acquired": args.acquired,
+                "source_version": args.source_version}]
+    need = schema_obligation(args.schema_version)
+    if need is None:
+        return sources
+    if need["provenance_id"] != args.provenance_id:
+        sources.append({"provenance_id": need["provenance_id"],
+                        "acquired": args.acquired,
+                        "source_version": need["source_version"]})
+    credits = list(args.attribution or [])
+    if not any(need["credit"] in c for c in credits):
+        credits.insert(0, need["credit"])
+    args.attribution = credits
+    links = list(args.attribution_link or [])
+    if need["link"] not in links:
+        links.insert(0, need["link"])
+    args.attribution_link = links
+    return sources
+
+
 def write_sidecars(args: argparse.Namespace,
                    bounds: tuple[float, float, float, float]) -> None:
     output = args.output
     output_hash = sha256(output)
+    sources = apply_schema_attribution(args)
     manifest = {
         "manifest_version": 1,
         "pack_id": pack_id(args, bounds),
@@ -115,9 +172,7 @@ def write_sidecars(args: argparse.Namespace,
         "builder_version": args.builder_version,
         "builder_commit": args.builder_commit,
         "build_date": args.build_date,
-        "sources": [{"provenance_id": args.provenance_id,
-                     "acquired": args.acquired,
-                     "source_version": args.source_version}],
+        "sources": sources,
         "pack_class": args.pack_class,
         "required_attribution": args.attribution,
         "attribution_links": args.attribution_link,

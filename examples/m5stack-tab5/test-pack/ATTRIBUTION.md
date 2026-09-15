@@ -9,16 +9,34 @@ the Open Database License. Engine license and data license are independent
 
 ## Required attribution
 
+**Both credits are required. Neither replaces the other** — they cover
+different layers: the tile-production schema, and the underlying database.
+
+© OpenMapTiles  
+https://openmaptiles.org/
+
 © OpenStreetMap contributors  
 https://www.openstreetmap.org/copyright
 
-License: **ODbL 1.0** (Open Database License)
+| Layer | License | Obligation | Provenance record |
+|---|---|---|---|
+| Tile schema (OpenMapTiles 3.16) | **CC BY 4.0** grant from the OpenMapTiles team | visible credit; **no** share-alike | `data/sources/openmaptiles.json` (`CONFIRMED`, reviewed 2026-09-14) |
+| Map data (OpenStreetMap) | **ODbL 1.0** | visible credit **and** share-alike | `data/sources/openstreetmap.json` (`CONFIRMED`, reviewed 2026-09-13) |
 
-Share-alike applies to this pack (queryable geometry and attributes).
-It does **not** change the OrcMaps engine license.
+Both records are `official_pack_allowed: true`.
 
-Provenance record: `data/sources/openstreetmap.json` (`CONFIRMED`,
-reviewed 2026-09-13). `official_pack_allowed: true`.
+ODbL share-alike applies to this pack (queryable geometry and attributes).
+Neither license changes the OrcMaps engine license.
+
+Planetiler states the OpenMapTiles obligation in its own build output:
+"Such tiles are reusable under CC-BY license granted by OpenMapTiles team"
+and "Maps made with these vector tiles must display a visible credit".
+
+> **Defect history.** Until 2026-09-14 this pack's manifest recorded only the
+> OpenStreetMap credit, so the device displayed an incomplete attribution, and
+> the text was additionally double-encoded (`Â©`). Both are fixed, and
+> `tools/check_data_provenance.py` now fails any `openmaptiles-*` manifest
+> that omits either credit or carries mangled encoding.
 
 ## Source extract
 

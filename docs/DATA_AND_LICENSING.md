@@ -267,6 +267,50 @@ This is why the Clean/Permissive/Open pack classes exist: so a user (or an
 OEM partner) can choose "give me only the packs with the least-restrictive
 terms" without us having to explain ODbL to every consumer of the project.
 
+## Schema obligations are separate from data obligations
+
+A pack has **two** independent intellectual-property layers, and crediting
+one does not discharge the other:
+
+| Layer | Example | License | Obligation |
+|---|---|---|---|
+| Map data | OpenStreetMap extract | ODbL 1.0 | credit **+** share-alike on the data |
+| Tile schema / production | OpenMapTiles 3.16 via Planetiler | CC BY 4.0 grant | credit only, **no** share-alike |
+
+So any pack whose `schema_version` begins `openmaptiles-` must display
+**both**:
+
+```
+© OpenMapTiles            https://openmaptiles.org/
+© OpenStreetMap contributors   https://www.openstreetmap.org/copyright
+```
+
+Planetiler prints this requirement in its own build output: generated tiles
+are "reusable under CC-BY license granted by OpenMapTiles team" and "maps
+made with these vector tiles must display a visible credit". Registry
+record: `data/sources/openmaptiles.json` (`CONFIRMED`, reviewed
+2026-09-14, class `PERMISSIVE_ATTRIBUTION`).
+
+**This does not apply to `orcmaps-overview-1`.** That profile is Natural
+Earth through an OrcMaps-native schema and owes OpenMapTiles nothing;
+forcing the credit onto it would be a false claim of provenance. The world
+overview pack therefore stays Clean-class with no required attribution.
+
+Neither obligation touches engine licensing — see "Code and data are
+different intellectual-property layers".
+
+**Enforced, not just documented.** `tools/check_data_provenance.py`
+(`SCHEMA_ATTRIBUTION_REQUIREMENTS`) fails any committed `openmaptiles-*`
+manifest missing the provenance id, the visible credit, or the link, and
+`tools/pack-builder/build_regional_pack.py` (`SCHEMA_ATTRIBUTION`) adds them
+to every manifest it emits, because the builder — not the caller — knows
+which schema it produced. Keep those two tables in sync.
+
+> **Defect history.** Until 2026-09-14 the Springfield demo pack credited
+> only OpenStreetMap despite being built with the OpenMapTiles profile, and
+> its credit text was double-encoded (`Â©`). The device therefore displayed
+> an incomplete credit. Fixed, and both classes of error are now CI failures.
+
 ## Contribution / AI-assisted development safeguard
 
 Because AI agents (Claude, Codex, ChatGPT, or any other) are doing

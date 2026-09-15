@@ -26,13 +26,20 @@
       "provenance_id": "openstreetmap",
       "acquired": "2026-09-14",
       "source_version": "geofabrik-oregon-latest-2026-09-14"
+    },
+    {
+      "provenance_id": "openmaptiles",
+      "acquired": "2026-09-14",
+      "source_version": "openmaptiles-3.16 schema via Planetiler 0.10.2"
     }
   ],
   "pack_class": "open",
   "required_attribution": [
+    "© OpenMapTiles",
     "© OpenStreetMap contributors"
   ],
   "attribution_links": [
+    "https://openmaptiles.org/",
     "https://www.openstreetmap.org/copyright"
   ],
   "priority": 100,

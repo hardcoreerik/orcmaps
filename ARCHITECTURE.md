@@ -506,8 +506,8 @@ tooling:
   unit-test counts match each `tests/test_*.py` suite's actual
   `def test_*` methods** (suites discovered by filename, so a new suite
   needs no checker edit; both doc phrasings are recognized — STATUS.md's
-  "28 data-provenance unit tests" slug form and this file's
-  "`tests/test_data_provenance.py`, 28 unit tests" filename form), documented
+  "34 data-provenance unit tests" slug form and this file's
+  "`tests/test_data_provenance.py`, 34 unit tests" filename form), documented
   component version strings match `idf_component.yml` (same code-fence masking), an
   unqualified claim that this project lacks CI never survives alongside an
   existing workflow file, no AI-prompt residue leaks into committed docs,
@@ -515,7 +515,7 @@ tooling:
   provenance policy documents below actually exist and `PROJECT_TRUTH.md`
   still states the IP-safety principle.
 - **`tools/check_data_provenance.py`** (tested by
-  `tests/test_data_provenance.py`, 28 unit tests) is the sibling checker
+  `tests/test_data_provenance.py`, 34 unit tests) is the sibling checker
   for map-data licensing policy rather than documentation consistency —
   see "Data provenance and attribution" above for what it validates. It
   does not decide what a license means; it enforces decisions already

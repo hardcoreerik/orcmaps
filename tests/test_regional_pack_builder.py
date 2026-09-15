@@ -52,6 +52,45 @@ class RegionalPackBuilderTests(unittest.TestCase):
             self.assertEqual(manifest["output_sha256"], checksum)
             self.assertEqual(manifest["size_bytes"], output.stat().st_size)
 
+    def test_openmaptiles_schema_adds_its_own_credit(self):
+        # A caller who supplies only the data credit must still get a
+        # manifest that satisfies the schema's obligation, because the
+        # builder -- not the caller -- knows which schema it emitted.
+        args = argparse.Namespace(
+            schema_version="openmaptiles-3.16", provenance_id="openstreetmap",
+            acquired="2026-09-14", source_version="test",
+            attribution=["© OpenStreetMap contributors"],
+            attribution_link=["https://www.openstreetmap.org/copyright"])
+        sources = BUILDER.apply_schema_attribution(args)
+        self.assertEqual(["openstreetmap", "openmaptiles"],
+                         [s["provenance_id"] for s in sources])
+        # Tile-production credit leads, data credit follows.
+        self.assertEqual("© OpenMapTiles", args.attribution[0])
+        self.assertIn("© OpenStreetMap contributors", args.attribution)
+        self.assertEqual("https://openmaptiles.org/", args.attribution_link[0])
+
+    def test_openmaptiles_credit_is_not_duplicated(self):
+        args = argparse.Namespace(
+            schema_version="openmaptiles-3.16", provenance_id="openstreetmap",
+            acquired="2026-09-14", source_version="test",
+            attribution=["© OpenMapTiles",
+                         "© OpenStreetMap contributors"],
+            attribution_link=["https://openmaptiles.org/"])
+        BUILDER.apply_schema_attribution(args)
+        self.assertEqual(1, sum(1 for c in args.attribution
+                                if "OpenMapTiles" in c))
+        self.assertEqual(1, args.attribution_link.count("https://openmaptiles.org/"))
+
+    def test_orcmaps_overview_schema_gets_no_openmaptiles_credit(self):
+        args = argparse.Namespace(
+            schema_version="orcmaps-overview-1", provenance_id="natural-earth",
+            acquired="2026-09-14", source_version="5.1.2",
+            attribution=[], attribution_link=[])
+        sources = BUILDER.apply_schema_attribution(args)
+        self.assertEqual(["natural-earth"], [s["provenance_id"] for s in sources])
+        self.assertEqual([], args.attribution)
+        self.assertEqual([], args.attribution_link)
+
     def test_provenance_policy_is_enforced(self):
         args = argparse.Namespace(provenance_id="openstreetmap", pack_class="open",
                                   attribution=["© OpenStreetMap contributors"])
