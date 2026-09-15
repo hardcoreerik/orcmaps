@@ -64,6 +64,10 @@ constexpr int kBottomBarH = 76;
 // slightly imprecise tap still activates a button.
 constexpr int kDragThresholdPx = 12;
 
+// Padding used when framing a pack with FitBounds(), so the extract's edge
+// is not flush against the screen edge.
+constexpr int kFitPaddingPx = 24;
+
 constexpr size_t kDecompressBudget = 512u * 1024u;
 constexpr size_t kStorageBenchBytes = 512u * 1024u;
 
@@ -348,6 +352,7 @@ orcmap::Viewport g_viewport;
 const orcmap::MapStyle* g_style = nullptr;
 bool g_show_info = false;
 bool g_detail_unavailable = false;
+bool g_partial_coverage = false;
 
 // Offscreen PSRAM canvas: the whole reason interaction can feel immediate
 // without a tile cache. A completed frame lives here, so a drag blits an
@@ -372,24 +377,72 @@ MapSource* SourceForManifest(const orcmap::PackManifest* manifest) {
   return nullptr;
 }
 
-// Chooses the single eligible pack for the current view. Coverage rules are
-// never relaxed: an uncovered z8+ view reports missing detail rather than
-// drawing a partially covered source as if it were global.
+// Presentation-layer overlap test. The engine's Contains() rule is NOT
+// relaxed -- ResolvePack() still decides automatic selection, so a small
+// extract can never be silently promoted to the global basemap. This only
+// answers a different question the demo needs: "does the pack the user is
+// looking at have any data here?"
+bool BoundsOverlap(const orcmap::GeoBounds& a, const orcmap::GeoBounds& b) {
+  return a.min_lon_deg <= b.max_lon_deg && a.max_lon_deg >= b.min_lon_deg &&
+         a.min_lat_deg <= b.max_lat_deg && a.max_lat_deg >= b.min_lat_deg;
+}
+
+// Selection is two-tier, and the tiers mean different things:
+//
+//   1. ResolvePack() -- strict full coverage. This is the authoritative
+//      automatic choice and stays untouched.
+//   2. overlap fallback -- the user has navigated somewhere a pack has
+//      *some* data. Render it and say so. Refusing here was worse than
+//      what the original demo did: at z14 on 1280 px the Springfield
+//      extract still fills 86.5% of the screen with real geography, and a
+//      blocking message threw that away. Partial coverage is reported, not
+//      hidden -- tiles_missing carries the hard number.
 void ResolveActiveSource() {
-  orcmap::GeoBounds bounds{};
-  if (!orcmap::GetVisibleBounds(g_viewport, &bounds)) {
-    g_detail_unavailable = true;
-    return;
-  }
-  const orcmap::PackManifest* chosen =
-      orcmap::ResolvePack(g_catalog, bounds, orcmap::GetZoom(g_viewport));
-  MapSource* source = SourceForManifest(chosen);
-  if (source == nullptr) {
-    g_detail_unavailable = true;
-    return;
-  }
   g_detail_unavailable = false;
-  g_active = *source;
+  g_partial_coverage = false;
+
+  orcmap::GeoBounds visible{};
+  if (!orcmap::GetVisibleBounds(g_viewport, &visible)) {
+    g_detail_unavailable = true;
+    return;
+  }
+
+  const uint8_t zoom = orcmap::GetZoom(g_viewport);
+  if (MapSource* covered =
+          SourceForManifest(orcmap::ResolvePack(g_catalog, visible, zoom))) {
+    g_active = *covered;
+    return;
+  }
+
+  const orcmap::PackManifest* best = nullptr;
+  for (const orcmap::PackManifest& m : g_catalog.Packs()) {
+    if (zoom < m.min_zoom || zoom > m.max_zoom) continue;
+    if (!BoundsOverlap(m.bounds, visible)) continue;
+    if (best == nullptr || m.priority > best->priority) best = &m;
+  }
+  MapSource* partial = SourceForManifest(best);
+  if (partial == nullptr) {
+    g_detail_unavailable = true;
+    return;
+  }
+  g_active = *partial;
+  g_partial_coverage = true;
+}
+
+// Correct centre and zoom for ANY screen, derived by the engine from the
+// pack's own bounds. The example supplies only width/height/tile size --
+// no hardcoded lat/lon/zoom per board. This is what fixes the Tab5
+// off-centre framing: the old demo centred on a Springfield *city*
+// coordinate 169 px west / 162 px south of the *extract's* centre, which
+// piled all the uncovered area onto the left edge and pushed 82 px of
+// usable pack data off-screen to the right.
+bool FocusPack(const orcmap::PackManifest& manifest) {
+  // Prefer filling the screen with map data (correct centre, no empty
+  // margin, zoom derived from this display's width/height). Fall back to
+  // framing the whole coverage area when the pack is too small to fill
+  // this screen at any zoom -- e.g. a tiny extract on a 1280 px display.
+  if (orcmap::FillBounds(&g_viewport, manifest.bounds)) return true;
+  return orcmap::FitBounds(&g_viewport, manifest.bounds, kFitPaddingPx);
 }
 
 uint8_t ActiveMaxZoom() {
@@ -444,14 +497,14 @@ void DrawChrome() {
   M5.Display.setTextColor(kChromeFg, kChromeBg);
   M5.Display.drawString("OrcMaps", 20, kTopBarH / 2);
 
-  char mid[96];
+  char mid[128];
   const char* pack_name = g_detail_unavailable || g_active.manifest == nullptr
                               ? "No local coverage"
                               : g_active.manifest->display_name.c_str();
-  std::snprintf(mid, sizeof(mid), "Z%u  %u", orcmap::GetZoom(g_viewport), 0u);
   M5.Display.setTextDatum(middle_center);
-  std::snprintf(mid, sizeof(mid), "Z%-2u  %s", orcmap::GetZoom(g_viewport),
-                pack_name);
+  std::snprintf(mid, sizeof(mid), "Z%-2u  %s%s", orcmap::GetZoom(g_viewport),
+                pack_name,
+                g_partial_coverage ? "  (partial coverage)" : "");
   M5.Display.setTextColor(kChromeDim, kChromeBg);
   M5.Display.drawString(mid, w / 2, kTopBarH / 2);
 
@@ -678,9 +731,6 @@ void RunBenchmarks() {
       // earlier ~4.4 s / 11.3 s Tab5 numbers. At z14 this viewport is wider
       // than the extract, so tiles_missing is expected to be non-zero.
       {"springfield", "springfield-97477", 44.0500, -123.0220, 14},
-      // The zoom where the extract actually covers a full 1280x600 view,
-      // which is what the interactive demo uses.
-      {"springfield-covered", "springfield-97477", 44.0500, -123.0220, 15},
   };
   for (const orcmap_bench::BenchScenario& scenario : scenarios) {
     RunScenario(scenario, hooks);
@@ -700,8 +750,12 @@ bool HitButton(int x, int y, int bx, int bw) {
 
 void HandleButtonTap(int x, int y) {
   if (HitButton(x, y, 20, 150)) {  // World
-    orcmap::SetZoom(&g_viewport, 0);
-    orcmap::SetCenter(&g_viewport, 20.0, 0.0);
+    if (g_world.manifest != nullptr) {
+      FocusPack(*g_world.manifest);
+    } else {
+      orcmap::SetZoom(&g_viewport, 0);
+      orcmap::SetCenter(&g_viewport, 20.0, 0.0);
+    }
     Redraw();
   } else if (HitButton(x, y, 190, 90)) {  // -
     orcmap::ZoomOut(&g_viewport);
@@ -714,12 +768,12 @@ void HandleButtonTap(int x, int y) {
       Redraw();
     }
   } else if (HitButton(x, y, 400, 220)) {  // Springfield
-    // z15, not z14: ResolvePack() requires full coverage and the extract is
-    // narrower than a 1280x600 z14 viewport. z14 stays available as a
-    // benchmark scenario, where partial coverage is measured not displayed.
-    orcmap::SetCenter(&g_viewport, 44.0500, -123.0220);
-    orcmap::SetZoom(&g_viewport, 15);
-    Redraw();
+    // Engine-derived framing: correct centre and the largest zoom that
+    // actually fits this display. No per-board zoom constant.
+    if (g_regional.manifest != nullptr) {
+      FocusPack(*g_regional.manifest);
+      Redraw();
+    }
   } else if (HitButton(x, y, 640, 130)) {  // Style
     g_style = (g_style == &orcmap::styles::OrcSdrDark())
                   ? &orcmap::styles::StandardLight()
@@ -848,14 +902,15 @@ extern "C" void app_main() {
   g_viewport.width_px = g_map_w;
   g_viewport.height_px = g_map_h;
   g_viewport.tile_size_px = 256;
-  // Start on whichever installed pack can actually show something: the
-  // world overview when present, otherwise the regional pack's own area.
-  if (have_world) {
+  // Start on whichever installed pack can actually show something, framed
+  // by the engine from that pack's own bounds. The example supplies only
+  // the viewport size -- centre and zoom are derived, so this is correct
+  // on any display without a per-board constant.
+  const orcmap::PackManifest* initial =
+      have_world ? g_world.manifest : g_regional.manifest;
+  if (initial == nullptr || !FocusPack(*initial)) {
     orcmap::SetCenter(&g_viewport, 20.0, 0.0);
     orcmap::SetZoom(&g_viewport, 0);
-  } else {
-    orcmap::SetCenter(&g_viewport, 44.0500, -123.0220);
-    orcmap::SetZoom(&g_viewport, 15);
   }
 
   vTaskDelay(pdMS_TO_TICKS(600));

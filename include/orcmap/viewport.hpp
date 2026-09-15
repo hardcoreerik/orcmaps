@@ -45,7 +45,23 @@ bool ProjectLatLon(const Viewport& viewport, LatLon point, double* screen_x,
 bool ScreenToLatLon(const Viewport& viewport, double screen_x,
                     double screen_y, LatLon* point);
 bool GetVisibleBounds(const Viewport& viewport, GeoBounds* bounds);
+// Centres on `bounds` and picks the LARGEST zoom at which all of `bounds`
+// is visible inside the viewport (minus padding). Use this to show a pack's
+// whole coverage area; the result usually leaves empty margin, because a
+// pack's aspect ratio rarely matches the screen's.
 bool FitBounds(Viewport* viewport, const GeoBounds& bounds, int padding_px);
+
+// Centres on `bounds` and picks the SMALLEST zoom at which `bounds` fully
+// covers the viewport -- the complement of FitBounds. Use this to fill the
+// screen with map data instead of framing the coverage area, which is what
+// a map application normally wants: correct centre, no empty margin, and a
+// zoom derived from the caller's own width/height rather than a per-board
+// constant.
+//
+// Returns false when no zoom up to the maximum can cover the viewport
+// (bounds too small relative to the screen); callers should then fall back
+// to FitBounds, which always succeeds for valid bounds.
+bool FillBounds(Viewport* viewport, const GeoBounds& bounds);
 bool ZoomAtScreenPoint(Viewport* viewport, double screen_x, double screen_y,
                        int zoom_delta);
 
