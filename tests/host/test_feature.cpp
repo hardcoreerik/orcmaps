@@ -231,6 +231,25 @@ void TestExperimentalOpenMapTilesLikeMappings() {
   ORCMAP_EXPECT_TRUE(!tile.features[8].kind_assigned);
 }
 
+void TestOverviewProfileMappingsAreExplicit() {
+  orcmap::FeatureTile tile;
+  for (const char* layer : {"land", "water", "waterway", "boundary", "place"}) {
+    orcmap::Feature feature;
+    feature.layer = layer;
+    tile.features.push_back(std::move(feature));
+  }
+  ORCMAP_EXPECT_TRUE(orcmap::experimental::AssignFeatureKindsForProfile(
+      "orcmaps-overview-1", &tile));
+  ORCMAP_EXPECT_TRUE(tile.features[0].kind == orcmap::FeatureKind::kLand);
+  ORCMAP_EXPECT_TRUE(tile.features[1].kind == orcmap::FeatureKind::kWater);
+  ORCMAP_EXPECT_TRUE(tile.features[2].kind == orcmap::FeatureKind::kWater);
+  ORCMAP_EXPECT_TRUE(tile.features[3].kind == orcmap::FeatureKind::kBoundary);
+  ORCMAP_EXPECT_TRUE(tile.features[4].kind ==
+                     orcmap::FeatureKind::kLabelPrimary);
+  ORCMAP_EXPECT_TRUE(!orcmap::experimental::AssignFeatureKindsForProfile(
+      "unknown-profile", &tile));
+}
+
 }  // namespace
 
 void RunFeatureTests(const std::string& mvt_fixture_path) {
@@ -243,4 +262,5 @@ void RunFeatureTests(const std::string& mvt_fixture_path) {
   TestExperimentalLeavesUnknownUnassigned();
   TestAssignKindsNullFails();
   TestExperimentalOpenMapTilesLikeMappings();
+  TestOverviewProfileMappingsAreExplicit();
 }

@@ -15,6 +15,7 @@ Packs describe geography and content, never a graphics adapter or board.
 M5GFX, LVGL, a native RGB565 framebuffer, and future targets consume the same
 PMTiles/MVT artifacts through OrcMaps core.
 
+
 No global overview cutoff is selected yet. The first source bundle is
 reproducibly pinned to 21 official Natural Earth 5.1.2 archives: land, ocean,
 lakes, rivers/lake centerlines, admin-0 lines, admin-1 lines, and populated
@@ -43,6 +44,15 @@ was generated, and no overview pack has been rendered on device. No full
 planet archive has been generated, and no on-device global-render claim is
 made. Size/embedding analysis lives in
 `ORCMAPS_EMBEDDED_WORLD_FIRMWARE_CONCEPT.md` (PLANNED/DEFERRED).
+
+Current evidence recommends **z0-6 for a tiny pack, z0-7 for a standard
+pack, and a regional handoff around z8**. That is a recommendation from host
+measurements, not frozen release policy: embedded and on-device measurements
+can still change it. Candidates are built by
+`tools/pack-builder/build_world_overview.py` into graphics-independent
+`orcmaps-overview-1` MVT, and the generic host renderer has verified global
+rendering from them.
+
 
 A future Pack Service may distribute or generate immutable pack triplets. It
 is optional provisioning only:

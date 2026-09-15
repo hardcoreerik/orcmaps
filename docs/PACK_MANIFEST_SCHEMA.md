@@ -96,9 +96,10 @@ Identity parts are restricted to ASCII letters, digits, `-`, and `.`.
 determine whether an installed pack is readable by the running engine
 version before attempting to parse it — this is what "prefer
 backwards-compatible formats" (`ROADMAP.md`) is checked against in
-practice. The current proven Springfield payload is `openmaptiles-3.16`.
-This records compatibility; it does not freeze OpenMapTiles as OrcMaps'
-permanent internal schema.
+practice. The currently supported measured payloads are Springfield's
+`openmaptiles-3.16` and Natural Earth's narrow `orcmaps-overview-1`. This
+records compatibility; it does not freeze either as OrcMaps' permanent general
+schema.
 
 ## Local-only source selection
 

@@ -1,0 +1,15 @@
+{
+  "schema_version": "orcmaps-overview-1",
+  "zoom_ranges": {
+    "110m": {"min": 0, "max": 2},
+    "50m": {"min": 3, "max": 5},
+    "10m": {"min": 6, "max": 8}
+  },
+  "layers": {
+    "land": {"geometry": "polygon"},
+    "water": {"geometry": "polygon"},
+    "waterway": {"geometry": "line"},
+    "boundary": {"geometry": "line"},
+    "place": {"geometry": "point"}
+  }
+}

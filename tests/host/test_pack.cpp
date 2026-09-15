@@ -65,6 +65,18 @@ void TestValidManifestPassesValidation() {
                      orcmap::PackValidationError::kNone);
 }
 
+void TestSupportedInputProfilesAreCentralized() {
+  auto pack = MakePack("world", -180.0, -85.0, 180.0, 85.0, 0, 8, 0);
+  pack.schema_version = "orcmaps-overview-1";
+  pack.pack_id = orcmap::MakePackId(pack);
+  ORCMAP_EXPECT_TRUE(orcmap::ValidatePackManifest(pack) ==
+                     orcmap::PackValidationError::kNone);
+  pack.schema_version = "unknown-profile";
+  pack.pack_id = orcmap::MakePackId(pack);
+  ORCMAP_EXPECT_TRUE(orcmap::ValidatePackManifest(pack) ==
+                     orcmap::PackValidationError::kCompatibility);
+}
+
 void TestInvalidBoundsAreRejected() {
   auto pack = MakePack("bad", -10.0, -90.0, 10.0, 30.0, 0, 7, 0);
   ORCMAP_EXPECT_TRUE(orcmap::ValidatePackManifest(pack) ==
@@ -141,6 +153,7 @@ void TestResolverTieBreakPrefersNewestIdentity() {
 void RunPackTests() {
   TestPackIdentityUsesImmutableInputs();
   TestValidManifestPassesValidation();
+  TestSupportedInputProfilesAreCentralized();
   TestInvalidBoundsAreRejected();
   TestInvalidZoomRangeIsRejected();
   TestMissingOfflineAttributionTextIsRejected();

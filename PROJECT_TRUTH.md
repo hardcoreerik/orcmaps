@@ -514,8 +514,10 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
   input into this API rather than create a second coordinate system.
 - World-overview source acquisition is pinned to 21 official Natural Earth
   5.1.2 archives across 110m, 50m, and 10m. The archives and extracted
-  shapefiles remain gitignored local provisioning inputs; no world-overview
-  PMTiles or final zoom cutoff has been produced.
+  shapefiles remain gitignored local provisioning inputs. Reproducible
+  `orcmaps-overview-1` z6/z7/z8 candidates measure 4.61/9.29/16.37 MiB and
+  render through the generic host target. z6 tiny and z7 standard are evidence-
+  based recommendations; no release cutoff is frozen.
 
 ## Explicit Non-Goals
 
@@ -534,10 +536,9 @@ by `tests/host/test_pmtiles.cpp` reading a real (synthetic) archive.
 
 - Tile content schema (general OpenMapTiles-style MVT vs. narrower custom
   schema) — deferred to Lane County vertical-slice measurement.
-- Exact zoom tiers/sizes per pack tier (world/country/state/local) — needs
-  a real built pack to measure; published planet-scale numbers found in
-  research (~120 GB Protomaps z0-15, ~78 GiB yuiseki z0-14) are not precise
-  enough to derive Oregon/county-scale numbers from.
+- Exact country/state/local tiers remain open. The Natural Earth overview is
+  now measured through z8; it supports a provisional regional handoff at z8,
+  not a final policy for other pack types.
 - Multi-file/chunked archive scheme for packs exceeding FAT32's 4 GiB
   single-file limit — not yet designed (yuiseki's 2 GiB-chunk precedent is
   the closest reference).

@@ -14,11 +14,14 @@ orcmap_pack_inspect header ARCHIVE
 orcmap_pack_inspect tile ARCHIVE Z X Y
 orcmap_pack_inspect sample ARCHIVE --lat LAT --lon LON --zoom Z [--radius N]
 orcmap_pack_inspect preview ARCHIVE --lat LAT --lon LON --zoom Z
-    [--out FILE --style ID --verbose]
+    [--out FILE --style ID --schema ID --verbose]
 ```
 
 Style ids: `orcsdr-dark`, `standard-light`, `high-contrast-field`,
 `night-red-safe`.
+
+Classification defaults to `openmaptiles-3.16`. Pass
+`--schema orcmaps-overview-1` for Natural Earth overview packs.
 
 Springfield / 97477 host preview (pack from `tools/pack-builder`):
 

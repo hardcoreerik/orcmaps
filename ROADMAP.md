@@ -260,10 +260,12 @@ network access or a remote service.
 
 - [x] Official Natural Earth 5.1.2 source bundle acquired and verified for
       seven layers at 110m, 50m, and 10m; archives stay outside Git
-- [ ] World base pack (low/medium zoom) built and benchmarked
+- [x] Natural Earth world base candidates z0-z6/z7/z8 built and benchmarked
+      through the generic host renderer; tiny=z6 and standard=z7 are measured
+      recommendations, not frozen release policy
 - [ ] Full-planet pack evaluated against real hardware limits (SD card
       size, FAT32 4 GiB file limit → chunking scheme, per yuiseki precedent)
-- [ ] Document actual limits found, not estimated ones
+- [x] Document world-overview limits found, not estimated ones
 
 ## Phase 9 — Ecosystem / external applications
 

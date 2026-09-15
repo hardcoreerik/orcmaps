@@ -180,7 +180,7 @@ size_t ApproxFeatureTileBytes(const orcmap::FeatureTile& tile) {
 }
 
 TileStats LoadTile(orcmap::PmTilesReader* reader, uint8_t z, uint32_t x,
-                   uint32_t y, bool classify) {
+                   uint32_t y, bool classify, const std::string& schema) {
   TileStats s;
   using Clock = std::chrono::steady_clock;
   auto t0 = Clock::now();
@@ -228,7 +228,7 @@ TileStats LoadTile(orcmap::PmTilesReader* reader, uint8_t z, uint32_t x,
 
   if (classify) {
     auto t4 = Clock::now();
-    orcmap::experimental::AssignFeatureKinds(&s.features_owned);
+    orcmap::experimental::AssignFeatureKindsForProfile(schema, &s.features_owned);
     s.classify_ms =
         std::chrono::duration<double, std::milli>(Clock::now() - t4).count();
   }
@@ -390,7 +390,8 @@ int CmdHeader(const std::string& path) {
   return 0;
 }
 
-int CmdTile(const std::string& path, uint8_t z, uint32_t x, uint32_t y) {
+int CmdTile(const std::string& path, uint8_t z, uint32_t x, uint32_t y,
+            const std::string& schema) {
   orcmap::host::FileByteSource source(path);
   if (!source.Valid()) {
     std::fprintf(stderr, "cannot open %s\n", path.c_str());
@@ -402,13 +403,13 @@ int CmdTile(const std::string& path, uint8_t z, uint32_t x, uint32_t y) {
     return 1;
   }
   PrintHeader(reader.Header());
-  const TileStats s = LoadTile(&reader, z, x, y, true);
+  const TileStats s = LoadTile(&reader, z, x, y, true, schema);
   PrintTileReport(z, x, y, s);
   return s.present ? 0 : 1;
 }
 
 int CmdSample(const std::string& path, double lat, double lon, uint8_t zoom,
-              int radius) {
+              int radius, const std::string& schema) {
   orcmap::host::FileByteSource source(path);
   if (!source.Valid()) {
     std::fprintf(stderr, "cannot open %s\n", path.c_str());
@@ -436,7 +437,7 @@ int CmdSample(const std::string& path, double lat, double lon, uint8_t zoom,
       }
       const TileStats s =
           LoadTile(&reader, zoom, static_cast<uint32_t>(x),
-                   static_cast<uint32_t>(y), true);
+                   static_cast<uint32_t>(y), true, schema);
       PrintTileReport(zoom, static_cast<uint32_t>(x), static_cast<uint32_t>(y),
                       s);
       if (s.present) {
@@ -459,7 +460,8 @@ int CmdSample(const std::string& path, double lat, double lon, uint8_t zoom,
 
 int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
                int width, int height, const std::string& out,
-               const orcmap::MapStyle& style, bool verbose) {
+               const orcmap::MapStyle& style, bool verbose,
+               const std::string& schema) {
   orcmap::host::FileByteSource source(path);
   if (!source.Valid()) {
     std::fprintf(stderr, "cannot open %s\n", path.c_str());
@@ -505,7 +507,7 @@ int CmdPreview(const std::string& path, double lat, double lon, uint8_t zoom,
          classify_sum = 0, render_sum = 0, report_sum = 0;
   const auto frame0 = Clock::now();
   for (const orcmap::TileId& tile : tiles) {
-    TileStats s = LoadTile(&reader, tile.z, tile.x, tile.y, true);
+    TileStats s = LoadTile(&reader, tile.z, tile.x, tile.y, true, schema);
     const auto p0 = Clock::now();
     if (verbose) {
       PrintTileReport(tile.z, tile.x, tile.y, s);
@@ -581,7 +583,7 @@ void Usage() {
       "orcmap_pack_inspect tile ARCHIVE Z X Y\n"
       "orcmap_pack_inspect sample ARCHIVE --lat LAT --lon LON --zoom Z [--radius N]\n"
       "orcmap_pack_inspect preview ARCHIVE --lat LAT --lon LON --zoom Z "
-      "[--width W --height H --out FILE --style ID --verbose]\n");
+      "[--width W --height H --out FILE --style ID --schema ID --verbose]\n");
 }
 
 bool HasFlag(int argc, char** argv, const char* name) {
@@ -612,6 +614,8 @@ int main(int argc, char** argv) {
   }
   const std::string cmd = argv[1];
   const std::string archive = argv[2];
+  std::string schema = "openmaptiles-3.16";
+  Flag(argc, argv, "schema", &schema);
   if (cmd == "header") return CmdHeader(archive);
   if (cmd == "tile") {
     if (argc < 6) {
@@ -620,7 +624,7 @@ int main(int argc, char** argv) {
     }
     return CmdTile(archive, static_cast<uint8_t>(std::atoi(argv[3])),
                    static_cast<uint32_t>(std::strtoul(argv[4], nullptr, 10)),
-                   static_cast<uint32_t>(std::strtoul(argv[5], nullptr, 10)));
+                   static_cast<uint32_t>(std::strtoul(argv[5], nullptr, 10)), schema);
   }
   std::string lat_s, lon_s, zoom_s, radius_s, width_s, height_s, out, style_id;
   Flag(argc, argv, "lat", &lat_s);
@@ -639,7 +643,7 @@ int main(int argc, char** argv) {
     }
     const int radius = radius_s.empty() ? 1 : std::atoi(radius_s.c_str());
     return CmdSample(archive, std::atof(lat_s.c_str()), std::atof(lon_s.c_str()),
-                     static_cast<uint8_t>(std::atoi(zoom_s.c_str())), radius);
+                     static_cast<uint8_t>(std::atoi(zoom_s.c_str())), radius, schema);
   }
   if (cmd == "preview") {
     if (lat_s.empty() || lon_s.empty() || zoom_s.empty()) {
@@ -659,7 +663,7 @@ int main(int argc, char** argv) {
     }
     return CmdPreview(archive, std::atof(lat_s.c_str()), std::atof(lon_s.c_str()),
                       static_cast<uint8_t>(std::atoi(zoom_s.c_str())), width,
-                      height, out, *style, verbose);
+                      height, out, *style, verbose, schema);
   }
   Usage();
   return 1;

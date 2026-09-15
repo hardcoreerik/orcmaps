@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string_view>
+
 #include "orcmap/feature.hpp"
 
 namespace orcmap {
@@ -25,6 +27,11 @@ bool TryClassifyFeature(const Feature& feature, FeatureKind* kind);
 // Best-effort: sets kind/kind_assigned only on features this heuristic
 // recognizes. Returns false if `tile` is null; empty tiles succeed.
 bool AssignFeatureKinds(FeatureTile* tile);
+
+// Applies the classifier for one supported MVT input profile. Unknown profiles
+// and null tiles fail without modifying the tile.
+bool AssignFeatureKindsForProfile(std::string_view schema_version,
+                                  FeatureTile* tile);
 
 // MVT layer include callback for the current no-text basemap. Skips
 // layers that only feed kLabel* (not drawn) or unused name plates.
