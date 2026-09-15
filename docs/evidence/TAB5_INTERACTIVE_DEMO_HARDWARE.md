@@ -206,7 +206,8 @@ scenarios bind their pack explicitly rather than relaxing any coverage rule.
 | Flash + image hash verification (COM17) | PASS |
 | Boot to interactive map | PASS |
 | SD mount and pack open | PASS |
-| Measured frame emitted (serial + numbered SD JSONL) | PASS |
+| Measured frame emitted to serial | PASS |
+| Measured frame written to numbered SD JSONL | **FAIL** — see "SD report files are empty" |
 | Full-coverage render at engine-derived zoom | PASS (18/18 tiles, z15) |
 | Centre matches extract centre | PASS (44.060008, -123.007500) |
 | Catalogue-derived zoom-out floor | IMPLEMENTED, z15 on this card, NOT PHOTOGRAPHED |
@@ -215,14 +216,32 @@ scenarios bind their pack explicitly rather than relaxing any coverage rule.
 | World -> regional transition on device | NOT YET RECORDED (world pack absent) |
 | Benchmark action (`Run Benchmarks`) on device | NOT YET RECORDED |
 
-Numbered reports are written to `/sd/orcmaps/orcmaps-benchmark-NNNN.jsonl`
-and never overwritten; this session advanced through 0007.
+Numbered report files are created at `/sd/orcmaps/orcmaps-benchmark-NNNN.jsonl`
+and never overwritten; this session advanced through 0013.
+
+### SD report files are empty
+
+Reading the card on a PC shows **all 13 report files are 0 bytes**. The
+numbering and creation work; nothing is ever written to them, or writes are
+never flushed/closed. An earlier version of this table claimed the SD JSONL
+half of that gate PASSed — that claim was wrong and is corrected above.
+
+Serial JSONL remains authoritative and is unaffected: every measured frame
+quoted in this file was captured from serial. But the on-card report path is
+**not** evidence of anything yet, and must not be cited as a second
+independent record until it actually contains data.
 
 ## Known gaps
 
-- The world overview pack was not on the card, so the world-first boot
-  experience and the world -> regional story are unverified on hardware.
-  Copy the built z0-7 candidate to `/orcmaps/world-overview.pmtiles`.
+- The world overview pack has now been written to the card
+  (`world-overview-z7.pmtiles` -> `/orcmaps/world-overview.pmtiles`, 9,737,500
+  bytes, SHA-256 verified on the card and matching the firmware's compiled-in
+  manifest exactly), together with its manifest and `.sha256`. The derived
+  zoom floor should therefore drop from z15 to **z3**, and boot should frame
+  the world instead of the regional extract. **Not yet observed on hardware:**
+  the card was provisioned from a PC and has not been booted in the device
+  since.
+- The SD report path writes nothing (see "SD report files are empty").
 - `build_world_overview.py` writes bounds as `85.0511288`, which
   `ValidBounds()` rejects (it requires <= `85.05112878`). The demo compiles
   in the engine constant instead; `llround(x * 1e7)` still yields
