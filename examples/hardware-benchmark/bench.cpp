@@ -335,6 +335,101 @@ void EmitIdentityRecord(const BenchHooks& hooks,
   Finish(hooks, &line);
 }
 
+void SweepAccumulator::Add(const BenchFrame& frame) {
+  if (frames == 0 || frame.frame_ms < min_ms) min_ms = frame.frame_ms;
+  if (frames == 0 || frame.frame_ms > max_ms) max_ms = frame.frame_ms;
+  ++frames;
+  total_ms += frame.frame_ms;
+  tiles_visible += frame.tiles_visible;
+  placements += frame.placements;
+  tiles_present += frame.tiles_present;
+  tiles_missing += frame.tiles_missing;
+  features_total += frame.features_total;
+  bytes_stored += frame.bytes_stored;
+  bytes_decompressed += frame.bytes_decompressed;
+  lookup_ms += frame.lookup_ms;
+  inflate_ms += frame.inflate_ms;
+  decode_ms += frame.decode_ms;
+  translate_ms += frame.translate_ms;
+  classify_ms += frame.classify_ms;
+  render_ms += frame.render_ms;
+}
+
+double SweepAccumulator::MeanMs() const {
+  return frames == 0 ? 0.0 : total_ms / static_cast<double>(frames);
+}
+
+double SweepAccumulator::Fps() const {
+  const double mean = MeanMs();
+  return mean > 0.0 ? 1000.0 / mean : 0.0;
+}
+
+namespace {
+
+// Shared body of the two sweep records: counts, rate, and stage MEANS.
+// Means, not totals, so a level with a different frame count stays
+// comparable with its neighbours.
+void AddSweepBody(LineBuffer* line, const SweepAccumulator& a) {
+  const double n = a.frames == 0 ? 1.0 : static_cast<double>(a.frames);
+  line->Add("\"frames\":%u,", static_cast<unsigned>(a.frames));
+  line->Add("\"mean_frame_ms\":%.3f,", a.MeanMs());
+  line->Add("\"min_frame_ms\":%.3f,", a.min_ms);
+  line->Add("\"max_frame_ms\":%.3f,", a.max_ms);
+  line->Add("\"fps\":%.3f,", a.Fps());
+  line->Add("\"tiles_visible\":%u,", static_cast<unsigned>(a.tiles_visible));
+  line->Add("\"placements\":%u,", static_cast<unsigned>(a.placements));
+  line->Add("\"tiles_present\":%u,", static_cast<unsigned>(a.tiles_present));
+  line->Add("\"tiles_missing\":%u,", static_cast<unsigned>(a.tiles_missing));
+  line->Add("\"features\":%u,", static_cast<unsigned>(a.features_total));
+  line->Add("\"bytes_stored\":%llu,",
+            static_cast<unsigned long long>(a.bytes_stored));
+  line->Add("\"bytes_decompressed\":%llu,",
+            static_cast<unsigned long long>(a.bytes_decompressed));
+  line->Add("\"mean_lookup_ms\":%.3f,", a.lookup_ms / n);
+  line->Add("\"mean_inflate_ms\":%.3f,", a.inflate_ms / n);
+  line->Add("\"mean_decode_ms\":%.3f,", a.decode_ms / n);
+  line->Add("\"mean_translate_ms\":%.3f,", a.translate_ms / n);
+  line->Add("\"mean_classify_ms\":%.3f,", a.classify_ms / n);
+  line->Add("\"mean_render_ms\":%.3f", a.render_ms / n);
+}
+
+}  // namespace
+
+void EmitSweepZoomRecord(const BenchHooks& hooks, const char* sweep_id,
+                         const char* direction, uint8_t zoom,
+                         int screens_panned, int no_coverage_frames,
+                         const char* pack_id,
+                         const orcmap::Viewport& viewport,
+                         const SweepAccumulator& accumulated) {
+  LineBuffer line;
+  Begin(&line, "sweep_zoom");
+  line.AddString("sweep", sweep_id);
+  line.AddString("direction", direction);
+  line.AddString("pack_id", pack_id);
+  line.Add("\"zoom\":%u,", static_cast<unsigned>(zoom));
+  line.Add("\"screens_panned\":%d,", screens_panned);
+  line.Add("\"no_coverage_frames\":%d,", no_coverage_frames);
+  line.Add("\"viewport_w\":%d,", viewport.width_px);
+  line.Add("\"viewport_h\":%d,", viewport.height_px);
+  AddSweepBody(&line, accumulated);
+  Finish(hooks, &line);
+}
+
+void EmitSweepSummaryRecord(const BenchHooks& hooks, const char* sweep_id,
+                            uint8_t min_zoom, uint8_t max_zoom,
+                            double wall_ms, int no_coverage_frames,
+                            const SweepAccumulator& accumulated) {
+  LineBuffer line;
+  Begin(&line, "sweep_summary");
+  line.AddString("sweep", sweep_id);
+  line.Add("\"min_zoom\":%u,", static_cast<unsigned>(min_zoom));
+  line.Add("\"max_zoom\":%u,", static_cast<unsigned>(max_zoom));
+  line.Add("\"wall_ms\":%.3f,", wall_ms);
+  line.Add("\"no_coverage_frames\":%d,", no_coverage_frames);
+  AddSweepBody(&line, accumulated);
+  Finish(hooks, &line);
+}
+
 void EmitRejectedPackRecord(const BenchHooks& hooks,
                             const orcmap::RejectedPack& rejected) {
   LineBuffer line;

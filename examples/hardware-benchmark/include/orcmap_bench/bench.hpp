@@ -170,6 +170,55 @@ void EmitIdentityRecord(const BenchHooks& hooks, const BenchIdentity& identity);
 void EmitStorageRecord(const BenchHooks& hooks, size_t block_bytes,
                        uint64_t bytes, double elapsed_ms);
 
+// Rate measurement across many frames: a zoom/pan sweep, or any other
+// sequence. Accumulates stage totals so a slow sweep can be attributed to a
+// stage rather than guessed at.
+//
+// `fps` here is throughput of the real uncached pipeline (1000 / mean frame
+// time), not a smoothed animation rate -- there is no tile cache, so every
+// frame is a full re-render. A frame with missing tiles is cheap, so
+// tiles_missing must be read alongside any rate.
+struct SweepAccumulator {
+  size_t frames = 0;
+  double total_ms = 0.0;
+  double min_ms = 0.0;
+  double max_ms = 0.0;
+
+  size_t tiles_visible = 0;
+  size_t placements = 0;
+  size_t tiles_present = 0;
+  size_t tiles_missing = 0;
+  size_t features_total = 0;
+  uint64_t bytes_stored = 0;
+  uint64_t bytes_decompressed = 0;
+
+  double lookup_ms = 0.0;
+  double inflate_ms = 0.0;
+  double decode_ms = 0.0;
+  double translate_ms = 0.0;
+  double classify_ms = 0.0;
+  double render_ms = 0.0;
+
+  void Add(const BenchFrame& frame);
+  double MeanMs() const;
+  double Fps() const;
+};
+
+// One record per zoom level of a sweep. `direction` is "down" or "up";
+// `screens_panned` is how many full viewport widths were traversed.
+void EmitSweepZoomRecord(const BenchHooks& hooks, const char* sweep_id,
+                         const char* direction, uint8_t zoom,
+                         int screens_panned, int no_coverage_frames,
+                         const char* pack_id,
+                         const orcmap::Viewport& viewport,
+                         const SweepAccumulator& accumulated);
+
+// Closing record for a whole sweep.
+void EmitSweepSummaryRecord(const BenchHooks& hooks, const char* sweep_id,
+                            uint8_t min_zoom, uint8_t max_zoom,
+                            double wall_ms, int no_coverage_frames,
+                            const SweepAccumulator& accumulated);
+
 // Emits one record per pack that runtime discovery refused. A user who
 // copied a pack and does not see it needs to know why, and serial JSONL is
 // the authoritative channel -- a rejection must never be visible only as a

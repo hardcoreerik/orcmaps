@@ -118,10 +118,37 @@ class PmTilesReader {
   static bool FindEntry(const std::vector<DirEntry>& dir, uint64_t tile_id,
                         DirEntry* found, bool* is_leaf);
 
+  // Returns a parsed leaf directory, reading and decompressing it only if it
+  // is not already cached. Tiles in one frame are spatially adjacent and
+  // PMTiles orders entries by Hilbert tile id, so a whole frame usually hits
+  // the same one or two leaf directories; without this, every tile lookup
+  // re-read AND re-inflated the same directory from storage.
+  //
+  // Returns nullptr on I/O or format error. The pointer is valid until the
+  // next call that misses the cache.
+  const std::vector<DirEntry>* LeafDirectory(uint64_t offset,
+                                             uint64_t length) const;
+
+  // Small round-robin cache. Four slots covers a frame that straddles a
+  // directory boundary while keeping worst-case memory bounded and
+  // predictable, which matters more than hit rate on an embedded target.
+  static constexpr int kLeafCacheSlots = 4;
+  struct LeafCacheSlot {
+    bool valid = false;
+    uint64_t offset = 0;
+    uint64_t length = 0;
+    std::vector<DirEntry> entries;
+  };
+
   ByteSource* source_;
   bool open_ = false;
   PmTilesHeader header_;
   std::vector<DirEntry> root_dir_;
+
+  // Mutable because GetTile() is logically const: caching changes speed,
+  // not observable results.
+  mutable LeafCacheSlot leaf_cache_[kLeafCacheSlots];
+  mutable int leaf_cache_next_ = 0;
 };
 
 }  // namespace orcmap

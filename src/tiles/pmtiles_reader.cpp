@@ -247,6 +247,29 @@ bool PmTilesReader::ReadMetadata(std::vector<uint8_t>* out) const {
                            kMaxDirectoryReadBytes, out);
 }
 
+const std::vector<PmTilesReader::DirEntry>* PmTilesReader::LeafDirectory(
+    uint64_t offset, uint64_t length) const {
+  for (const LeafCacheSlot& slot : leaf_cache_) {
+    if (slot.valid && slot.offset == offset && slot.length == length) {
+      return &slot.entries;
+    }
+  }
+  LeafCacheSlot& slot = leaf_cache_[leaf_cache_next_];
+  leaf_cache_next_ = (leaf_cache_next_ + 1) % kLeafCacheSlots;
+  // Invalidate before reading: a failed read must not leave a stale slot
+  // claiming to hold this directory.
+  slot.valid = false;
+  if (!ReadDirectory(offset, length, &slot.entries)) {
+    slot.entries.clear();
+    slot.entries.shrink_to_fit();
+    return nullptr;
+  }
+  slot.offset = offset;
+  slot.length = length;
+  slot.valid = true;
+  return &slot.entries;
+}
+
 bool PmTilesReader::GetTile(uint8_t z, uint32_t x, uint32_t y,
                              std::vector<uint8_t>* out) const {
   if (!open_) return false;
@@ -256,21 +279,18 @@ bool PmTilesReader::GetTile(uint8_t z, uint32_t x, uint32_t y,
   bool is_leaf = false;
   if (!FindEntry(root_dir_, tile_id, &entry, &is_leaf)) return false;
 
-  std::vector<DirEntry> leaf_dir;
-  const std::vector<DirEntry>* dir = &root_dir_;
   int leaf_hops = 0;
   while (is_leaf) {
     // Spec allows nested leaf directories; bound the hop count so a
     // corrupt/cyclic archive can't spin forever.
     if (++leaf_hops > 8) return false;
-    if (!ReadDirectory(header_.leaf_dirs_offset + entry.offset, entry.length,
-                        &leaf_dir)) {
-      return false;
-    }
-    dir = &leaf_dir;
-    if (!FindEntry(leaf_dir, tile_id, &entry, &is_leaf)) return false;
+    const std::vector<DirEntry>* leaf =
+        LeafDirectory(header_.leaf_dirs_offset + entry.offset, entry.length);
+    if (leaf == nullptr) return false;
+    // FindEntry copies what it needs into `entry`, so the cached vector is
+    // not referenced past this call and a later miss may safely evict it.
+    if (!FindEntry(*leaf, tile_id, &entry, &is_leaf)) return false;
   }
-  (void)dir;
 
   out->resize(entry.length);
   if (entry.length == 0) return true;

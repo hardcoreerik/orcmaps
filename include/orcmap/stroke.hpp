@@ -55,10 +55,40 @@ void RasterizeCenteredStroke(int x0, int y0, int x1, int y1, float width_px,
   int dy = -iabs(y1 - y0);
   int sy = y0 < y1 ? 1 : -1;
   int err = dx + dy;
+
+  // Run coalescing. The union of w x w brushes centred on consecutive
+  // pixels of an AXIS-ALIGNED run is exactly one rectangle:
+  //
+  //   horizontal run x=a..b at constant y -> (a-r, y-r, (b-a+1)+w-1, w)
+  //   vertical   run y=a..b at constant x -> (x-r, a-r, w, (b-a+1)+w-1)
+  //
+  // so emitting one rect per run paints precisely the same pixels as one
+  // rect per pixel -- this is a pure speed change, not an approximation.
+  // A DIAGONAL step breaks the identity (the union of two diagonally
+  // adjacent squares is not a rectangle), so any step that moves in both
+  // axes flushes the run first.
+  //
+  // This matters because roads are the widest, most numerous geometry:
+  // orcsdr-dark draws motorways at 3 px and primaries at 2.5 px, so before
+  // this every road pixel cost a separate FillRect call into the graphics
+  // adapter.
+  int run_x0 = x0;
+  int run_y0 = y0;
+  int run_x1 = x0;
+  int run_y1 = y0;
+  const auto flush = [&]() {
+    const int left = (run_x0 < run_x1 ? run_x0 : run_x1) - r;
+    const int top = (run_y0 < run_y1 ? run_y0 : run_y1) - r;
+    const int span_x = iabs(run_x1 - run_x0) + 1;
+    const int span_y = iabs(run_y1 - run_y0) + 1;
+    fill_rect(left, top, span_x + w - 1, span_y + w - 1);
+  };
+
   for (;;) {
-    fill_rect(x0 - r, y0 - r, w, w);
     if (x0 == x1 && y0 == y1) break;
     const int e2 = 2 * err;
+    const int prev_x = x0;
+    const int prev_y = y0;
     if (e2 >= dy) {
       err += dy;
       x0 += sx;
@@ -67,7 +97,19 @@ void RasterizeCenteredStroke(int x0, int y0, int x1, int y1, float width_px,
       err += dx;
       y0 += sy;
     }
+    const bool moved_x = x0 != prev_x;
+    const bool moved_y = y0 != prev_y;
+    if (moved_x && !moved_y && run_y0 == run_y1) {
+      run_x1 = x0;  // extend horizontal run
+    } else if (moved_y && !moved_x && run_x0 == run_x1) {
+      run_y1 = y0;  // extend vertical run
+    } else {
+      flush();
+      run_x0 = run_x1 = x0;
+      run_y0 = run_y1 = y0;
+    }
   }
+  flush();
 }
 
 }  // namespace orcmap

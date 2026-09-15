@@ -2,6 +2,7 @@
 #include "orcmap/clip.hpp"
 
 #include <limits>
+#include <vector>
 #include "orcmap/feature.hpp"
 #include "orcmap/renderer.hpp"
 #include "orcmap/stroke.hpp"
@@ -29,6 +30,105 @@ int CountColor(const orcmap::host::FramebufferTarget& fb, orcmap::Color c) {
     }
   }
   return n;
+}
+
+// The run-coalescing rasterizer must paint EXACTLY what a naive
+// one-rect-per-pixel brush paints. This compares the two over a spread of
+// angles, widths, and partially-offscreen cases rather than trusting the
+// geometric argument, and separately checks that the optimization actually
+// reduces the number of fill_rect calls.
+constexpr int kStrokeW = 64;
+constexpr int kStrokeH = 48;
+
+void PaintRect(std::vector<uint8_t>* buf, int x, int y, int w, int h) {
+  for (int yy = y; yy < y + h; ++yy) {
+    if (yy < 0 || yy >= kStrokeH) continue;
+    for (int xx = x; xx < x + w; ++xx) {
+      if (xx < 0 || xx >= kStrokeW) continue;
+      (*buf)[yy * kStrokeW + xx] = 1;
+    }
+  }
+}
+
+void TestRunCoalescingIsPixelIdenticalToPerPixelBrush() {
+  constexpr int kW = kStrokeW;
+  constexpr int kH = kStrokeH;
+  const int lines[][4] = {
+      {2, 2, 60, 2},     {60, 2, 2, 2},     {2, 2, 2, 44},
+      {2, 44, 2, 2},     {0, 0, 63, 47},    {63, 47, 0, 0},
+      {5, 40, 58, 6},    {1, 1, 62, 20},    {1, 20, 62, 1},
+      {-20, 10, 80, 12}, {30, -15, 32, 70}, {-5, -5, 70, 60},
+      {10, 10, 10, 10},  {0, 47, 63, 0},
+  };
+  const float widths[] = {1.0f, 1.8f, 2.0f, 2.5f, 3.0f, 5.0f};
+
+  for (const float width : widths) {
+    for (const auto& line : lines) {
+      std::vector<uint8_t> optimized(kW * kH, 0);
+      std::vector<uint8_t> reference(kW * kH, 0);
+      int optimized_calls = 0;
+      int reference_calls = 0;
+
+      orcmap::RasterizeCenteredStroke(
+          line[0], line[1], line[2], line[3], width, kW, kH,
+          [&](int x, int y, int w, int h) {
+            ++optimized_calls;
+            PaintRect(&optimized, x, y, w, h);
+          });
+
+      // Reference: the previous behaviour -- one w x w rect centred on every
+      // Bresenham pixel, with the same clip rect the real one uses.
+      const int rw = orcmap::RasterStrokeWidthPx(width);
+      if (rw > 0) {
+        const int r = rw / 2;
+        int x0 = line[0], y0 = line[1], x1 = line[2], y1 = line[3];
+        if (orcmap::ClipLineToPixelRect(&x0, &y0, &x1, &y1, -r, -r,
+                                        kW - 1 + r, kH - 1 + r)) {
+          const auto iabs = [](int v) { return v < 0 ? -v : v; };
+          int dx = iabs(x1 - x0);
+          int sx = x0 < x1 ? 1 : -1;
+          int dy = -iabs(y1 - y0);
+          int sy = y0 < y1 ? 1 : -1;
+          int err = dx + dy;
+          for (;;) {
+            ++reference_calls;
+            PaintRect(&reference, x0 - r, y0 - r, rw, rw);
+            if (x0 == x1 && y0 == y1) break;
+            const int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+          }
+        }
+      }
+
+      ORCMAP_EXPECT_TRUE(optimized == reference);
+      // Never worse than the per-pixel version.
+      ORCMAP_EXPECT_TRUE(optimized_calls <= reference_calls ||
+                         reference_calls == 0);
+    }
+  }
+}
+
+void TestRunCoalescingCollapsesAxisAlignedRuns() {
+  // A long horizontal 3 px stroke is the common case (roads), and must
+  // collapse to a single rectangle instead of one per pixel.
+  int calls = 0;
+  orcmap::RasterizeCenteredStroke(4, 20, 120, 20, 3.0f, 200, 40,
+                                  [&](int, int, int, int) { ++calls; });
+  ORCMAP_EXPECT_EQ(calls, 1);
+
+  calls = 0;
+  orcmap::RasterizeCenteredStroke(20, 4, 20, 120, 3.0f, 40, 200,
+                                  [&](int, int, int, int) { ++calls; });
+  ORCMAP_EXPECT_EQ(calls, 1);
+
+  // A pure diagonal cannot collapse: every step moves in both axes, so it
+  // still costs one rect per pixel. Recording this keeps the optimization
+  // honest about what it does not help.
+  calls = 0;
+  orcmap::RasterizeCenteredStroke(0, 0, 63, 63, 3.0f, 64, 64,
+                                  [&](int, int, int, int) { ++calls; });
+  ORCMAP_EXPECT_EQ(calls, 64);
 }
 
 void TestRasterWidthZeroNegative() {
@@ -180,4 +280,6 @@ void RunStrokeTests() {
   TestZeroWidthNoDraw();
   TestLabelKindsProduceNoPixels();
   TestClipRectRejectsInverted();
+  TestRunCoalescingIsPixelIdenticalToPerPixelBrush();
+  TestRunCoalescingCollapsesAxisAlignedRuns();
 }

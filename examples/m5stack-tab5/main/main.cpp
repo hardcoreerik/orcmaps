@@ -499,6 +499,11 @@ void RenderMapFrame() {
     g_canvas->setTextColor(kChromeDim, kChromeBg);
     g_canvas->drawString("Zoom out to the world overview", g_map_w / 2,
                          g_map_h / 2 + 48);
+    // No pipeline ran, so there is no measurement. Clearing g_last_frame is
+    // not cosmetic: leaving the PREVIOUS frame's statistics here made a
+    // no-coverage frame get counted again as if it had been rendered, which
+    // silently inflated tile counts and skewed sweep rates.
+    g_last_frame = orcmap_bench::BenchFrame{};
     return;
   }
 
@@ -626,7 +631,8 @@ void DrawInfoPanel() {
                 static_cast<unsigned>(g_last_frame.tiles_visible));
   put(kChromeDim, line);
   put(kChromeDim, "Made with Natural Earth (overview)");
-  put(kChromeWarn, "Tap Info again to close. Bench = run scenarios.");
+  put(kChromeWarn, "Info again to close. Bench = scenarios.");
+  put(kChromeWarn, "Sweep = every zoom + 5-screen pans (slow).");
 }
 
 void PresentCanvas(int offset_x, int offset_y) {
@@ -747,6 +753,122 @@ void RunScenario(const orcmap_bench::BenchScenario& scenario,
   g_active = saved_active;
 }
 
+// Zoom + pan sweep: walk every usable zoom level from the deepest installed
+// detail down to the display's own floor and back up, panning a fixed number
+// of full screens at each level, and record the rate.
+//
+// It drives RenderMapFrame() -- the same call an interactive redraw makes --
+// so the numbers describe what the demo actually does. Nothing is smoothed
+// or averaged away: there is no tile cache, so every frame is a full
+// re-render, and `fps` is uncached pipeline throughput rather than an
+// animation rate.
+//
+// Panning at deep zoom deliberately leaves the installed pack's coverage.
+// That is honest and is why every record carries tiles_missing: a frame with
+// missing tiles is CHEAP, so a rate without its missing count is misleading.
+constexpr int kSweepScreens = 5;
+
+// Frames during a sweep that had no installed coverage at all.
+int g_sweep_no_coverage = 0;
+
+void SweepAtZoom(const orcmap_bench::BenchHooks& hooks, const char* direction,
+                 uint8_t zoom, orcmap_bench::SweepAccumulator* overall) {
+  if (!orcmap::SetZoom(&g_viewport, zoom)) return;
+
+  // Re-centre on the deepest pack at every level so the pan starts inside
+  // real data instead of wherever the previous level happened to end.
+  if (MapSource* deepest = DeepestSource()) {
+    const orcmap::GeoBounds& b = deepest->manifest->bounds;
+    orcmap::SetCenter(&g_viewport, (b.min_lat_deg + b.max_lat_deg) * 0.5,
+                      (b.min_lon_deg + b.max_lon_deg) * 0.5);
+  }
+
+  orcmap_bench::SweepAccumulator level;
+  int no_coverage = 0;
+  const auto measure = [&]() {
+    RenderMapFrame();
+    Present();
+    // A frame with no installed coverage rendered a message, not a map, so
+    // it is NOT a pipeline measurement and must not enter the rate. It is
+    // counted and reported separately -- panning 5 screens at deep zoom
+    // genuinely leaves a small pack's coverage, and hiding that would make
+    // the rate look better than the demo is.
+    if (g_detail_unavailable || g_last_frame.frame_ms <= 0.0) {
+      ++no_coverage;
+      ++g_sweep_no_coverage;
+      return;
+    }
+    level.Add(g_last_frame);
+    if (overall != nullptr) overall->Add(g_last_frame);
+  };
+
+  measure();  // settle frame at the new zoom, counted like any other
+  // Right kSweepScreens full widths, then back left the same distance, so
+  // the camera ends where it started and the level is repeatable.
+  for (int i = 0; i < kSweepScreens; ++i) {
+    orcmap::PanByPixels(&g_viewport, g_map_w, 0);
+    measure();
+  }
+  for (int i = 0; i < kSweepScreens; ++i) {
+    orcmap::PanByPixels(&g_viewport, -g_map_w, 0);
+    measure();
+  }
+
+  orcmap::Viewport map_vp = g_viewport;
+  map_vp.width_px = g_map_w;
+  map_vp.height_px = g_map_h;
+  const char* pack_id = g_active.manifest != nullptr
+                            ? g_active.manifest->pack_id.c_str()
+                            : "none";
+  orcmap_bench::EmitSweepZoomRecord(hooks, "zoom-pan-1", direction, zoom,
+                                    kSweepScreens * 2, no_coverage, pack_id,
+                                    map_vp, level);
+
+  char note[96];
+  std::snprintf(note, sizeof(note), "z%u %s  %.0f ms  %.2f fps  %d blank",
+                static_cast<unsigned>(zoom), direction, level.MeanMs(),
+                level.Fps(), no_coverage);
+  M5.Display.fillRect(0, MapTop(), M5.Display.width(), 28, kChromeBg);
+  M5.Display.setTextDatum(middle_left);
+  M5.Display.setTextSize(2);
+  M5.Display.setTextColor(kChromeFg, kChromeBg);
+  M5.Display.drawString(note, 20, MapTop() + 14);
+}
+
+void RunZoomPanSweep() {
+  const orcmap_bench::BenchHooks hooks = MakeHooks();
+  const orcmap::Viewport saved = g_viewport;
+  const MapSource saved_active = g_active;
+
+  uint8_t deepest_zoom = g_zoom_floor;
+  if (MapSource* deepest = DeepestSource()) {
+    deepest_zoom = deepest->manifest->max_zoom;
+  }
+  if (deepest_zoom < g_zoom_floor) deepest_zoom = g_zoom_floor;
+
+  orcmap_bench::SweepAccumulator overall;
+  g_sweep_no_coverage = 0;
+  const int64_t start = NowUs();
+
+  // Max down to the display floor, then back up: every level is measured
+  // twice, in both directions of travel.
+  for (int z = deepest_zoom; z >= static_cast<int>(g_zoom_floor); --z) {
+    SweepAtZoom(hooks, "down", static_cast<uint8_t>(z), &overall);
+  }
+  for (int z = g_zoom_floor; z <= static_cast<int>(deepest_zoom); ++z) {
+    SweepAtZoom(hooks, "up", static_cast<uint8_t>(z), &overall);
+  }
+
+  const double wall_ms = static_cast<double>(NowUs() - start) / 1000.0;
+  orcmap_bench::EmitSweepSummaryRecord(hooks, "zoom-pan-1", g_zoom_floor,
+                                       deepest_zoom, wall_ms,
+                                       g_sweep_no_coverage, overall);
+
+  g_viewport = saved;
+  g_active = saved_active;
+  Redraw();
+}
+
 void RunBenchmarks() {
   const orcmap_bench::BenchHooks hooks = MakeHooks();
 
@@ -832,6 +954,8 @@ void HandleButtonTap(int x, int y) {
     Present();
   } else if (g_show_info && HitButton(x, y, 920, 200)) {
     RunBenchmarks();
+  } else if (g_show_info && HitButton(x, y, 1130, 130)) {
+    RunZoomPanSweep();
   }
 }
 
@@ -978,6 +1102,14 @@ extern "C" void app_main() {
   vTaskDelay(pdMS_TO_TICKS(600));
   M5.Display.fillScreen(TFT_BLACK);
   Redraw();
+
+#ifdef ORCMAP_TAB5_AUTOSWEEP
+  // Measurement build only (see main/CMakeLists.txt). Lets a sweep be
+  // captured over serial without a human tapping Info -> Sweep.
+  ESP_LOGW(kTag, "AUTOSWEEP build: running zoom/pan sweep at boot");
+  RunZoomPanSweep();
+  ESP_LOGW(kTag, "AUTOSWEEP complete");
+#endif
 
   // Interactive loop. A drag blits the finished canvas at an offset for
   // immediate feedback; the pipeline re-runs once on release.
