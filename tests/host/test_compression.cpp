@@ -127,6 +127,55 @@ void TestCorruptGzipPayload(const std::string& gz_path) {
   ORCMAP_EXPECT_EQ(out.size(), static_cast<size_t>(0));
 }
 
+// STREAMING inflate must be byte-identical to fetch-then-inflate. This is
+// the gate on the change that let a no-PSRAM board render mid-zoom tiles: it
+// halves the large-allocation requirement, and it must not alter one byte of
+// output while doing so.
+void TestStreamingInflateMatchesTwoStep(const std::string& gzip_pmtiles) {
+  orcmap::host::FileByteSource source(gzip_pmtiles);
+  ORCMAP_EXPECT_TRUE(source.Valid());
+  orcmap::PmTilesReader reader(&source);
+  ORCMAP_EXPECT_TRUE(reader.Open());
+
+  // Reference: the old two-step path.
+  std::vector<uint8_t> stored;
+  ORCMAP_EXPECT_TRUE(reader.GetTile(0, 0, 0, &stored));
+  std::vector<uint8_t> two_step;
+  ORCMAP_EXPECT_TRUE(orcmap::DecompressPayload(
+      reader.Header().tile_compression, stored.data(), stored.size(),
+      1u << 20, &two_step));
+  ORCMAP_EXPECT_TRUE(!two_step.empty());
+
+  // Streaming, into a fresh buffer.
+  std::vector<uint8_t> streamed;
+  ORCMAP_EXPECT_TRUE(
+      reader.GetTileInflated(0, 0, 0, 1u << 20, &streamed));
+  ORCMAP_EXPECT_TRUE(streamed == two_step);
+
+  // Streaming into a REUSED buffer that already holds larger content must
+  // still produce exactly the tile, not a mixture -- this is how the
+  // embedded path uses it.
+  std::vector<uint8_t> reused(4096, 0xAB);
+  reused.reserve(1u << 16);
+  const size_t capacity_before = reused.capacity();
+  ORCMAP_EXPECT_TRUE(reader.GetTileInflated(0, 0, 0, 1u << 20, &reused));
+  ORCMAP_EXPECT_TRUE(reused == two_step);
+  // Reuse must not have thrown the reservation away.
+  ORCMAP_EXPECT_TRUE(reused.capacity() >= capacity_before);
+
+  // A budget below the real inflated size is refused, not truncated.
+  std::vector<uint8_t> too_small;
+  ORCMAP_EXPECT_TRUE(
+      !reader.GetTileInflated(0, 0, 0, two_step.size() - 1, &too_small));
+  ORCMAP_EXPECT_TRUE(too_small.empty());
+
+  // An absent tile is reported as absent by both paths, consistently.
+  ORCMAP_EXPECT_TRUE(!reader.TileExists(14, 1, 1));
+  std::vector<uint8_t> absent;
+  ORCMAP_EXPECT_TRUE(!reader.GetTileInflated(14, 1, 1, 1u << 20, &absent));
+  ORCMAP_EXPECT_TRUE(reader.TileExists(0, 0, 0));
+}
+
 void TestGzipPmtilesToPixels(const std::string& gzip_pmtiles,
                              const std::string& raw_mvt) {
   orcmap::host::FileByteSource source(gzip_pmtiles);
@@ -185,4 +234,5 @@ void RunCompressionTests(const std::string& pmtiles_path,
   TestEmptyGzipInput();
   TestCorruptGzipPayload(gz_path);
   TestGzipPmtilesToPixels(gzip_pmtiles, mvt_path);
+  TestStreamingInflateMatchesTwoStep(gzip_pmtiles);
 }

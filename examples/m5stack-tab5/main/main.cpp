@@ -128,15 +128,11 @@ orcmap_bench::BenchHooks MakeHooks() {
   return hooks;
 }
 
-void ClassifyExperimental(orcmap::FeatureTile* tile) {
-  orcmap::experimental::AssignFeatureKinds(tile);
-}
-
 orcmap_bench::BenchPipelineOptions MakePipelineOptions() {
   orcmap_bench::BenchPipelineOptions options;
   options.include_layer = &orcmap::experimental::IncludeNoTextBasemapLayer;
   options.decompress_budget = kDecompressBudget;
-  options.classify = &ClassifyExperimental;
+  options.classify_feature = &orcmap::experimental::TryClassifyFeature;
   return options;
 }
 

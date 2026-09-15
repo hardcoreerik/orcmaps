@@ -149,3 +149,82 @@ the present count, and the corrected run's counters reconcile exactly.
 - No touch, no interaction: this example is a benchmark instrument, and the
   Tab5's drag-blit model cannot be ported to a board with no PSRAM.
 - Single board, single card, single style (`orcsdr-dark`).
+
+## Streaming pipeline (second attempt at "every tile loads")
+
+The pipeline was rebuilt to stream, and the engine change is real and
+verified — but **the goal is not yet met on this board.** Recorded here with
+the measurements rather than as a success.
+
+### What was built
+
+Nothing materialises a whole tile any more:
+
+- `MvtDecodeOptions::feature_sink` — the decoder hands each feature over as
+  it is parsed, into one reused `MvtFeature`, and accumulates nothing.
+- `TranslateMvtFeature` / `RenderFeatureAt` — per-feature translate and draw,
+  reusing one `Feature` with its buffers retained.
+- `DecompressStreaming` / `PmTilesReader::GetTileInflated` — the compressed
+  payload is pulled from the archive in 2 KiB pieces, so compressed and
+  inflated bytes are never resident together.
+
+Host tests gate all of it: the streaming decode is asserted **byte-identical**
+to the materialising decode (same feature sequence, geometry, attributes, and
+layer context, on the real MVT fixture), proven to reuse a single `Feature`
+object address and to accumulate nothing, to honour the layer filter, and to
+abort rather than truncate when a sink refuses. Streaming inflate is asserted
+byte-identical to fetch-then-inflate, including into a reused buffer, with an
+undersized budget refused rather than truncated.
+
+### Measured effect on the CYD
+
+| build | world z1 | oregon z7 | springfield z13 |
+|---|---|---|---|
+| materialising | 2 of 4 tiles | 0 of 9 | 0 of 6 |
+| streaming decode | **4 of 4**, 632 features | 0 of 9 | 0 of 6 |
+| streaming decode + inflate | 2-3 of 4 (varies) | 0 of 9 | 0 of 6 |
+
+Streaming decode alone fixed the world view outright. Adding streaming
+inflate did **not** help further and made the world view unstable, which
+points at the actual remaining limit.
+
+### The remaining blocker, numerically
+
+It is not total memory, it is **contiguous** memory:
+
+| | |
+|---|---:|
+| free internal heap | 190,264 bytes |
+| **largest free block** | **69,632 bytes** |
+| oregon z7 worst tile, inflated | 111,366 bytes |
+| springfield z13 worst tile, inflated | 77,380 bytes |
+
+The pipeline still needs ONE contiguous buffer holding a whole inflated tile,
+and the largest block available is 70-106 KiB depending on fragmentation —
+below what the dense tiles require. Frame-to-frame the largest block shrinks,
+which is why the world view degraded from 4 of 4 to 2 of 4 across runs.
+
+Pre-reserving a 132 KiB buffer at startup was tried and made things **worse**,
+not better: it claimed the largest block and left a 77,824-byte maximum
+behind, after which every tile failed. That attempt is recorded because the
+intuition ("reserve early while memory is clean") was wrong here.
+
+Two suspects were measured and **ruled out**: the resident root directories
+of all three packs total 3.6 KiB, and `sizeof(tinfl_decompressor)` is ~8 KiB
+(it holds no LZ dictionary), so neither explains the fragmentation.
+
+### The two ways to finish this
+
+1. **End-to-end streaming parse** — parse the MVT while inflating, through a
+   sliding window, so no whole-tile buffer exists at any point. Peak becomes
+   the inflate window plus one feature, roughly 40 KiB, which fits with room
+   to spare and would make *any* pack work on this board. This is the durable
+   fix and is not implemented.
+2. **CYD-sized packs** — these packs were built for a 1280x720 Tab5 at
+   extent 4096, which is 16x the pixel resolution a 480x320 screen can show.
+   A pack built for this display (coarser simplification, fewer layers,
+   smaller extent) would produce tiles small enough to load today, with no
+   engine change.
+
+(1) is the better engineering answer; (2) is the faster route to a working
+demo. They are not exclusive.

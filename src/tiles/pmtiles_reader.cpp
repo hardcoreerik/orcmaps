@@ -270,8 +270,8 @@ const std::vector<PmTilesReader::DirEntry>* PmTilesReader::LeafDirectory(
   return &slot.entries;
 }
 
-bool PmTilesReader::GetTile(uint8_t z, uint32_t x, uint32_t y,
-                             std::vector<uint8_t>* out) const {
+bool PmTilesReader::LocateTile(uint8_t z, uint32_t x, uint32_t y,
+                               uint64_t* offset, uint32_t* length) const {
   if (!open_) return false;
   const uint64_t tile_id = ZxyToTileId(z, x, y);
 
@@ -292,10 +292,48 @@ bool PmTilesReader::GetTile(uint8_t z, uint32_t x, uint32_t y,
     if (!FindEntry(*leaf, tile_id, &entry, &is_leaf)) return false;
   }
 
-  out->resize(entry.length);
-  if (entry.length == 0) return true;
-  return source_->Read(header_.tile_data_offset + entry.offset, out->data(),
-                        entry.length) == entry.length;
+  if (offset != nullptr) *offset = header_.tile_data_offset + entry.offset;
+  if (length != nullptr) *length = entry.length;
+  return true;
+}
+
+bool PmTilesReader::TileExists(uint8_t z, uint32_t x, uint32_t y) const {
+  return LocateTile(z, x, y, nullptr, nullptr);
+}
+
+bool PmTilesReader::GetTile(uint8_t z, uint32_t x, uint32_t y,
+                             std::vector<uint8_t>* out) const {
+  if (out == nullptr) return false;
+  uint64_t offset = 0;
+  uint32_t length = 0;
+  if (!LocateTile(z, x, y, &offset, &length)) return false;
+  out->resize(length);
+  if (length == 0) return true;
+  return source_->Read(offset, out->data(), length) == length;
+}
+
+namespace {
+
+size_t ReadThroughByteSource(void* ctx, uint64_t offset, uint8_t* dst,
+                             size_t len) {
+  return static_cast<ByteSource*>(ctx)->Read(offset, dst, len);
+}
+
+}  // namespace
+
+bool PmTilesReader::GetTileInflated(uint8_t z, uint32_t x, uint32_t y,
+                                    size_t max_output_size,
+                                    std::vector<uint8_t>* out) const {
+  if (out == nullptr) return false;
+  uint64_t offset = 0;
+  uint32_t length = 0;
+  if (!LocateTile(z, x, y, &offset, &length)) return false;
+  if (length == 0) {
+    out->clear();
+    return true;
+  }
+  return DecompressStreaming(header_.tile_compression, &ReadThroughByteSource,
+                             source_, offset, length, max_output_size, out);
 }
 
 }  // namespace orcmap

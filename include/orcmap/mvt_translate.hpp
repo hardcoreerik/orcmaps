@@ -20,4 +20,13 @@ namespace orcmap {
 // translation to an empty FeatureTile.
 bool TranslateMvtToFeatureTile(const MvtTile& in, FeatureTile* out);
 
+// Single-feature translation, for streaming decode (MvtDecodeOptions::
+// feature_sink). Writes into `out`, reusing its existing capacity instead of
+// returning a fresh Feature, so a tile's features can be translated one at a
+// time without the allocation churn -- or the peak memory -- of building a
+// whole FeatureTile. `layer` supplies extent and layer name; its own
+// `features` vector is not read.
+bool TranslateMvtFeature(const MvtLayer& layer, const MvtFeature& in,
+                         Feature* out);
+
 }  // namespace orcmap

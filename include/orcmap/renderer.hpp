@@ -45,4 +45,12 @@ bool RenderFeatureTileAt(const FeatureTile& features,
                          const Viewport& viewport, const MapStyle& style,
                          RenderTarget* target);
 
+// Draws ONE feature at one placement. This is what a streaming decoder needs
+// (see MvtDecodeOptions::feature_sink): the caller never has to hold a whole
+// FeatureTile, which is what made mid-zoom tiles impossible on a board
+// without PSRAM. Same paint, clipping and skip rules as the batch calls.
+bool RenderFeatureAt(const Feature& feature, const TilePlacement& placement,
+                     const Viewport& viewport, const MapStyle& style,
+                     RenderTarget* target);
+
 }  // namespace orcmap

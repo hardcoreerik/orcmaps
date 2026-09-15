@@ -88,9 +88,33 @@ struct MvtTile {
 // Skipped layers are omitted from `out` (no partial features). A skipped
 // layer is only checked for top-level protobuf framing and a name; its
 // feature/key/value payloads are not semantically decoded.
+struct MvtLayer;
+struct MvtFeature;
+
+// STREAMING decode. When `feature_sink` is set, decoding does NOT build an
+// MvtTile: each feature is handed to the sink as soon as it is parsed, into
+// a single reused MvtFeature, and then discarded. `out` is left empty.
+//
+// This exists because materialising a tile is what makes OrcMaps unusable on
+// a board without PSRAM. Measured on real packs, a tile whose inflated bytes
+// are 16-111 KiB materialises into an MvtTile plus a FeatureTile totalling
+// 6-9x that -- up to 1,011 KiB for one Oregon z7 tile, against roughly
+// 150 KiB of usable DRAM on an ESP32-3248S035. Streaming reduces the peak to
+// the inflated bytes plus one feature.
+//
+// The sink receives the owning layer (name/extent/version populated, its
+// `features` vector deliberately empty) so the existing per-feature
+// translation applies unchanged. Nothing passed to the sink outlives the
+// call: copy what you need. Returning false from the sink aborts the decode
+// and makes the decode call return false.
+using MvtFeatureSink = bool (*)(const MvtLayer& layer,
+                                const MvtFeature& feature, void* ctx);
+
 struct MvtDecodeOptions {
   bool (*include_layer)(const char* name, size_t name_len, void* ctx) = nullptr;
   void* include_layer_ctx = nullptr;
+  MvtFeatureSink feature_sink = nullptr;
+  void* feature_sink_ctx = nullptr;
 };
 
 // Decodes one MVT tile's raw bytes (after DecompressPayload if the

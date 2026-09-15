@@ -96,6 +96,24 @@ class PmTilesReader {
   bool GetTile(uint8_t z, uint32_t x, uint32_t y,
                std::vector<uint8_t>* out) const;
 
+  // Looks up a tile AND inflates it, streaming the compressed bytes out of
+  // the ByteSource so the compressed payload is never resident alongside the
+  // inflated payload. Use this instead of GetTile + DecompressPayload on
+  // memory-constrained targets: it halves the large-allocation requirement,
+  // which is what makes mid-zoom tiles possible without PSRAM.
+  //
+  // `out` is resized to the exact inflated size; reserve its capacity once
+  // and reuse it across tiles. Returns false if the tile is absent (not an
+  // error -- sparse coverage), on I/O or format error, or if the inflated
+  // size would exceed `max_output_size`. Distinguish absence from failure
+  // with TileExists().
+  bool GetTileInflated(uint8_t z, uint32_t x, uint32_t y,
+                       size_t max_output_size,
+                       std::vector<uint8_t>* out) const;
+
+  // True if this archive stores the tile, without reading its bytes.
+  bool TileExists(uint8_t z, uint32_t x, uint32_t y) const;
+
  private:
   struct DirEntry {
     uint64_t tile_id = 0;
@@ -110,6 +128,12 @@ class PmTilesReader {
   // and any leaf directory.
   bool ReadDirectory(uint64_t offset, uint64_t length,
                       std::vector<DirEntry>* out) const;
+
+  // Directory walk shared by GetTile and GetTileInflated: resolves z/x/y to
+  // an absolute archive offset and stored length. Null outputs make it an
+  // existence check.
+  bool LocateTile(uint8_t z, uint32_t x, uint32_t y, uint64_t* offset,
+                  uint32_t* length) const;
 
   // Binary-searches a parsed, tile_id-sorted directory for `tile_id`.
   // Returns false if no entry could contain this tile_id at all. On true,

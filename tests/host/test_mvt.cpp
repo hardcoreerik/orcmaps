@@ -46,6 +46,134 @@ const orcmap::MvtValue* FindAttribute(const orcmap::MvtFeature& feature,
   return nullptr;
 }
 
+// STREAMING decode must be output-identical to materialising decode. This is
+// the gate on the change that made a no-PSRAM board usable: if streaming
+// ever emitted a different feature sequence, maps would silently differ by
+// board.
+struct StreamCapture {
+  std::vector<std::string> layers;
+  std::vector<orcmap::MvtFeature> features;
+  std::vector<uint32_t> extents;
+  // Proves the decoder really does reuse one Feature rather than holding all
+  // of them: every callback must see the same object address.
+  const void* first_address = nullptr;
+  bool single_address = true;
+};
+
+bool CaptureFeature(const orcmap::MvtLayer& layer,
+                    const orcmap::MvtFeature& feature, void* ctx) {
+  StreamCapture& cap = *static_cast<StreamCapture*>(ctx);
+  if (cap.first_address == nullptr) {
+    cap.first_address = &feature;
+  } else if (cap.first_address != &feature) {
+    cap.single_address = false;
+  }
+  cap.layers.push_back(layer.name);
+  cap.extents.push_back(layer.extent);
+  cap.features.push_back(feature);  // deep copy, for comparison only
+  return true;
+}
+
+void TestStreamingMatchesMaterialisedDecode(const std::string& fixture_path) {
+  const std::vector<uint8_t> data = ReadFile(fixture_path);
+  ORCMAP_EXPECT_TRUE(!data.empty());
+
+  orcmap::MvtTile batch;
+  ORCMAP_EXPECT_TRUE(orcmap::DecodeMvtTile(data.data(), data.size(), &batch));
+
+  StreamCapture cap;
+  orcmap::MvtDecodeOptions options;
+  options.feature_sink = &CaptureFeature;
+  options.feature_sink_ctx = &cap;
+  orcmap::MvtTile streamed;
+  ORCMAP_EXPECT_TRUE(orcmap::DecodeMvtTile(data.data(), data.size(), options,
+                                           &streamed));
+
+  // Streaming must not accumulate anything.
+  ORCMAP_EXPECT_EQ(static_cast<int>(streamed.layers.size()), 0);
+  ORCMAP_EXPECT_TRUE(cap.single_address);
+
+  size_t expected = 0;
+  for (const orcmap::MvtLayer& layer : batch.layers) {
+    expected += layer.features.size();
+  }
+  ORCMAP_EXPECT_EQ(static_cast<int>(cap.features.size()),
+                   static_cast<int>(expected));
+  ORCMAP_EXPECT_TRUE(expected > 0);
+
+  // Same features, same order, same layer context.
+  size_t i = 0;
+  for (const orcmap::MvtLayer& layer : batch.layers) {
+    for (const orcmap::MvtFeature& want : layer.features) {
+      const orcmap::MvtFeature& got = cap.features[i];
+      ORCMAP_EXPECT_EQ(cap.layers[i], layer.name);
+      ORCMAP_EXPECT_TRUE(cap.extents[i] == layer.extent);
+      ORCMAP_EXPECT_TRUE(got.id == want.id);
+      ORCMAP_EXPECT_TRUE(got.geom_type == want.geom_type);
+      ORCMAP_EXPECT_EQ(static_cast<int>(got.geometry.size()),
+                       static_cast<int>(want.geometry.size()));
+      for (size_t r = 0; r < want.geometry.size(); ++r) {
+        ORCMAP_EXPECT_EQ(static_cast<int>(got.geometry[r].size()),
+                         static_cast<int>(want.geometry[r].size()));
+        for (size_t k = 0; k < want.geometry[r].size(); ++k) {
+          ORCMAP_EXPECT_TRUE(got.geometry[r][k].x == want.geometry[r][k].x);
+          ORCMAP_EXPECT_TRUE(got.geometry[r][k].y == want.geometry[r][k].y);
+        }
+      }
+      ORCMAP_EXPECT_TRUE(got.attribute_keys == want.attribute_keys);
+      ORCMAP_EXPECT_EQ(static_cast<int>(got.attribute_values.size()),
+                       static_cast<int>(want.attribute_values.size()));
+      for (size_t v = 0; v < want.attribute_values.size(); ++v) {
+        ORCMAP_EXPECT_TRUE(got.attribute_values[v] == want.attribute_values[v]);
+      }
+      ++i;
+    }
+  }
+}
+
+void TestStreamingHonoursLayerFilterAndAbort(const std::string& fixture_path) {
+  const std::vector<uint8_t> data = ReadFile(fixture_path);
+
+  // The layer filter still applies while streaming.
+  StreamCapture all;
+  orcmap::MvtDecodeOptions unfiltered;
+  unfiltered.feature_sink = &CaptureFeature;
+  unfiltered.feature_sink_ctx = &all;
+  orcmap::MvtTile sink_only;
+  ORCMAP_EXPECT_TRUE(orcmap::DecodeMvtTile(data.data(), data.size(),
+                                           unfiltered, &sink_only));
+
+  StreamCapture filtered;
+  orcmap::MvtDecodeOptions with_filter;
+  with_filter.feature_sink = &CaptureFeature;
+  with_filter.feature_sink_ctx = &filtered;
+  with_filter.include_layer = &orcmap::experimental::IncludeNoTextBasemapLayer;
+  ORCMAP_EXPECT_TRUE(orcmap::DecodeMvtTile(data.data(), data.size(),
+                                           with_filter, &sink_only));
+  ORCMAP_EXPECT_TRUE(filtered.features.size() <= all.features.size());
+  for (const std::string& name : filtered.layers) {
+    ORCMAP_EXPECT_TRUE(
+        orcmap::experimental::IncludeNoTextBasemapLayer(name.c_str(),
+                                                        name.size(), nullptr));
+  }
+
+  // A sink that refuses aborts the decode rather than silently truncating.
+  struct Refuse {
+    static bool Sink(const orcmap::MvtLayer&, const orcmap::MvtFeature&,
+                     void* ctx) {
+      ++*static_cast<int*>(ctx);
+      return false;
+    }
+  };
+  int calls = 0;
+  orcmap::MvtDecodeOptions refusing;
+  refusing.feature_sink = &Refuse::Sink;
+  refusing.feature_sink_ctx = &calls;
+  ORCMAP_EXPECT_TRUE(!orcmap::DecodeMvtTile(data.data(), data.size(), refusing,
+                                            &sink_only));
+  ORCMAP_EXPECT_EQ(calls, 1);
+}
+
 void TestDecodeFixture(const std::string& fixture_path) {
   const std::vector<uint8_t> data = ReadFile(fixture_path);
   ORCMAP_EXPECT_TRUE(!data.empty());
@@ -227,6 +355,8 @@ void TestTruncatedFixtureFails(const std::string& fixture_path) {
 
 void RunMvtTests(const std::string& fixture_path) {
   TestDecodeFixture(fixture_path);
+  TestStreamingMatchesMaterialisedDecode(fixture_path);
+  TestStreamingHonoursLayerFilterAndAbort(fixture_path);
   TestEmptyBufferFails();
   TestGarbageBufferFails();
   TestTruncatedFixtureFails(fixture_path);

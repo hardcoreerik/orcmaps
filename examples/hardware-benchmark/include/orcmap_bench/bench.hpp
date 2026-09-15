@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "orcmap/feature.hpp"
 #include "orcmap/pack_discovery.hpp"
@@ -65,12 +66,18 @@ struct BenchPipelineOptions {
   void* include_layer_ctx = nullptr;
   // Upper bound handed to DecompressPayload for a single tile payload.
   size_t decompress_budget = 512u * 1024u;
-  // FeatureKind assignment, supplied by the caller so this component does
-  // not depend on the EXPERIMENTAL classifier (or on whatever replaces it
-  // once a real tile-content schema is chosen). The renderer skips
-  // unclassified features, so a caller that wants visible geography must
-  // provide this.
-  void (*classify)(orcmap::FeatureTile* tile) = nullptr;
+  // FeatureKind assignment for ONE feature, supplied by the caller so this
+  // component still does not depend on the EXPERIMENTAL classifier (or on
+  // whatever replaces it once a real tile-content schema is chosen). The
+  // renderer skips unclassified features, so a caller that wants visible
+  // geography must provide this.
+  //
+  // Per-feature rather than per-tile because the pipeline streams: no
+  // FeatureTile is ever materialised. Return true and set *kind when the
+  // feature is recognised; return false to leave it unclassified (and so
+  // undrawn), which is the same rule the batch classifier applied.
+  bool (*classify_feature)(const orcmap::Feature& feature,
+                           orcmap::FeatureKind* kind) = nullptr;
 
   // Heap floor for boards without PSRAM. When non-zero (and hooks provide
   // internal_free), a tile is SKIPPED rather than decoded if free internal
@@ -82,6 +89,13 @@ struct BenchPipelineOptions {
   // firmware, which would take a multi-minute benchmark run with it. A
   // skipped tile is a recorded, visible measurement; a crash is not.
   size_t min_free_internal_bytes = 0;
+
+  // Optional caller-owned inflate buffer, reused for every tile. Reserve it
+  // ONCE, as early in startup as possible: on a board without PSRAM the
+  // limit is the largest contiguous block, and a buffer claimed while the
+  // heap is still unfragmented stays usable for the rest of the run. Null
+  // falls back to a per-tile local buffer, which is fine where PSRAM exists.
+  std::vector<uint8_t>* scratch_inflated = nullptr;
 };
 
 // One measured frame. All timings are milliseconds; all byte counts are

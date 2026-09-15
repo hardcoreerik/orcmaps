@@ -105,6 +105,22 @@ bool RenderFeatureTile(const FeatureTile& features, TileId source_tile,
   return RenderFeatureTileAt(features, nearest, viewport, style, target);
 }
 
+bool RenderFeatureAt(const Feature& feature, const TilePlacement& placement,
+                     const Viewport& viewport, const MapStyle& style,
+                     RenderTarget* target) {
+  if (target == nullptr) return false;
+  if (!ZoomIsValid(viewport.zoom)) return false;
+  if (placement.tile.z != viewport.zoom) return false;
+  const uint32_t extent = feature.extent == 0 ? 4096u : feature.extent;
+  TileScreenMap map;
+  if (!MakeTilePlacementScreenMap(viewport, placement, extent, &map)) {
+    return false;
+  }
+  std::vector<int> poly_xy;
+  RenderOneFeature(feature, map, viewport, style, target, &poly_xy);
+  return true;
+}
+
 bool RenderFeatureTileAt(const FeatureTile& features,
                          const TilePlacement& placement,
                          const Viewport& viewport, const MapStyle& style,

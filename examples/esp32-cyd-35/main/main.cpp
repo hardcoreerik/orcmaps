@@ -98,7 +98,13 @@ constexpr int kPanelH = 480;
 // The budget is an upper bound per tile payload, not a reservation; measured
 // OpenMapTiles tiles decompress to roughly 4-40 KB each. 192 KB is generous
 // for that while still being refused long before it could exhaust the heap.
-constexpr size_t kDecompressBudget = 192u * 1024u;
+constexpr size_t kDecompressBudget = 160u * 1024u;
+// Reusable inflate buffer, claimed ONCE at startup while the heap is still
+// unfragmented. Measured on this board: 211,788 bytes free but a largest
+// free block of only 106,496 once the readers were open, while the densest
+// Oregon z7 tile inflates to 111,366 bytes -- so the buffer has to be taken
+// before that fragmentation happens, and then reused for every tile.
+constexpr size_t kInflateScratchBytes = 132u * 1024u;
 // Below this much free internal memory the harness skips a tile instead of
 // attempting an allocation that would abort the firmware (exceptions are
 // disabled, so a failed allocation terminates rather than throws). A skipped
@@ -212,15 +218,14 @@ orcmap_bench::BenchHooks MakeHooks() {
   return hooks;
 }
 
-void ClassifyExperimental(orcmap::FeatureTile* tile) {
-  orcmap::experimental::AssignFeatureKinds(tile);
-}
+std::vector<uint8_t> g_inflate_scratch;
 
 orcmap_bench::BenchPipelineOptions MakePipelineOptions() {
   orcmap_bench::BenchPipelineOptions options;
+  options.scratch_inflated = &g_inflate_scratch;
   options.include_layer = &orcmap::experimental::IncludeNoTextBasemapLayer;
   options.decompress_budget = kDecompressBudget;
-  options.classify = &ClassifyExperimental;
+  options.classify_feature = &orcmap::experimental::TryClassifyFeature;
   options.min_free_internal_bytes = kHeapFloor;
   return options;
 }
@@ -616,10 +621,16 @@ extern "C" void app_main() {
                 static_cast<unsigned>(InternalFree() / 1024));
   StatusLine(70, TFT_GREEN, line);
 
+  // The inflate buffer is REUSED but deliberately NOT pre-reserved.
+  // Measured on this board: reserving 132 KiB up front claimed the largest
+  // free block and left a 77,824-byte maximum behind, which made every tile
+  // fail -- worse than not reserving at all (106,496 bytes largest, world
+  // tiles rendering). It grows to the first tile's size and is then reused,
+  // which avoids per-tile churn without carving up the heap.
   if (!MountSd()) {
     Fail("SD CARD NOT FOUND", "insert a card with /orcmaps");
   }
-  StatusLine(84, TFT_GREEN, "SD card  mounted");
+  StatusLine(98, TFT_GREEN, "SD card  mounted");
 
   OpenNumberedReport();
 
@@ -641,7 +652,7 @@ extern "C" void app_main() {
   std::snprintf(line, sizeof(line), "Packs    %u installed, %u rejected",
                 static_cast<unsigned>(discovery.packs_added),
                 static_cast<unsigned>(discovery.rejected.size()));
-  StatusLine(98, discovery.packs_added > 0 ? TFT_GREEN : TFT_ORANGE, line);
+  StatusLine(112, discovery.packs_added > 0 ? TFT_GREEN : TFT_ORANGE, line);
   if (g_catalog.Packs().empty()) {
     Fail("NO USABLE PACKS IN /orcmaps", "run tools/pack-verify on the card");
   }

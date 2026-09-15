@@ -127,6 +127,63 @@ void JsonEscape(const char* input, char* out, size_t out_size) {
   out[o] = '\0';
 }
 
+namespace {
+
+// Per-tile state for the streaming sink. Holds no geometry of its own beyond
+// one reused Feature.
+struct StreamContext {
+  const BenchHooks* hooks = nullptr;
+  const BenchPipelineOptions* options = nullptr;
+  const orcmap::Viewport* viewport = nullptr;
+  const orcmap::MapStyle* style = nullptr;
+  orcmap::RenderTarget* target = nullptr;
+  const std::vector<int64_t>* placements = nullptr;
+  BenchFrame* frame = nullptr;
+
+  orcmap::TileId tile{};     // the tile these features came from
+  orcmap::Feature feature;   // reused for every feature in the tile
+  size_t features = 0;
+  double inner_ms = 0.0;     // time attributed to translate/classify/render
+};
+
+bool StreamFeature(const orcmap::MvtLayer& layer,
+                   const orcmap::MvtFeature& in, void* ctx) {
+  StreamContext& s = *static_cast<StreamContext*>(ctx);
+  const BenchHooks& hooks = *s.hooks;
+  const int64_t inner_start = Now(hooks);
+
+  int64_t t = Now(hooks);
+  if (!orcmap::TranslateMvtFeature(layer, in, &s.feature)) return false;
+  s.frame->translate_ms += MsSince(hooks, t);
+  ++s.features;
+
+  if (s.options->classify_feature != nullptr) {
+    t = Now(hooks);
+    orcmap::FeatureKind kind = orcmap::FeatureKind::kBackground;
+    if (s.options->classify_feature(s.feature, &kind)) {
+      s.feature.kind = kind;
+      s.feature.kind_assigned = true;
+    }
+    s.frame->classify_ms += MsSince(hooks, t);
+  }
+
+  t = Now(hooks);
+  for (const int64_t unwrapped_x : *s.placements) {
+    orcmap::TilePlacement placement;
+    placement.tile = s.tile;
+    placement.unwrapped_x = unwrapped_x;
+    if (!orcmap::RenderFeatureAt(s.feature, placement, *s.viewport, *s.style,
+                                 s.target)) {
+      s.frame->error_stage = "render";
+    }
+  }
+  s.frame->render_ms += MsSince(hooks, t);
+  s.inner_ms += MsSince(hooks, inner_start);
+  return true;
+}
+
+}  // namespace
+
 bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
                          const orcmap::Viewport& viewport,
                          const orcmap::MapStyle& style,
@@ -204,78 +261,85 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
 #if defined(__cpp_exceptions) && __cpp_exceptions
     try {
 #endif
-    std::vector<uint8_t> stored;
     int64_t t = Now(hooks);
-    const bool got = reader.GetTile(tile.z, tile.x, tile.y, &stored);
+    const bool exists = reader.TileExists(tile.z, tile.x, tile.y);
     frame.lookup_ms += MsSince(hooks, t);
-    if (!got) {
+    if (!exists) {
       ++frame.tiles_missing;
       continue;
     }
     ++frame.tiles_present;
     counted_present = true;
-    frame.bytes_stored += stored.size();
 
-    std::vector<uint8_t> raw;
+    // Lookup + STREAMING inflate. The compressed payload is pulled from the
+    // archive in small pieces and never held alongside the inflated bytes:
+    // on a board without PSRAM the binding limit is the largest CONTIGUOUS
+    // block, not total free memory, and holding both needed two large blocks
+    // where only one exists.
+    //
+    // `raw` is the caller's reusable scratch buffer when supplied, so the one
+    // remaining large allocation happens once, early, rather than per tile
+    // on an already-fragmented heap.
+    std::vector<uint8_t> local_raw;
+    std::vector<uint8_t>& raw =
+        options.scratch_inflated != nullptr ? *options.scratch_inflated
+                                            : local_raw;
     t = Now(hooks);
-    const bool inflated = orcmap::DecompressPayload(
-        reader.Header().tile_compression, stored.data(), stored.size(),
-        options.decompress_budget, &raw);
+    const bool inflated = reader.GetTileInflated(
+        tile.z, tile.x, tile.y, options.decompress_budget, &raw);
     frame.inflate_ms += MsSince(hooks, t);
-    stored.clear();
-    stored.shrink_to_fit();
     if (!inflated) {
       frame.error_stage = "inflate";
       continue;
     }
+    frame.bytes_stored += raw.size();  // inflated; compressed is never held
     frame.bytes_decompressed += raw.size();
 
-    orcmap::MvtTile mvt;
-    t = Now(hooks);
+    // STREAMING decode/translate/classify/render.
+    //
+    // Nothing materialises a whole MvtTile or FeatureTile: each feature is
+    // translated into one reused Feature, classified, drawn at every
+    // placement, and discarded. Measured on real packs, materialising cost
+    // 6-9x the inflated bytes -- up to 1,011 KiB for a single Oregon z7
+    // tile -- which is why a no-PSRAM board could not render mid zooms at
+    // all. Streaming makes the peak the inflated bytes plus one feature.
+    //
+    // Stage timings are accumulated inside the sink, so decode/translate/
+    // classify/render stay separately attributable even though they now
+    // interleave per feature.
+    StreamContext stream;
+    stream.hooks = &hooks;
+    stream.options = &options;
+    stream.viewport = &viewport;
+    stream.style = &style;
+    stream.target = target;
+    stream.placements = &copies[ti];
+    stream.tile = tile;
+    stream.frame = &frame;
+
     orcmap::MvtDecodeOptions decode_options;
     decode_options.include_layer = options.include_layer;
     decode_options.include_layer_ctx = options.include_layer_ctx;
-    const bool decoded =
-        orcmap::DecodeMvtTile(raw.data(), raw.size(), decode_options, &mvt);
-    frame.decode_ms += MsSince(hooks, t);
-    raw.clear();
-    raw.shrink_to_fit();
+    decode_options.feature_sink = &StreamFeature;
+    decode_options.feature_sink_ctx = &stream;
+
+    orcmap::MvtTile unused;  // stays empty: the sink consumes every feature
+    t = Now(hooks);
+    const bool decoded = orcmap::DecodeMvtTile(raw.data(), raw.size(),
+                                               decode_options, &unused);
+    // Everything the sink measured is already attributed; what remains here
+    // is protobuf parsing itself.
+    frame.decode_ms += MsSince(hooks, t) - stream.inner_ms;
+    if (options.scratch_inflated == nullptr) {
+      raw.clear();
+      raw.shrink_to_fit();
+    }
     if (!decoded) {
       frame.error_stage = "decode";
       continue;
     }
+    frame.features_total += stream.features;
 
-    orcmap::FeatureTile features;
-    t = Now(hooks);
-    const bool translated = orcmap::TranslateMvtToFeatureTile(mvt, &features);
-    frame.translate_ms += MsSince(hooks, t);
-    mvt = orcmap::MvtTile{};
-    if (!translated) {
-      frame.error_stage = "translate";
-      continue;
-    }
-    frame.features_total += features.features.size();
-
-    if (options.classify != nullptr) {
-      t = Now(hooks);
-      options.classify(&features);
-      frame.classify_ms += MsSince(hooks, t);
-    }
-
-    t = Now(hooks);
-    for (const int64_t unwrapped_x : copies[ti]) {
-      orcmap::TilePlacement placement;
-      placement.tile = tile;
-      placement.unwrapped_x = unwrapped_x;
-      if (!orcmap::RenderFeatureTileAt(features, placement, viewport, style,
-                                       target)) {
-        frame.error_stage = "render";
-      }
-    }
-    frame.render_ms += MsSince(hooks, t);
-
-    features.features.clear();
-    features.features.shrink_to_fit();
 #if defined(__cpp_exceptions) && __cpp_exceptions
     } catch (const std::bad_alloc&) {
       if (counted_present && frame.tiles_present > 0) --frame.tiles_present;

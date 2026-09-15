@@ -399,6 +399,28 @@ bool DecodeLayer(const uint8_t* data, size_t length,
   }
   *keep = true;
 
+  if (options.feature_sink != nullptr) {
+    // Streaming: one reused feature, handed over and discarded. Clearing
+    // rather than reconstructing keeps the vectors' capacity, so a tile with
+    // hundreds of features does not re-allocate hundreds of times.
+    MvtFeature feature;
+    for (const auto& [feature_data, feature_len] : feature_blobs) {
+      feature.id = 0;
+      feature.geom_type = MvtGeomType::kUnknown;
+      for (MvtRing& ring : feature.geometry) ring.clear();
+      feature.geometry.clear();
+      feature.attribute_keys.clear();
+      feature.attribute_values.clear();
+      if (!DecodeFeature(feature_data, feature_len, keys, values, &feature)) {
+        return false;
+      }
+      if (!options.feature_sink(*out, feature, options.feature_sink_ctx)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   out->features.reserve(feature_blobs.size());
   for (const auto& [feature_data, feature_len] : feature_blobs) {
     MvtFeature feature;
@@ -439,11 +461,17 @@ bool DecodeMvtTile(const uint8_t* data, size_t length,
       }
       MvtLayer layer;
       bool keep = true;
-      MvtDecodeOptions full;
-      if (!DecodeLayer(layer_data, layer_len, full, &layer, &keep)) {
+      // include_layer was already applied above; forward only the sink so a
+      // streaming caller still receives this layer's features.
+      MvtDecodeOptions inner;
+      inner.feature_sink = options.feature_sink;
+      inner.feature_sink_ctx = options.feature_sink_ctx;
+      if (!DecodeLayer(layer_data, layer_len, inner, &layer, &keep)) {
         return false;
       }
-      if (keep) out->layers.push_back(std::move(layer));
+      if (keep && options.feature_sink == nullptr) {
+        out->layers.push_back(std::move(layer));
+      }
     } else {
       if (!r.SkipField(wire_type)) return false;
     }
