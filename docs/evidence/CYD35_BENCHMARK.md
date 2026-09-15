@@ -350,3 +350,40 @@ the decoded MVT geometry instead of translating into a parallel `Feature`
 structure, which halves per-feature geometry memory at a stroke. Shrinking
 the point representation (both types are two int32s; extents fit an int16)
 would halve it again. Neither is done.
+
+## The plain build was behaving like a benchmark, not a demo
+
+Reported from the bench: *"demo on CYD seems too fast and does not draw each
+panel correctly before it moves to the next."* That was accurate and it was
+the firmware's fault, not the renderer's.
+
+`RunScenarios()` ran unconditionally in **every** build, including the plain
+one: six frames (three installed packs, cold and warm) drawn back-to-back
+with no pause. Because this board has no PSRAM and renders straight to the
+panel, each of those frames appears progressively, so the screen flickered
+through half-drawn maps and then settled on whichever pack happened to come
+last. Two of the three packs also still skip tiles, so several of those
+frames were genuinely incomplete.
+
+Fixed:
+
+- the scenario sequence is now measurement-only, behind
+  `-DORCMAP_CYD_SCENARIOS=1` (and implied by `-DORCMAP_CYD_AUTOSWEEP=1`);
+- every build now **ends on one finished view**: the widest installed pack is
+  re-framed and drawn once, rather than leaving the camera wherever a
+  benchmark abandoned it;
+- that final frame is still measured and emitted to serial, so the picture a
+  user actually looks at is evidence like any other.
+
+Verified on the device:
+
+```
+final view: 4/4 tiles, 632 features
+holding final view
+scenario=final-view z1 present=4/4 feats=632 1,453 ms PASS
+```
+
+One view, every tile present, held. What remains visible is that the frame
+paints progressively over ~1.45 s — unavoidable on a board that cannot hold
+an offscreen framebuffer (320x480x16bpp is 307,200 bytes against ~129 KiB of
+free heap), and the reason the Tab5's drag-blit model was never ported here.

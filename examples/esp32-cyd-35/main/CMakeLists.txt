@@ -17,3 +17,11 @@ idf_component_register(
 if(ORCMAP_CYD_AUTOSWEEP)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE ORCMAP_CYD_AUTOSWEEP=1)
 endif()
+
+# Runs the fixed cold/warm scenario per installed pack at boot. Measurement
+# only: in a plain build the sequence flickers through half-drawn maps,
+# because this board renders straight to the panel.
+#   idf.py -DORCMAP_CYD_SCENARIOS=1 build
+if(ORCMAP_CYD_SCENARIOS)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE ORCMAP_CYD_SCENARIOS=1)
+endif()

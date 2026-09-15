@@ -728,8 +728,16 @@ extern "C" void app_main() {
   vTaskDelay(pdMS_TO_TICKS(800));
   RenderFrame();
 
+  // MEASUREMENT BUILDS ONLY run the scenario sequence. In a plain build it
+  // made the device look broken: six frames (three packs, cold and warm)
+  // drawn back-to-back with no pause, each one appearing progressively
+  // because there is no offscreen canvas on this board, so the screen
+  // flickered through half-drawn maps and settled on whichever pack came
+  // last. A bench instrument may do that; something you look at may not.
+#if defined(ORCMAP_CYD_SCENARIOS) || defined(ORCMAP_CYD_AUTOSWEEP)
   ESP_LOGI(kTag, "running fixed scenarios");
   RunScenarios();
+#endif
 
 #ifdef ORCMAP_CYD_AUTOSWEEP
   ESP_LOGW(kTag, "AUTOSWEEP build: running zoom/pan sweep");
@@ -737,6 +745,30 @@ extern "C" void app_main() {
   ESP_LOGW(kTag, "AUTOSWEEP complete");
 #endif
 
-  ESP_LOGI(kTag, "benchmark done; idling");
+  // Always END on one finished view rather than wherever a benchmark left
+  // the camera: re-frame the widest installed pack and draw it once. On this
+  // card that is the world overview, which renders every tile.
+  if (MapSource* widest = WidestSource()) {
+    FocusPack(*widest->manifest);
+  }
+  RenderFrame();
+  if (g_last_frame.tiles_visible > 0) {
+    ESP_LOGI(kTag, "final view: %u/%u tiles, %u features",
+             static_cast<unsigned>(g_last_frame.tiles_present),
+             static_cast<unsigned>(g_last_frame.tiles_visible),
+             static_cast<unsigned>(g_last_frame.features_total));
+    // Serial stays the authoritative record even for a plain build: the one
+    // frame a user actually looks at is measured like any other.
+    orcmap::Viewport map_vp = g_viewport;
+    map_vp.width_px = kDisplayW;
+    map_vp.height_px = kDisplayH;
+    orcmap_bench::EmitFrameRecord(
+        MakeHooks(), "final-view", "live",
+        g_active.manifest != nullptr ? g_active.manifest->pack_id.c_str()
+                                     : "none",
+        g_style->id, map_vp, g_last_frame);
+  }
+
+  ESP_LOGI(kTag, "holding final view");
   for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
 }
