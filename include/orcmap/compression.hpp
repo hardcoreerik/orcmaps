@@ -73,6 +73,17 @@ bool DecompressStreaming(Compression compression, CompressedChunkReader reader,
 // passes calls Begin() again, which re-inflates from the start.
 class InflatingByteStream {
  public:
+  // Claims the window, inflater state and input chunk NOW, without starting
+  // a payload. Call this once at startup on a memory-constrained board: the
+  // 32 KiB window must come out of a large contiguous region, and by the
+  // time the first tile is drawn the only such region may already be gone.
+  //
+  // Measured on a CYD 3.5": the largest allocatable block at draw time was
+  // 47,104 bytes, and taking the window from it left exactly 14,336 -- too
+  // little for the feature buffer that follows, so the tile failed. Claiming
+  // both early fixes that.
+  bool Reserve();
+
   // Allocates the window, inflater state and input chunk on first use and
   // keeps them for every subsequent Begin(), so repeated tiles do not
   // re-allocate. Returns false if the scratch cannot be allocated.

@@ -161,6 +161,14 @@ bool StreamLayerFeatures(InflatingByteStream* in, uint64_t layer_len,
 
 }  // namespace
 
+bool ReserveMvtStreamScratch(MvtStreamScratch* scratch,
+                             size_t max_feature_bytes) {
+  if (scratch == nullptr) return false;
+  if (!scratch->stream.Reserve()) return false;
+  scratch->feature_bytes.reserve(max_feature_bytes);
+  return scratch->feature_bytes.capacity() >= max_feature_bytes;
+}
+
 bool StreamMvtTile(Compression compression, CompressedChunkReader reader,
                    void* ctx, uint64_t input_offset, size_t input_size,
                    const MvtDecodeOptions& options,

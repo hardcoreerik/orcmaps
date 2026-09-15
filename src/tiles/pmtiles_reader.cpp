@@ -247,27 +247,109 @@ bool PmTilesReader::ReadMetadata(std::vector<uint8_t>* out) const {
                            kMaxDirectoryReadBytes, out);
 }
 
-const std::vector<PmTilesReader::DirEntry>* PmTilesReader::LeafDirectory(
+// Reads a directory's decompressed bytes without parsing them into entries.
+bool PmTilesReader::ReadDirectoryBytes(uint64_t offset, uint64_t length,
+                                       std::vector<uint8_t>* out) const {
+  out->clear();
+  if (length == 0 || length > kMaxDirectoryReadBytes) return false;
+  std::vector<uint8_t> raw(length);
+  if (source_->Read(offset, raw.data(), length) != length) return false;
+  return DecompressPayload(header_.internal_compression, raw.data(), raw.size(),
+                           kMaxDirectoryReadBytes, out);
+}
+
+bool PmTilesReader::FindEntryInSerialized(const uint8_t* data, size_t length,
+                                          uint64_t tile_id, DirEntry* found,
+                                          bool* is_leaf) {
+  size_t pos = 0;
+  bool ok = false;
+  const uint64_t count = ReadVarint(data, length, &pos, &ok);
+  if (!ok || count == 0 || count > kMaxDirectoryReadBytes / 4) return false;
+
+  // Column 1: tile ids as deltas. Find the LAST index whose id is <=
+  // tile_id -- the same rule the parsed binary search used -- while walking
+  // the column to locate where the next one starts.
+  uint64_t running = 0;
+  uint64_t chosen_id = 0;
+  bool have_choice = false;
+  size_t chosen = 0;
+  for (uint64_t i = 0; i < count; ++i) {
+    const uint64_t delta = ReadVarint(data, length, &pos, &ok);
+    if (!ok) return false;
+    running += delta;
+    if (running <= tile_id) {
+      chosen = static_cast<size_t>(i);
+      chosen_id = running;
+      have_choice = true;
+    }
+  }
+  if (!have_choice) return false;
+
+  // Column 2: run lengths.
+  uint64_t run_length = 0;
+  for (uint64_t i = 0; i < count; ++i) {
+    const uint64_t v = ReadVarint(data, length, &pos, &ok);
+    if (!ok) return false;
+    if (i == chosen) run_length = v;
+  }
+
+  // Column 3: lengths. The chosen entry's length is needed, and every
+  // earlier length feeds the offset rule below.
+  std::vector<uint32_t> lengths;
+  lengths.resize(static_cast<size_t>(chosen) + 1);
+  uint64_t chosen_length = 0;
+  for (uint64_t i = 0; i < count; ++i) {
+    const uint64_t v = ReadVarint(data, length, &pos, &ok);
+    if (!ok) return false;
+    if (i <= chosen) lengths[static_cast<size_t>(i)] = static_cast<uint32_t>(v);
+    if (i == chosen) chosen_length = v;
+  }
+
+  // Column 4: offsets. A zero means "immediately after the previous entry",
+  // so offsets must be accumulated in order up to the chosen index.
+  uint64_t prev_offset = 0;
+  uint64_t prev_length = 0;
+  uint64_t chosen_offset = 0;
+  for (uint64_t i = 0; i <= chosen; ++i) {
+    const uint64_t raw_offset = ReadVarint(data, length, &pos, &ok);
+    if (!ok) return false;
+    const uint64_t actual =
+        raw_offset == 0 ? (prev_offset + prev_length) : (raw_offset - 1);
+    prev_offset = actual;
+    prev_length = lengths[static_cast<size_t>(i)];
+    if (i == chosen) chosen_offset = actual;
+  }
+
+  // A run of tiles: the id must fall inside it.
+  if (run_length > 0 && tile_id >= chosen_id + run_length) return false;
+
+  found->tile_id = chosen_id;
+  found->run_length = static_cast<uint32_t>(run_length);
+  found->length = static_cast<uint32_t>(chosen_length);
+  found->offset = chosen_offset;
+  *is_leaf = run_length == 0;
+  return true;
+}
+
+const std::vector<uint8_t>* PmTilesReader::LeafDirectoryBytes(
     uint64_t offset, uint64_t length) const {
   for (const LeafCacheSlot& slot : leaf_cache_) {
     if (slot.valid && slot.offset == offset && slot.length == length) {
-      return &slot.entries;
+      return &slot.bytes;
     }
   }
   LeafCacheSlot& slot = leaf_cache_[leaf_cache_next_];
   leaf_cache_next_ = (leaf_cache_next_ + 1) % kLeafCacheSlots;
-  // Invalidate before reading: a failed read must not leave a stale slot
-  // claiming to hold this directory.
   slot.valid = false;
-  if (!ReadDirectory(offset, length, &slot.entries)) {
-    slot.entries.clear();
-    slot.entries.shrink_to_fit();
+  if (!ReadDirectoryBytes(offset, length, &slot.bytes)) {
+    slot.bytes.clear();
+    slot.bytes.shrink_to_fit();
     return nullptr;
   }
   slot.offset = offset;
   slot.length = length;
   slot.valid = true;
-  return &slot.entries;
+  return &slot.bytes;
 }
 
 bool PmTilesReader::LocateTile(uint8_t z, uint32_t x, uint32_t y,
@@ -284,12 +366,14 @@ bool PmTilesReader::LocateTile(uint8_t z, uint32_t x, uint32_t y,
     // Spec allows nested leaf directories; bound the hop count so a
     // corrupt/cyclic archive can't spin forever.
     if (++leaf_hops > 8) return false;
-    const std::vector<DirEntry>* leaf =
-        LeafDirectory(header_.leaf_dirs_offset + entry.offset, entry.length);
+    const std::vector<uint8_t>* leaf = LeafDirectoryBytes(
+        header_.leaf_dirs_offset + entry.offset, entry.length);
     if (leaf == nullptr) return false;
-    // FindEntry copies what it needs into `entry`, so the cached vector is
-    // not referenced past this call and a later miss may safely evict it.
-    if (!FindEntry(*leaf, tile_id, &entry, &is_leaf)) return false;
+    // Searched in serialized form: no 96 KiB entry vector is ever built.
+    if (!FindEntryInSerialized(leaf->data(), leaf->size(), tile_id, &entry,
+                               &is_leaf)) {
+      return false;
+    }
   }
 
   if (offset != nullptr) *offset = header_.tile_data_offset + entry.offset;

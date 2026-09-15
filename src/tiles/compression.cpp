@@ -208,6 +208,17 @@ bool DecompressStreaming(Compression compression, CompressedChunkReader reader,
 
 // --- InflatingByteStream -------------------------------------------------
 
+bool InflatingByteStream::Reserve() {
+  if (window_.size() != TINFL_LZ_DICT_SIZE) window_.resize(TINFL_LZ_DICT_SIZE);
+  if (state_.size() < sizeof(tinfl_decompressor)) {
+    state_.resize(sizeof(tinfl_decompressor));
+  }
+  if (chunk_.size() < kInflateChunkBytes) chunk_.resize(kInflateChunkBytes);
+  return window_.size() == TINFL_LZ_DICT_SIZE &&
+         state_.size() >= sizeof(tinfl_decompressor) &&
+         chunk_.size() >= kInflateChunkBytes;
+}
+
 bool InflatingByteStream::Begin(Compression compression,
                                 CompressedChunkReader reader, void* ctx,
                                 uint64_t input_offset, size_t input_size) {

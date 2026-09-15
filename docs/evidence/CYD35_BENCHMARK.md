@@ -291,3 +291,62 @@ fewer layers, lower extent. That is a data change, and it is the honest
 answer rather than a shortcut — the engine work above stands on its own
 (it is what makes the world view render at all, and it reduces Tab5 memory),
 but "every tile loads on a CYD" needs tiles sized for a CYD.
+
+## Breakthrough: the blocker was the directory, not the tile
+
+After all of the above, the thing actually breaking mid-zoom tiles was found
+by measuring the reader rather than the renderer.
+
+**A PMTiles leaf directory in these packs holds 4,096 entries.** Serialized
+that is ~21 KiB of delta-varint bytes; parsed into `std::vector<DirEntry>`
+it is **98,304 bytes** — a 4.6x inflation, and the single largest allocation
+the reader made. Worse, the leaf cache added earlier for Tab5 speed kept
+**four** of those **per reader**, with three readers open.
+
+Springfield stores everything in its root directory (141 entries, zero leaf
+pointers), which is why it had always behaved differently from world and
+Oregon.
+
+Fixed by searching directories in their serialized form:
+`FindEntryInSerialized` walks the columnar layout (ids, run lengths,
+lengths, offsets) sequentially and keeps nothing — only one entry is ever
+needed. The cache now holds decompressed *bytes* (~21 KiB) instead of parsed
+entries (~96 KiB), and two slots instead of four.
+
+Validated on real packs with real 4,096-entry leaf directories, not just the
+root-only test fixture: 13 tiles across world and Oregon, streamed features
+identical to the buffered decoder, 0 mismatched, 0 failed.
+
+### Measured on the device
+
+| | before | after |
+|---|---|---|
+| world z1 | 2 of 4 tiles | **4 of 4, 632 features, PASS** |
+| oregon z7 | 0 of 9 | **5 of 9, 396 features** |
+| springfield z13 | 0 of 6 | 0 of 6 |
+| free heap | 91,732 | 129,492 |
+| largest block | 47,104 | 45,056-65,536 |
+
+The world view now renders every tile. The horizontal seam visible in the
+earlier photograph — the z1 tile-row boundary, where the upper row died
+before its ocean polygon landed — is gone.
+
+## The next blocker, measured
+
+Springfield z13 now reports `translate` and `render` time with `decode` and
+`bytes` at zero: features were being drawn and then memory ran out
+(minimum free 15,112 bytes). The cause is **per-feature decoded geometry**:
+
+- a 36,259-byte encoded feature holds roughly 9,000 coordinate pairs;
+- decoded to `MvtPoint` (8 bytes each) that is ~72 KiB;
+- `TranslateMvtFeature` then makes a SECOND ~72 KiB copy as `Feature`.
+
+So one dense feature costs ~144 KiB against ~129 KiB of free heap. No
+amount of tile-level streaming addresses this, because the cost is inside a
+single feature.
+
+The clear next step is to remove the duplicate copy: render directly from
+the decoded MVT geometry instead of translating into a parallel `Feature`
+structure, which halves per-feature geometry memory at a stroke. Shrinking
+the point representation (both types are two int32s; extents fit an int16)
+would halve it again. Neither is done.

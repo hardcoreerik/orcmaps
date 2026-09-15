@@ -148,6 +148,10 @@ class PmTilesReader {
   bool ReadDirectory(uint64_t offset, uint64_t length,
                       std::vector<DirEntry>* out) const;
 
+  // Reads and decompresses a directory without parsing it into entries.
+  bool ReadDirectoryBytes(uint64_t offset, uint64_t length,
+                          std::vector<uint8_t>* out) const;
+
   // Directory walk shared by GetTile and GetTileInflated: resolves z/x/y to
   // an absolute archive offset and stored length. Null outputs make it an
   // existence check.
@@ -161,26 +165,41 @@ class PmTilesReader {
   static bool FindEntry(const std::vector<DirEntry>& dir, uint64_t tile_id,
                         DirEntry* found, bool* is_leaf);
 
-  // Returns a parsed leaf directory, reading and decompressing it only if it
-  // is not already cached. Tiles in one frame are spatially adjacent and
-  // PMTiles orders entries by Hilbert tile id, so a whole frame usually hits
-  // the same one or two leaf directories; without this, every tile lookup
-  // re-read AND re-inflated the same directory from storage.
+  // Finds one entry in a directory still in its SERIALIZED form, without
+  // building a parsed entry vector.
   //
-  // Returns nullptr on I/O or format error. The pointer is valid until the
-  // next call that misses the cache.
-  const std::vector<DirEntry>* LeafDirectory(uint64_t offset,
-                                             uint64_t length) const;
+  // This matters enormously on a small board. A PMTiles leaf directory in
+  // this project's packs holds 4,096 entries: 21 KiB of delta-varint bytes
+  // that expand to 98,304 bytes as a std::vector<DirEntry> -- a 4.6x
+  // inflation, and the single largest allocation the reader used to make.
+  // Only ONE entry is ever needed, so the columnar layout (all tile ids,
+  // then all run lengths, then all lengths, then all offsets) is walked
+  // sequentially and nothing is stored.
+  static bool FindEntryInSerialized(const uint8_t* data, size_t length,
+                                    uint64_t tile_id, DirEntry* found,
+                                    bool* is_leaf);
 
-  // Small round-robin cache. Four slots covers a frame that straddles a
-  // directory boundary while keeping worst-case memory bounded and
-  // predictable, which matters more than hit rate on an embedded target.
-  static constexpr int kLeafCacheSlots = 4;
+  // Returns a leaf directory's DECOMPRESSED BYTES, reading and inflating
+  // only on a cache miss. Caching the bytes rather than parsed entries keeps
+  // a slot at ~21 KiB instead of ~96 KiB.
+  //
+  // Tiles in one frame are spatially adjacent and PMTiles orders entries by
+  // Hilbert tile id, so a frame usually hits the same one or two leaf
+  // directories; without any cache, every tile lookup re-read AND
+  // re-inflated the same directory from storage.
+  const std::vector<uint8_t>* LeafDirectoryBytes(uint64_t offset,
+                                                 uint64_t length) const;
+
+  // Two slots, not four: a slot is now bytes rather than parsed entries, and
+  // two covers a frame straddling a directory boundary while keeping the
+  // worst case near 42 KiB -- which is the difference between working and
+  // not on a board with ~90 KiB of usable DRAM.
+  static constexpr int kLeafCacheSlots = 2;
   struct LeafCacheSlot {
     bool valid = false;
     uint64_t offset = 0;
     uint64_t length = 0;
-    std::vector<DirEntry> entries;
+    std::vector<uint8_t> bytes;
   };
 
   ByteSource* source_;

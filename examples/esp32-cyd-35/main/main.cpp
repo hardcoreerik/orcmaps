@@ -107,6 +107,11 @@ constexpr size_t kDecompressBudget = 160u * 1024u;
 // tile is recorded; a crash would take the whole run with it.
 constexpr size_t kHeapFloor = 48u * 1024u;
 
+// Largest single feature the packs contain, measured: 36,259 bytes in
+// Springfield z13, 19,253 in Oregon z7. The buffer is claimed at this size
+// up front so a dense tile never has to find it on a fragmented heap.
+constexpr size_t kMaxFeatureBytes = 40u * 1024u;
+
 constexpr int kSweepScreens = 5;
 
 // ---------------------------------------------------------------------------
@@ -591,6 +596,18 @@ void RunScenarios() {
 }  // namespace
 
 extern "C" void app_main() {
+  // FIRST, before anything else allocates: claim the streaming scratch's
+  // large buffers while the 176 KiB DRAM region is still whole.
+  //
+  // This ordering is the fix, not a precaution. Measured on this board, by
+  // the time a tile is drawn the largest allocatable block is 47,104 bytes;
+  // taking the 32 KiB inflate window out of it leaves exactly 14,336, which
+  // is too small for the feature buffer that must follow, so the tile fails.
+  // Claimed here, both come out of contiguous DRAM and the steady state
+  // needs no large allocation at all.
+  const bool scratch_ready =
+      orcmap::ReserveMvtStreamScratch(&g_stream_scratch, kMaxFeatureBytes);
+
   g_display.init();
   g_display.setRotation(kDisplayRotation);
   g_display.setBrightness(200);
@@ -623,9 +640,17 @@ extern "C" void app_main() {
     Fail("UNEXPECTED DISPLAY SIZE", line);
   }
 
-  std::snprintf(line, sizeof(line), "Heap     %u KiB free (no PSRAM)",
-                static_cast<unsigned>(InternalFree() / 1024));
+  std::snprintf(line, sizeof(line), "Heap     %u KiB free, %u KiB largest",
+                static_cast<unsigned>(InternalFree() / 1024),
+                static_cast<unsigned>(InternalLargest() / 1024));
   StatusLine(70, TFT_GREEN, line);
+  if (!scratch_ready) {
+    Fail("NOT ENOUGH MEMORY FOR MAP BUFFERS",
+         "streaming scratch could not be reserved");
+  }
+  std::snprintf(line, sizeof(line), "Buffers  32+%u KiB reserved",
+                static_cast<unsigned>(kMaxFeatureBytes / 1024));
+  StatusLine(84, TFT_GREEN, line);
 
   if (!MountSd()) {
     Fail("SD CARD NOT FOUND", "insert a card with /orcmaps");

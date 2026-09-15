@@ -69,6 +69,19 @@ inline constexpr size_t kMaxStreamedFeatureBytes = 256u * 1024u;
 // `options.feature_sink` (which must be set). `options.include_layer` is
 // honoured. Returns false on malformed input, on a feature exceeding
 // kMaxStreamedFeatureBytes, or if the sink refuses.
+// Claims the scratch's large buffers up front. Call ONCE at startup, as
+// early as possible, on a board where the heap fragments: the 32 KiB inflate
+// window and the feature buffer each need a sizeable contiguous block, and
+// claiming them lazily means competing with the SD stack, filesystem and
+// display driver for whatever is left.
+//
+// `max_feature_bytes` should cover the largest single feature the packs
+// contain; the largest measured in this project is 36,259 bytes. Returns
+// false if the board cannot supply the buffers, which is worth failing
+// loudly at startup rather than mid-frame.
+bool ReserveMvtStreamScratch(MvtStreamScratch* scratch,
+                             size_t max_feature_bytes);
+
 bool StreamMvtTile(Compression compression, CompressedChunkReader reader,
                    void* ctx, uint64_t input_offset, size_t input_size,
                    const MvtDecodeOptions& options, MvtStreamScratch* scratch);
