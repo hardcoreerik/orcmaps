@@ -1,0 +1,319 @@
+#include "orcmap_bench/bench.hpp"
+
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+#include <vector>
+
+#include "orcmap/compression.hpp"
+#include "orcmap/mvt.hpp"
+#include "orcmap/mvt_translate.hpp"
+#include "orcmap/renderer.hpp"
+
+namespace orcmap_bench {
+
+namespace {
+
+constexpr size_t kLineMax = 2048;
+
+int64_t Now(const BenchHooks& hooks) {
+  return hooks.now_us != nullptr ? hooks.now_us() : 0;
+}
+
+double MsSince(const BenchHooks& hooks, int64_t start_us) {
+  if (hooks.now_us == nullptr) return 0.0;
+  return static_cast<double>(hooks.now_us() - start_us) / 1000.0;
+}
+
+Optional64 Probe(size_t (*fn)()) {
+  if (fn == nullptr) return Optional64::None();
+  return Optional64::Of(static_cast<int64_t>(fn()));
+}
+
+// Minimal bounded appender. Every emit path uses this so a long pack id or
+// style name truncates instead of overflowing.
+struct LineBuffer {
+  char data[kLineMax];
+  size_t len = 0;
+
+  void Add(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+  void AddOptional(const char* key, const Optional64& value);
+  void AddString(const char* key, const char* value);
+};
+
+void LineBuffer::Add(const char* fmt, ...) {
+  if (len >= sizeof(data) - 1) return;
+  va_list args;
+  va_start(args, fmt);
+  const int n = std::vsnprintf(data + len, sizeof(data) - len, fmt, args);
+  va_end(args);
+  if (n > 0) {
+    len += static_cast<size_t>(n);
+    if (len > sizeof(data) - 1) len = sizeof(data) - 1;
+  }
+}
+
+void LineBuffer::AddOptional(const char* key, const Optional64& value) {
+  if (value.has_value) {
+    Add("\"%s\":%lld,", key, static_cast<long long>(value.value));
+  } else {
+    Add("\"%s\":null,", key);
+  }
+}
+
+void LineBuffer::AddString(const char* key, const char* value) {
+  if (value == nullptr) {
+    Add("\"%s\":null,", key);
+    return;
+  }
+  char escaped[256];
+  JsonEscape(value, escaped, sizeof(escaped));
+  Add("\"%s\":\"%s\",", key, escaped);
+}
+
+// Removes the trailing comma (if any) and closes the object, then emits.
+void Finish(const BenchHooks& hooks, LineBuffer* line) {
+  if (line->len > 0 && line->data[line->len - 1] == ',') --line->len;
+  if (line->len < sizeof(line->data) - 2) {
+    line->data[line->len++] = '}';
+  }
+  line->data[line->len] = '\0';
+  if (hooks.emit_line != nullptr) hooks.emit_line(line->data, hooks.emit_ctx);
+}
+
+void Begin(LineBuffer* line, const char* record) {
+  line->len = 0;
+  line->Add("ORCMAPS_BENCH_JSON {\"record\":\"%s\",", record);
+}
+
+}  // namespace
+
+void JsonEscape(const char* input, char* out, size_t out_size) {
+  if (out == nullptr || out_size == 0) return;
+  size_t o = 0;
+  if (input == nullptr) {
+    out[0] = '\0';
+    return;
+  }
+  for (size_t i = 0; input[i] != '\0'; ++i) {
+    const unsigned char c = static_cast<unsigned char>(input[i]);
+    const char* escape = nullptr;
+    char buf[7];
+    switch (c) {
+      case '"': escape = "\\\""; break;
+      case '\\': escape = "\\\\"; break;
+      case '\n': escape = "\\n"; break;
+      case '\r': escape = "\\r"; break;
+      case '\t': escape = "\\t"; break;
+      default:
+        if (c < 0x20) {
+          std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+          escape = buf;
+        }
+        break;
+    }
+    if (escape != nullptr) {
+      const size_t n = std::strlen(escape);
+      if (o + n >= out_size) break;
+      std::memcpy(out + o, escape, n);
+      o += n;
+    } else {
+      if (o + 1 >= out_size) break;
+      out[o++] = static_cast<char>(c);
+    }
+  }
+  out[o] = '\0';
+}
+
+bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
+                         const orcmap::Viewport& viewport,
+                         const orcmap::MapStyle& style,
+                         orcmap::RenderTarget* target,
+                         const BenchPipelineOptions& options,
+                         const BenchHooks& hooks, bool background,
+                         BenchFrame* out) {
+  BenchFrame frame;
+  frame.internal_free_before = Probe(hooks.internal_free);
+  frame.psram_free_before = Probe(hooks.psram_free);
+
+  const int64_t frame_start = Now(hooks);
+
+  std::vector<orcmap::TileId> tiles;
+  const int64_t enum_start = Now(hooks);
+  if (!orcmap::EnumerateVisibleTiles(viewport, &tiles)) {
+    frame.error_stage = "enumerate";
+    if (out != nullptr) *out = frame;
+    return false;
+  }
+  frame.enumerate_ms = MsSince(hooks, enum_start);
+  frame.tiles_visible = tiles.size();
+
+  if (background && !orcmap::ClearMapBackground(viewport, style, target)) {
+    frame.error_stage = "background";
+    if (out != nullptr) *out = frame;
+    return false;
+  }
+
+  for (const orcmap::TileId& tile : tiles) {
+    std::vector<uint8_t> stored;
+    int64_t t = Now(hooks);
+    const bool got = reader.GetTile(tile.z, tile.x, tile.y, &stored);
+    frame.lookup_ms += MsSince(hooks, t);
+    if (!got) {
+      ++frame.tiles_missing;
+      continue;
+    }
+    ++frame.tiles_present;
+    frame.bytes_stored += stored.size();
+
+    std::vector<uint8_t> raw;
+    t = Now(hooks);
+    const bool inflated = orcmap::DecompressPayload(
+        reader.Header().tile_compression, stored.data(), stored.size(),
+        options.decompress_budget, &raw);
+    frame.inflate_ms += MsSince(hooks, t);
+    stored.clear();
+    stored.shrink_to_fit();
+    if (!inflated) {
+      frame.error_stage = "inflate";
+      continue;
+    }
+    frame.bytes_decompressed += raw.size();
+
+    orcmap::MvtTile mvt;
+    t = Now(hooks);
+    orcmap::MvtDecodeOptions decode_options;
+    decode_options.include_layer = options.include_layer;
+    decode_options.include_layer_ctx = options.include_layer_ctx;
+    const bool decoded =
+        orcmap::DecodeMvtTile(raw.data(), raw.size(), decode_options, &mvt);
+    frame.decode_ms += MsSince(hooks, t);
+    raw.clear();
+    raw.shrink_to_fit();
+    if (!decoded) {
+      frame.error_stage = "decode";
+      continue;
+    }
+
+    orcmap::FeatureTile features;
+    t = Now(hooks);
+    const bool translated = orcmap::TranslateMvtToFeatureTile(mvt, &features);
+    frame.translate_ms += MsSince(hooks, t);
+    mvt = orcmap::MvtTile{};
+    if (!translated) {
+      frame.error_stage = "translate";
+      continue;
+    }
+    frame.features_total += features.features.size();
+
+    if (options.classify != nullptr) {
+      t = Now(hooks);
+      options.classify(&features);
+      frame.classify_ms += MsSince(hooks, t);
+    }
+
+    t = Now(hooks);
+    if (!orcmap::RenderFeatureTile(features, tile, viewport, style, target)) {
+      frame.error_stage = "render";
+    }
+    frame.render_ms += MsSince(hooks, t);
+
+    features.features.clear();
+    features.features.shrink_to_fit();
+  }
+
+  frame.frame_ms = MsSince(hooks, frame_start);
+  frame.internal_free_after = Probe(hooks.internal_free);
+  frame.psram_free_after = Probe(hooks.psram_free);
+  frame.internal_min = Probe(hooks.internal_min);
+  frame.internal_largest = Probe(hooks.internal_largest);
+  frame.psram_min = Probe(hooks.psram_min);
+  frame.psram_largest = Probe(hooks.psram_largest);
+  frame.ok = frame.error_stage == nullptr;
+
+  if (out != nullptr) *out = frame;
+  return frame.ok;
+}
+
+void EmitFrameRecord(const BenchHooks& hooks, const char* scenario_id,
+                     const char* phase, const char* pack_id,
+                     const char* style_id, const orcmap::Viewport& viewport,
+                     const BenchFrame& frame) {
+  LineBuffer line;
+  Begin(&line, "frame");
+  line.AddString("scenario", scenario_id);
+  line.AddString("phase", phase);
+  line.AddString("pack_id", pack_id);
+  line.AddString("style", style_id);
+  line.Add("\"zoom\":%u,", static_cast<unsigned>(viewport.zoom));
+  line.Add("\"center_lat\":%.6f,", viewport.center_lat_deg);
+  line.Add("\"center_lon\":%.6f,", viewport.center_lon_deg);
+  line.Add("\"viewport_w\":%d,", viewport.width_px);
+  line.Add("\"viewport_h\":%d,", viewport.height_px);
+
+  line.Add("\"tiles_visible\":%u,", static_cast<unsigned>(frame.tiles_visible));
+  line.Add("\"tiles_present\":%u,", static_cast<unsigned>(frame.tiles_present));
+  line.Add("\"tiles_missing\":%u,", static_cast<unsigned>(frame.tiles_missing));
+  line.Add("\"features\":%u,", static_cast<unsigned>(frame.features_total));
+  line.Add("\"bytes_stored\":%llu,",
+           static_cast<unsigned long long>(frame.bytes_stored));
+  line.Add("\"bytes_decompressed\":%llu,",
+           static_cast<unsigned long long>(frame.bytes_decompressed));
+  line.AddOptional("byte_source_bytes", frame.byte_source_bytes);
+
+  line.Add("\"enumerate_ms\":%.3f,", frame.enumerate_ms);
+  line.Add("\"lookup_ms\":%.3f,", frame.lookup_ms);
+  line.Add("\"inflate_ms\":%.3f,", frame.inflate_ms);
+  line.Add("\"decode_ms\":%.3f,", frame.decode_ms);
+  line.Add("\"translate_ms\":%.3f,", frame.translate_ms);
+  line.Add("\"classify_ms\":%.3f,", frame.classify_ms);
+  line.Add("\"render_ms\":%.3f,", frame.render_ms);
+  line.Add("\"frame_ms\":%.3f,", frame.frame_ms);
+
+  line.AddOptional("internal_free_before", frame.internal_free_before);
+  line.AddOptional("internal_free_after", frame.internal_free_after);
+  line.AddOptional("internal_min", frame.internal_min);
+  line.AddOptional("internal_largest", frame.internal_largest);
+  line.AddOptional("psram_free_before", frame.psram_free_before);
+  line.AddOptional("psram_free_after", frame.psram_free_after);
+  line.AddOptional("psram_min", frame.psram_min);
+  line.AddOptional("psram_largest", frame.psram_largest);
+
+  line.AddString("error_stage", frame.error_stage);
+  line.Add("\"result\":\"%s\"", frame.ok ? "PASS" : "FAIL");
+  Finish(hooks, &line);
+}
+
+void EmitIdentityRecord(const BenchHooks& hooks,
+                        const BenchIdentity& identity) {
+  LineBuffer line;
+  Begin(&line, "identity");
+  line.AddString("bench_version", identity.bench_version);
+  line.AddString("board", identity.board);
+  line.AddString("mcu", identity.mcu);
+  line.AddString("idf_version", identity.idf_version);
+  line.AddString("graphics_adapter", identity.graphics_adapter);
+  line.AddString("orcmaps_commit", identity.orcmaps_commit);
+  line.Add("\"display_w\":%d,", identity.display_width);
+  line.Add("\"display_h\":%d,", identity.display_height);
+  line.AddOptional("psram_total", identity.psram_total);
+  line.AddOptional("flash_total", identity.flash_total);
+  Finish(hooks, &line);
+}
+
+void EmitStorageRecord(const BenchHooks& hooks, size_t block_bytes,
+                       uint64_t bytes, double elapsed_ms) {
+  LineBuffer line;
+  Begin(&line, "storage");
+  line.Add("\"block_bytes\":%u,", static_cast<unsigned>(block_bytes));
+  line.Add("\"bytes\":%llu,", static_cast<unsigned long long>(bytes));
+  line.Add("\"elapsed_ms\":%.3f,", elapsed_ms);
+  const double mbps =
+      elapsed_ms > 0.0
+          ? (static_cast<double>(bytes) / 1.0e6) / (elapsed_ms / 1000.0)
+          : 0.0;
+  line.Add("\"mb_per_sec\":%.3f", mbps);
+  Finish(hooks, &line);
+}
+
+}  // namespace orcmap_bench

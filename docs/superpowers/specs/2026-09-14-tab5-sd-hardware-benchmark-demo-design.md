@@ -2,15 +2,43 @@
 
 ## Goal
 
-Turn the existing M5Stack Tab5 proof into a Tab5-optimized interactive OrcMaps
-showcase with a reusable, example-only hardware benchmark harness underneath.
-The user sees a clean map application; serial JSONL and numbered SD reports
-provide comparable engineering evidence for later LilyGO T-Display-S3 and CYD
-ports.
+A **Tab5-optimized user demo first, with a benchmark harness underneath it.**
+
+The deliverable is an interactive OrcMaps application that demonstrates what
+using OrcMaps actually feels like to an end user. The reusable, example-only
+hardware benchmark harness runs beneath that experience and records evidence;
+serial JSONL and numbered SD reports stay comparable for later LilyGO
+T-Display-S3 and CYD ports.
+
+The primary Tab5 screen **must not look like a diagnostic application.** The
+map is the product. Benchmark numbers do not occupy the normal map view.
+
+Priority order when tradeoffs appear:
+
+1. correct OrcMaps architecture
+2. correct map rendering/data
+3. good Tab5 user experience
+4. repeatable measurements
+5. portability of benchmark methodology
+6. extra diagnostics
+
+The first three are not sacrificed to make benchmarking easier.
 
 This checkpoint is SD-card-first. It does not embed a map in firmware, change
 partitions, touch OrcSDR, implement another board, add networking, publish, or
 merge.
+
+## Target user story
+
+```
+copy map packs to SD -> insert card -> boot -> map appears -> pan -> zoom
+   -> world overview gives broad geography
+   -> regional pack gives detail where installed
+```
+
+The user should be able to navigate from the world view toward Oregon by
+ordinary panning and zooming. The `Springfield` control is a convenience
+shortcut, not the only route into regional detail.
 
 ## Preserved starting point
 
@@ -78,6 +106,42 @@ the overview. `Springfield` jumps to the known regional center at z14. The
 first version redraws after a completed drag or button action; it does not add
 pinch recognition, kinetic scrolling, or a tile cache before baseline hardware
 measurement.
+
+## Responsiveness without faking measurements
+
+The renderer has no decoded/rendered tile cache, and a cold 1280x720 z14
+Springfield frame previously measured ~4.4 s. Redrawing the full pipeline on
+every touch event would make the demo a slideshow, so responsiveness is solved
+in the **presentation layer only**, leaving the measured pipeline untouched:
+
+- The map frame is rendered into a PSRAM offscreen RGB565 canvas larger than
+  the 1280x720 viewport (margin on each side). 32 MiB PSRAM makes this cheap.
+- **During a drag**, the existing canvas is blitted at an offset. No decode, no
+  re-render, no SD access. The full pipeline runs when the gesture leaves the
+  margin or on release.
+- **On zoom**, a scaled blit of the current canvas is shown immediately as an
+  approximation, then the true frame is rendered at the new zoom and swapped.
+
+These are display operations outside timed frame boundaries, exactly like the
+status/UI overlays. They cannot inflate or deflate pipeline stage numbers.
+
+Sequencing keeps both goals honest:
+
+1. capture the cold/warm baseline with the unchanged pipeline first;
+2. then enable the presentation-layer pan/zoom behavior in the same firmware.
+
+Interactive smoothness is therefore never reported as a pipeline improvement.
+A cold first paint of a dense z14 view still takes seconds, and the demo does
+not pretend otherwise. World-overview navigation is expected to feel good
+immediately because the Natural Earth overview is far lighter than dense urban
+z14; that expectation is measured, not assumed.
+
+## Zoom limits
+
+Overzoom is currently rejected by the viewport. Interactive zoom is therefore
+clamped to the active pack's `max_zoom`, and the `+` control becomes inert at
+that limit rather than producing an empty frame. Reaching the limit is shown as
+a normal-user state, not an error.
 
 ## Local source selection and truthful limitations
 
