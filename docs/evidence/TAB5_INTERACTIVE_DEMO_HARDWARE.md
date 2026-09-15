@@ -5,6 +5,12 @@ Status: **hardware-verified interactive demo**. Three runs recorded below: the
 first exposed a framing bug, the second confirms that fix, and the third
 follows a user report that zooming out stopped filling the screen.
 
+Each board has its **own** SD card — the Tab5 and the LilyGO T-Display-S3 do
+not share one — so pack provisioning is per device. Nothing installed on this
+card implies anything about the LilyGO's, and derived limits differ by display
+anyway. Tab5 cards are identifiable by their `orcmaps-benchmark-NNNN.jsonl`
+report files; the LilyGO example writes `orcmaps-report-NNNN.txt` instead.
+
 ## Device and build
 
 | | |
@@ -13,7 +19,7 @@ follows a user report that zooming out stopped filling the screen.
 | MCU | ESP32-P4 rev v1.3, 32 MiB PSRAM, 360 MHz |
 | Display | ST7123, 1280x720 (M5GFX autodetect `board_M5Tab5`) |
 | Touch | ST touch FW 03 |
-| SD card | SD32G, SDHC, 4-bit bus, 40 MHz, 29820 MB |
+| SD card | SD32G, SDHC, 4-bit bus, 40 MHz, 29820 MB — **this device's own card** |
 | ESP-IDF | v5.5.4 |
 | Firmware | `orcmap_m5stack_tab5.bin`, 635,360 bytes (39% of app partition free) |
 | Flash port | COM17, all image hashes verified by esptool |
