@@ -1,0 +1,31 @@
+# CYD 3.5" (ESP32-3248S035): plain ESP32-D0WD-V3, 4 MB flash, NO PSRAM.
+#
+# The absence of PSRAM is the defining constraint: ~300 KB of DRAM total, so
+# no full-screen offscreen canvas (320x480x16bpp alone is 307,200 bytes) and
+# no room for a generous decompression budget. The benchmark therefore
+# renders directly to the panel and runs with a heap floor.
+
+CONFIG_IDF_TARGET="esp32"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# No CONFIG_SPIRAM: this chip has none. Setting it would fail to boot.
+
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+CONFIG_FREERTOS_HZ=1000
+# The manifest JSON reader recurses to a bounded depth and the pipeline uses
+# sizeable stack locals; 12 KB leaves clear headroom without eating heap.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
+CONFIG_ESP_BROWNOUT_DET=n
+
+# C++ exceptions ON for this board specifically. With them disabled a failed
+# allocation calls abort(), and on a ~300 KB no-PSRAM device that is a real
+# outcome: decoding a dense tile genuinely can exhaust the heap. Exceptions
+# let the shared pipeline catch std::bad_alloc and record the tile as
+# skipped, so an out-of-memory tile becomes a measurement instead of a
+# reset loop. The other OrcMaps boards have PSRAM and keep exceptions off.
+CONFIG_COMPILER_CXX_EXCEPTIONS=y
+CONFIG_COMPILER_CXX_EXCEPTIONS_EMG_POOL_SIZE=2048

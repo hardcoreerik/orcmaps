@@ -1,0 +1,17 @@
+# LovyanGFX, not M5GFX. This board is not an M5Stack product, and M5GFX's
+# trimmed panel set carries no ST7796 driver, which this display needs.
+#
+# LovyanGFX is not published in the ESP Component Registry, so it is pinned
+# by git tag AND full commit SHA -- the same version-pinning discipline the
+# project uses for its own dependencies. Do not float this without a
+# hardware re-test.
+#
+# The OrcMaps display adapter is written against lgfx::v1::LovyanGFX, so it
+# serves either distribution unchanged; see
+# adapters/m5gfx/include/orcmap/m5gfx/display_target.hpp.
+dependencies:
+  idf:
+    version: ">=5.5.0,<5.6.0"
+  lovyangfx:
+    git: https://github.com/lovyan03/LovyanGFX.git
+    version: fb7cec222726b92676e26126246d59f70f04ced2  # tag 1.2.29

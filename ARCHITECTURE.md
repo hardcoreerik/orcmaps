@@ -83,6 +83,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Springfield demo pack | `examples/m5stack-tab5/test-pack/` | Public OSM-derived PMTiles used on Tab5 (ODbL). |
 | Tab5 example | `examples/m5stack-tab5/` | Hardware-verified static Springfield render (M5Unified + SDMMC Slot 0). See `docs/evidence/TAB5_SPRINGFIELD_HARDWARE.md`. |
 | LilyGO T-Display-S3 example | `examples/lilygo-tdisplay-s3/` | Hardware-verified static Springfield demo (M5GFX + 1-bit SDMMC Shield); writes a new numbered run report to the card. See `docs/evidence/LILYGO_TDISPLAY_S3_SPRINGFIELD_HARDWARE.md`. |
+| CYD 3.5" example | `examples/esp32-cyd-35/` | Hardware-verified BENCHMARK INSTRUMENT (not an interactive demo): ESP32-3248S035, ST7796 480x320 landscape via LovyanGFX, SD over SPI, runtime pack discovery. **No PSRAM**, so no offscreen canvas and no drag model; renders straight to the panel. 55% of tiles are refused for memory and z8-z14 render nothing — see `docs/evidence/CYD35_BENCHMARK.md`. |
 | Host tests | `tests/host/` | Implemented, 100% passing |
 | Test fixture | `tests/fixtures/tiny.pmtiles`, `tiny.mvt`, `tiny-gzip.pmtiles` | Implemented (synthetic; gzip tile fixture for the decompress→pixels path) |
 | Runtime attribution API | `include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp` | Implemented (header-only; no `MapEngine`/discovery populates it yet) |

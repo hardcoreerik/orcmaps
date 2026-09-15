@@ -1,5 +1,7 @@
 #include "orcmap_bench/bench.hpp"
 
+#include <new>
+
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -182,6 +184,26 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
 
   for (size_t ti = 0; ti < tiles.size(); ++ti) {
     const orcmap::TileId& tile = tiles[ti];
+    // Heap floor check before any per-tile allocation.
+    if (options.min_free_internal_bytes > 0 && hooks.internal_free != nullptr &&
+        hooks.internal_free() < options.min_free_internal_bytes) {
+      ++frame.tiles_skipped_memory;
+      continue;
+    }
+    // On a board without PSRAM a dense tile can exhaust the heap mid-decode,
+    // and with C++ exceptions disabled a failed allocation calls abort() --
+    // taking a multi-minute benchmark run with it. Where the board enables
+    // exceptions, that becomes a recorded skip instead of a crash. The
+    // pre-tile heap floor above cannot catch this on its own: it samples
+    // free memory BEFORE the tile, while the decoder's vectors grow during
+    // it.
+    // Declared outside the try so the handler can undo a count made before
+    // the allocation failed: a tile fetched successfully but abandoned
+    // mid-decode must not be reported as BOTH present and skipped.
+    bool counted_present = false;
+#if defined(__cpp_exceptions) && __cpp_exceptions
+    try {
+#endif
     std::vector<uint8_t> stored;
     int64_t t = Now(hooks);
     const bool got = reader.GetTile(tile.z, tile.x, tile.y, &stored);
@@ -191,6 +213,7 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
       continue;
     }
     ++frame.tiles_present;
+    counted_present = true;
     frame.bytes_stored += stored.size();
 
     std::vector<uint8_t> raw;
@@ -253,6 +276,14 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
 
     features.features.clear();
     features.features.shrink_to_fit();
+#if defined(__cpp_exceptions) && __cpp_exceptions
+    } catch (const std::bad_alloc&) {
+      if (counted_present && frame.tiles_present > 0) --frame.tiles_present;
+      ++frame.tiles_skipped_memory;
+      frame.error_stage = "out-of-memory";
+      continue;
+    }
+#endif
   }
 
   frame.frame_ms = MsSince(hooks, frame_start);
@@ -288,6 +319,8 @@ void EmitFrameRecord(const BenchHooks& hooks, const char* scenario_id,
   line.Add("\"placements\":%u,", static_cast<unsigned>(frame.placements));
   line.Add("\"tiles_present\":%u,", static_cast<unsigned>(frame.tiles_present));
   line.Add("\"tiles_missing\":%u,", static_cast<unsigned>(frame.tiles_missing));
+  line.Add("\"tiles_skipped_memory\":%u,",
+           static_cast<unsigned>(frame.tiles_skipped_memory));
   line.Add("\"features\":%u,", static_cast<unsigned>(frame.features_total));
   line.Add("\"bytes_stored\":%llu,",
            static_cast<unsigned long long>(frame.bytes_stored));
@@ -344,6 +377,7 @@ void SweepAccumulator::Add(const BenchFrame& frame) {
   placements += frame.placements;
   tiles_present += frame.tiles_present;
   tiles_missing += frame.tiles_missing;
+  tiles_skipped_memory += frame.tiles_skipped_memory;
   features_total += frame.features_total;
   bytes_stored += frame.bytes_stored;
   bytes_decompressed += frame.bytes_decompressed;
@@ -380,6 +414,8 @@ void AddSweepBody(LineBuffer* line, const SweepAccumulator& a) {
   line->Add("\"placements\":%u,", static_cast<unsigned>(a.placements));
   line->Add("\"tiles_present\":%u,", static_cast<unsigned>(a.tiles_present));
   line->Add("\"tiles_missing\":%u,", static_cast<unsigned>(a.tiles_missing));
+  line->Add("\"tiles_skipped_memory\":%u,",
+            static_cast<unsigned>(a.tiles_skipped_memory));
   line->Add("\"features\":%u,", static_cast<unsigned>(a.features_total));
   line->Add("\"bytes_stored\":%llu,",
             static_cast<unsigned long long>(a.bytes_stored));

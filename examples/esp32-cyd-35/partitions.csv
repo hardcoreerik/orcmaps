@@ -1,0 +1,7 @@
+# 4 MB flash. One 2 MB app partition: the benchmark firmware is well under
+# 1 MB, and a single factory app keeps this example's flash layout trivial.
+# Nothing here is shared with, or copied from, OrcSDR's partition layout.
+# Name,   Type, SubType, Offset,  Size
+nvs,      data, nvs,     0x9000,  0x6000
+phy_init, data, phy,     0xf000,  0x1000
+factory,  app,  factory, 0x10000, 0x200000

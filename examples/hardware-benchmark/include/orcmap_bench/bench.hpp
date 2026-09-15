@@ -71,6 +71,17 @@ struct BenchPipelineOptions {
   // unclassified features, so a caller that wants visible geography must
   // provide this.
   void (*classify)(orcmap::FeatureTile* tile) = nullptr;
+
+  // Heap floor for boards without PSRAM. When non-zero (and hooks provide
+  // internal_free), a tile is SKIPPED rather than decoded if free internal
+  // memory is already below this, and counted in
+  // BenchFrame::tiles_skipped_memory.
+  //
+  // This exists because the alternative on a ~300 KB device is an abort:
+  // with C++ exceptions disabled a failed vector allocation terminates the
+  // firmware, which would take a multi-minute benchmark run with it. A
+  // skipped tile is a recorded, visible measurement; a crash is not.
+  size_t min_free_internal_bytes = 0;
 };
 
 // One measured frame. All timings are milliseconds; all byte counts are
@@ -85,6 +96,9 @@ struct BenchFrame {
   size_t placements = 0;
   size_t tiles_present = 0;
   size_t tiles_missing = 0;
+  // Tiles not attempted because free memory was below
+  // BenchPipelineOptions::min_free_internal_bytes.
+  size_t tiles_skipped_memory = 0;
   size_t features_total = 0;
   uint64_t bytes_stored = 0;       // compressed bytes handed to decompress
   uint64_t bytes_decompressed = 0; // bytes produced by decompress
@@ -188,6 +202,9 @@ struct SweepAccumulator {
   size_t placements = 0;
   size_t tiles_present = 0;
   size_t tiles_missing = 0;
+  // Tiles not attempted because free memory was below
+  // BenchPipelineOptions::min_free_internal_bytes.
+  size_t tiles_skipped_memory = 0;
   size_t features_total = 0;
   uint64_t bytes_stored = 0;
   uint64_t bytes_decompressed = 0;

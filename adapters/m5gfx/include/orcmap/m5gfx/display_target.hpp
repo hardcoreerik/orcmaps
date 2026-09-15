@@ -5,7 +5,18 @@
 #include <limits>
 #include <vector>
 
+// M5GFX is a LovyanGFX fork and this adapter is written against
+// lgfx::v1::LovyanGFX, so either distribution satisfies it. Boards M5GFX
+// does not carry a panel driver for (e.g. the CYD's ST7796) depend on
+// LovyanGFX directly; prefer M5GFX when both are present so the existing
+// M5Stack examples are unaffected.
+#if __has_include(<M5GFX.h>)
 #include <M5GFX.h>
+#elif __has_include(<LovyanGFX.hpp>)
+#include <LovyanGFX.hpp>
+#else
+#error "orcmap/m5gfx/display_target.hpp requires M5GFX or LovyanGFX"
+#endif
 
 #include "orcmap/clip.hpp"
 #include "orcmap/m5gfx/color.hpp"
