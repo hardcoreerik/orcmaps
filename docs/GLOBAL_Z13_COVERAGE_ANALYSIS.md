@@ -1,7 +1,40 @@
-# Global navigation to z13: size, file layout, and what blocks it
+# Global navigation, z1 to z13: size, file layout, and what blocks it
+
+Target range: **z1 through z13**, global.
 
 Scope: what it would take for the Tab5 demo to let a user navigate to **any
 place on Earth down to z13**, and what that costs in bytes and files.
+
+## z1 is in the pack but is not the Tab5's floor
+
+Choosing z1 as the bottom of the range costs nothing and is worth doing, but
+it does not become the Tab5's zoom-out limit, and the reason is physical
+rather than a policy choice:
+
+| zoom | world size | fills the 1280x600 map area? |
+|---|---|---|
+| z0 | 256 x 256 px | no — 172 px empty band top and bottom |
+| z1 | 512 x 512 px | no — 44 px empty band top and bottom |
+| **z2** | 1024 x 1024 px | **yes** |
+
+Width is not the problem: the map extends around itself, so any width is
+covered. **Height cannot wrap** — Mercator Y is clamped, and repeating the
+world vertically would be geographically false — so a world shorter than the
+map area must show empty bands. z2 is therefore the lowest zoom that fills
+this display, and `WorldViewZoom` derives exactly that.
+
+Smaller displays reach further out: the LilyGO's ~170 px height is covered by
+z0's 256 px world, so its floor is z0. The floor is a property of the display
+and the installed coverage, never of the pack range alone.
+
+Including z1 (and z0) in the pack is still correct — it costs **one tile**
+versus starting at z1, it serves those smaller displays, and it keeps the
+pack independent of any one device's chrome height. If the Tab5's bars were
+ever reduced to leave a map area of 512 px or less, z1 would start filling
+with no rebuild.
+
+Tile counts, for scale: z0-13 is 89,478,485 tiles and z1-13 is 89,478,484 —
+the range choice is not a size decision.
 
 The world-view start (z2 on 1280x600, map extending around itself) is
 **implemented**. Global z13 coverage is **not**, and this document separates
@@ -28,41 +61,86 @@ The host adapter has the same defect in a different form:
 too. Both want `_fseeki64`/`fseeko64` and a 64-bit offset type before any
 multi-gigabyte pack is attempted.
 
-## Size: what we can and cannot claim
+## Size: measured, not estimated
 
-**We cannot state a reliable figure from our own data, and should not
-pretend otherwise.** Our only OSM sample is the Springfield extract:
-3,507,636 B for 50.4 km^2 at z0-15, i.e. ~69.6 kB/km^2. Extrapolating that
-across 148.9 M km^2 of land gives absurd results (70-140 GB at z0-13, above
-published whole-planet figures at higher zoom), because a built-up US city is
-nowhere near the global mean density. One dense urban sample cannot size the
-planet.
+Rather than extrapolate from the Springfield extract — one dense urban tile,
+which scales to figures above published whole-planet totals and is therefore
+useless — a region-scale pack was actually built with the local toolchain:
 
-What can be said with the anchors we do have:
+```
+java -Xmx6g -jar planetiler.jar --osm-path=oregon-latest.osm.pbf \
+  --output=oregon-z1-13.pmtiles --minzoom=1 --maxzoom=13 \
+  --render_maxzoom=13 --tile_compression=gzip --force
+```
 
-- `data/local/oregon-latest.osm.pbf` is 253,592,262 B (242 MiB) for one US
-  state. A planet PBF is roughly two orders of magnitude larger.
-- Published planet vector basemaps are on the order of 100 GB at z0-15.
-  Each dropped zoom divides the total by roughly 3-4, so z0-13 lands in the
-  **single-digit to low-tens of GB**. This is a recalled public figure, not
-  something measured here, and no network was used to check it.
+| Measured | Value |
+|---|---:|
+| Oregon, z1-13 | **84,615,534 B (80.7 MiB)** |
+| Build time | 50 s |
+| Intermediate feature store | 370 MB |
+| Area | 254,800 km^2 |
+| **Density** | **332 B/km^2** |
+| Share of global land | 0.17% |
 
-**The honest way to get a real number is to measure it**, and the toolchain
-to do so is already on disk (`planetiler.jar`, go-pmtiles, the Oregon PBF).
-Building Oregon at z0-13 and dividing by its share of global land gives a
-defensible extrapolation for a few minutes of compute. Until that is run,
-treat any global figure in this document as an order of magnitude.
+Scaling that rate to 148.9 M km^2 of land:
+
+| Global mean density vs Oregon | Global z1-13 | Archives at 2 GiB | Fits the 30.4 GB card? |
+|---|---:|---:|---|
+| same (upper bound) | 49.5 GB | 24 | **no** |
+| half | 24.7 GB | 12 | yes, tight |
+| a third | 16.5 GB | 8 | yes |
+| a fifth | 9.9 GB | 5 | yes |
+| a tenth | 4.9 GB | 3 | yes |
+
+Oregon is a developed US state with good OSM coverage but also large empty
+high desert and forest, so it is a fair "developed country" sample rather
+than a worst case. Much of the world (Sahara, Siberia, Antarctica, open
+ocean coastlines) carries far less OSM data, while western Europe and Japan
+carry more. The realistic band is therefore **roughly 10-25 GB**, with
+49.5 GB as a hard upper bound that **does not fit this card**.
+
+This is the first defensible size figure in the project: it comes from a
+build we ran, not from recalled public numbers.
 
 ## File layout that follows from the limits
 
-Assuming z0-13 global lands anywhere in the 6-20 GB range:
-
-- it fits the 29 GB card at the low end and is tight at the high end;
-- it **cannot** be one file — at 2 GiB per archive it needs roughly
-  **4-11 archives**, split geographically (continent or sub-continent);
-- each archive needs its own manifest, and coverage must tile the globe
+- Global z1-13 **cannot be one file**: at 2 GiB per archive the likely band
+  needs **5-12 archives**, split geographically (continent or
+  sub-continent), and the upper bound needs 24.
+- Each archive needs its own manifest, and coverage must tile the globe
   without gaps, because `ResolvePack()` requires *full* coverage of the
   visible bounds and will otherwise fall through to partial rendering.
+- At the top of the band the card is the binding constraint, not our
+  software. A larger card, or dropping to z12 globally with z13 only where
+  wanted, both resolve it.
+
+## Attribution finding: OpenMapTiles credit is missing
+
+Planetiler's own output for this build states that tiles produced with the
+OpenMapTiles profile are reusable under a CC-BY licence granted by the
+OpenMapTiles team, and that **maps made with these vector tiles must display
+a visible credit: "(c) OpenMapTiles (c) OpenStreetMap contributors"**.
+
+The existing Springfield pack was built the same way, but its manifest
+credits only `(c) OpenStreetMap contributors`, and `OpenMapTiles` appears
+nowhere in `docs/DATA_AND_LICENSING.md` or `data/sources/`. The demo shows
+whatever the manifest says, so the device is currently displaying an
+incomplete credit.
+
+This is **not** resolved here, and deliberately so: the authoritative text is
+the OpenMapTiles licence itself, and project rules forbid recording a
+provenance conclusion without checking the primary source. What is needed:
+
+1. read the OpenMapTiles licence directly and record it as a source in
+   `data/sources/` with its real terms;
+2. add the required credit to the regional pack manifest and to any z1-13
+   build, so attribution travels with the pack;
+3. decide whether the overview pack is affected — it is Natural Earth via
+   a custom `orcmaps-overview-1` profile, so probably not, but that needs
+   checking rather than assuming.
+
+Until then, treat any OSM/OpenMapTiles-derived pack as carrying an
+unsatisfied attribution obligation.
 
 ## What blocks it beyond data
 
@@ -86,7 +164,7 @@ Data is not the only gap, and the firmware gaps are cheaper to fix:
 
 ## Build cost for true global coverage
 
-Generating planet z0-13 is a heavyweight job: a planet PBF download in the
+Generating planet z1-13 is a heavyweight job: a planet PBF download in the
 tens of GB, Planetiler needing substantial RAM and scratch disk, and hours
 of runtime. That is Population B territory in the provisioning design, not
 something to put in front of Population A. Source acquisition over the
@@ -99,17 +177,24 @@ Staged, so each step is verifiable:
 
 1. **Now (done):** world view at z2 with wrapping, plus the existing
    regional pack. Navigable globe at z2-z7, one city at z13-z15.
-2. **Measure before scaling:** build Oregon z0-13 with the local toolchain
-   to get a real bytes-per-area figure, and benchmark lookup on the largest
-   archive produced. Both are cheap and remove the two biggest unknowns.
-3. **Fix the 64-bit offset bug** in both byte sources before any archive
+2. **Done:** Oregon z1-13 measured at 332 B/km^2 (above). Still to measure:
+   PMTiles lookup cost on a large archive, the biggest remaining unknown.
+   `oregon-z1-13.pmtiles` at 80.7 MiB is ~24x the Springfield archive and
+   is a usable first data point for that.
+3. **Settle the OpenMapTiles attribution obligation** before distributing
+   any OSM-derived pack.
+4. **Fix the 64-bit offset bug** in both byte sources before any archive
    approaches 2 GiB.
-4. **Implement runtime manifest discovery** (P3). Without it no pack set
-   larger than two entries can be used at all.
-5. **Then** decide global z13 versus a curated set of regional z13 packs.
-   A card holding the z0-7 world plus a handful of chosen z0-13 regions
+5. **Implement runtime manifest discovery** (P3). Without it no pack set
+   larger than two entries can be used at all, so no multi-archive global
+   layout is usable regardless of how the data is built.
+6. **Then** decide global z1-13 versus a curated set of regional z13 packs.
+   A card holding the z0-7 world plus a handful of chosen z1-13 regions
    delivers most of the demo value for a few hundred MB and needs no planet
    build.
+
+The immediate next step that unlocks the most is **5**, not more data: the
+demo physically cannot load more than two packs today.
 
 Step 5's curated option is worth taking seriously: "navigate anywhere at
 z13" and "navigate anywhere, with z13 detail where the user actually cares"
