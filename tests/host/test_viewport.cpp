@@ -342,6 +342,55 @@ void TestFitBoundsWorldOregonAndSpringfield() {
   ORCMAP_EXPECT_NEAR(v.center_lon_deg, -123.0075, 1e-4);
 }
 
+void TestFillBoundsCentresAndCoversViewport() {
+  // The Springfield extract, on the Tab5 map area. FitBounds frames the
+  // whole extract (empty margin); FillBounds fills the screen instead.
+  const orcmap::GeoBounds springfield{-123.055, 44.030, -122.960, 44.090};
+  orcmap::Viewport v = MakeView(0.0, 0.0, 0, 1280, 600, 256);
+
+  ORCMAP_EXPECT_TRUE(orcmap::FitBounds(&v, springfield, 24));
+  const uint8_t fit_zoom = v.zoom;
+
+  ORCMAP_EXPECT_TRUE(orcmap::FillBounds(&v, springfield));
+  const uint8_t fill_zoom = v.zoom;
+
+  // Filling the screen must be at least as zoomed-in as framing it.
+  ORCMAP_EXPECT_TRUE(fill_zoom > fit_zoom);
+
+  // Centred on the extract, not on some hardcoded city coordinate.
+  ORCMAP_EXPECT_NEAR(v.center_lon_deg, -123.0075, 1e-4);
+  ORCMAP_EXPECT_NEAR(v.center_lat_deg, 44.060, 1e-3);
+
+  // And the chosen zoom genuinely covers: visible bounds inside the pack.
+  orcmap::GeoBounds visible{};
+  ORCMAP_EXPECT_TRUE(orcmap::GetVisibleBounds(v, &visible));
+  ORCMAP_EXPECT_TRUE(visible.min_lon_deg >= springfield.min_lon_deg);
+  ORCMAP_EXPECT_TRUE(visible.max_lon_deg <= springfield.max_lon_deg);
+  ORCMAP_EXPECT_TRUE(visible.min_lat_deg >= springfield.min_lat_deg);
+  ORCMAP_EXPECT_TRUE(visible.max_lat_deg <= springfield.max_lat_deg);
+}
+
+void TestFillBoundsIsScreenDependent() {
+  // Same pack, two very different displays: the engine must derive a
+  // different zoom from width/height alone, with no per-board constant.
+  const orcmap::GeoBounds springfield{-123.055, 44.030, -122.960, 44.090};
+  orcmap::Viewport tab5 = MakeView(0.0, 0.0, 0, 1280, 600, 256);
+  orcmap::Viewport lilygo = MakeView(0.0, 0.0, 0, 320, 170, 256);
+  ORCMAP_EXPECT_TRUE(orcmap::FillBounds(&tab5, springfield));
+  ORCMAP_EXPECT_TRUE(orcmap::FillBounds(&lilygo, springfield));
+  // A bigger screen needs more ground, so it must zoom in further to stay
+  // inside the same extract.
+  ORCMAP_EXPECT_TRUE(tab5.zoom > lilygo.zoom);
+  ORCMAP_EXPECT_NEAR(tab5.center_lon_deg, lilygo.center_lon_deg, 1e-6);
+}
+
+void TestFillBoundsRejectsUnfillableBounds() {
+  orcmap::Viewport v = MakeView(0.0, 0.0, 0, 1280, 600, 256);
+  // A degenerate sliver cannot cover any viewport at any zoom.
+  ORCMAP_EXPECT_TRUE(!orcmap::FillBounds(&v, {0.0, 0.0, 0.0, 0.0}));
+  ORCMAP_EXPECT_TRUE(!orcmap::FillBounds(nullptr, {-1.0, -1.0, 1.0, 1.0}));
+}
+
 void TestProjectionRoundTripAfterPanAndZoom() {
   orcmap::Viewport v = MakeView(44.05, -123.022, 14, 320, 170, 256);
   ORCMAP_EXPECT_TRUE(orcmap::PanByPixels(&v, 17.0, -9.0));
@@ -391,6 +440,9 @@ void RunViewportTests() {
   TestCameraCenterAndZoomControls();
   TestPanMovesCameraAndWrapsAntimeridian();
   TestVisibleBoundsWorldAndTinyViewport();
+  TestFillBoundsCentresAndCoversViewport();
+  TestFillBoundsIsScreenDependent();
+  TestFillBoundsRejectsUnfillableBounds();
   TestFitBoundsWorldOregonAndSpringfield();
   TestProjectionRoundTripAfterPanAndZoom();
   TestZoomAtScreenPointPreservesAnchor();

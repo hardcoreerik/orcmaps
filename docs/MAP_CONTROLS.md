@@ -11,7 +11,7 @@ Implemented controls:
 - `SetViewportSize`
 - `PanByPixels`
 - `GetVisibleBounds`
-- `FitBounds`
+- `FitBounds` / `FillBounds`
 - `ProjectLatLon` / `ScreenToLatLon`
 - `ZoomAtScreenPoint`
 
@@ -21,14 +21,35 @@ moves the camera east and south; a direct-manipulation touch binding normally
 passes the negative drag delta.
 
 Visible bounds use `min_lon > max_lon` to represent an antimeridian-crossing
-view. A viewport covering the whole world reports `-180..180`. `FitBounds`
-chooses the highest integer zoom that fits after padding and uses projected
-latitude, not an inaccurate arithmetic latitude midpoint.
+view. A viewport covering the whole world reports `-180..180`.
+
+`FitBounds` and `FillBounds` are complements, and the distinction matters to
+applications:
+
+- `FitBounds` centres on the bounds and chooses the **highest** integer zoom
+  at which all of them fit after padding. Use it to show a pack's whole
+  coverage area. The result normally leaves empty margin, because a pack's
+  aspect ratio rarely matches a screen's.
+- `FillBounds` centres on the bounds and chooses the **smallest** zoom at
+  which the bounds fully cover the viewport, so the screen is filled with map
+  data and no margin shows. Use it for a normal map view. It returns false
+  when no zoom can cover the viewport, and callers then fall back to
+  `FitBounds`.
+
+Both use projected latitude, not an inaccurate arithmetic latitude midpoint,
+and both derive zoom from the caller's own `width_px`/`height_px`: an
+application supplies its screen size and gets a correctly centred, correctly
+sized map without a per-board centre or zoom constant. The same pack framed
+on a 1280x600 display and a 320x170 display yields the same centre and
+different zooms.
 
 `ZoomAtScreenPoint` preserves the geographic point below the supplied screen
 coordinate. This is the portable behavior needed by touch, mouse-wheel, and
 button-driven map applications; no UI widgets live in OrcMaps core.
 
 Host tests cover z0 world bounds, repeated zoom limits, antimeridian pan,
-Mercator clamping, world/Oregon/Springfield fit, tiny displays, projection
-round trips, and anchored zoom. No physical touch-control test has run yet.
+Mercator clamping, world/Oregon/Springfield fit, `FillBounds` centring and
+genuine coverage, `FillBounds` screen-dependence across two display sizes,
+unfillable bounds, tiny displays, projection round trips, and anchored zoom.
+Touch drag/zoom bindings are physically exercised by the Tab5 demo; no
+automated physical touch-control test exists.

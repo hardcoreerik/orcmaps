@@ -75,8 +75,12 @@ candidates). Neither is final. Do not finalize OpenMapTiles, Shortbread,
 - `orcmap::LatLonToTile`/`TileToLatLon`/etc. — standard Web Mercator tile
   math, antimeridian-safe, Mercator-latitude-clamp-safe.
 - `orcmap::Viewport` camera controls — center, integer zoom, geographic pan,
-  viewport size, visible/fit bounds, projection/unprojection, and
-  anchor-preserving zoom. Hardware demos do not bind touch/buttons yet.
+  viewport size, visible bounds, projection/unprojection, anchor-preserving
+  zoom, and two complementary framing calls: `FitBounds` (frame a pack's whole
+  coverage area) and `FillBounds` (fill the screen with map data). Both derive
+  centre and zoom from the caller's viewport size, so an application supplies
+  only its screen dimensions — no per-board centre or zoom constant. The Tab5
+  demo binds touch drag, zoom buttons, style and info to these calls.
 - `orcmap::MapStyle` + 4 built-in styles (`orcsdr-dark`, `standard-light`,
   `high-contrast-field`, `night-red-safe`) + `ResolveFeatureStyle()` +
   `StyleManager` runtime switching + `RenderedTileCacheKey`. The LilyGO demo
@@ -129,7 +133,7 @@ candidates). Neither is final. Do not finalize OpenMapTiles, Shortbread,
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **123 test functions, all passing**.
+- Host test suite: **126 test functions, all passing**.
 - `EnumerateVisibleTiles` (unique TileIds, X wrap, Y clamp).
   `TileScreenMap` uses shortest wrapped X delta. Overzoom still rejected.
 - `RenderTarget::DrawLine` takes `width_px` from `MapPaint`. Shared
@@ -256,7 +260,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 123 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 126 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`
