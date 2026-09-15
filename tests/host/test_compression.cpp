@@ -199,32 +199,34 @@ void TestInflatingStreamMatchesBufferedInflate(const std::string& gzip_pmtiles) 
 // buffer: if the two ever diverged, a board with PSRAM and a board without
 // would draw different maps from the same pack.
 struct ParseCapture {
-  std::vector<orcmap::MvtFeature> features;
-  std::vector<std::string> layers;
-  std::vector<uint32_t> extents;
+  std::vector<orcmap::Feature> features;
 };
 
-bool CaptureParsed(const orcmap::MvtLayer& layer,
-                   const orcmap::MvtFeature& feature, void* ctx) {
-  ParseCapture& cap = *static_cast<ParseCapture*>(ctx);
-  cap.layers.push_back(layer.name);
-  cap.extents.push_back(layer.extent);
-  cap.features.push_back(feature);
+bool CaptureParsed(const orcmap::Feature& feature, void* ctx) {
+  static_cast<ParseCapture*>(ctx)->features.push_back(feature);
   return true;
 }
 
+// The streaming parser decodes MVT bytes STRAIGHT into orcmap::Feature, with
+// no intermediate MvtFeature. That halves a dense feature's geometry cost,
+// and it must produce exactly what decode-then-translate produced -- if the
+// two diverged, a board with PSRAM and a board without would draw different
+// maps from the same pack.
 void TestStreamedParseMatchesBufferedDecode(const std::string& gzip_pmtiles) {
   orcmap::host::FileByteSource source(gzip_pmtiles);
   ORCMAP_EXPECT_TRUE(source.Valid());
   orcmap::PmTilesReader reader(&source);
   ORCMAP_EXPECT_TRUE(reader.Open());
 
-  // Reference: inflate the whole tile, then decode it.
+  // Reference: inflate whole, decode whole, translate whole.
   std::vector<uint8_t> raw;
   ORCMAP_EXPECT_TRUE(reader.GetTileInflated(0, 0, 0, 1u << 20, &raw));
   orcmap::MvtTile buffered;
+  ORCMAP_EXPECT_TRUE(orcmap::DecodeMvtTile(raw.data(), raw.size(), &buffered));
+  orcmap::FeatureTile translated;
   ORCMAP_EXPECT_TRUE(
-      orcmap::DecodeMvtTile(raw.data(), raw.size(), &buffered));
+      orcmap::TranslateMvtToFeatureTile(buffered, &translated));
+  ORCMAP_EXPECT_TRUE(!translated.features.empty());
 
   uint64_t offset = 0;
   uint32_t length = 0;
@@ -235,7 +237,7 @@ void TestStreamedParseMatchesBufferedDecode(const std::string& gzip_pmtiles) {
   };
 
   ParseCapture cap;
-  orcmap::MvtDecodeOptions options;
+  orcmap::MvtStreamOptions options;
   options.feature_sink = &CaptureParsed;
   options.feature_sink_ctx = &cap;
   orcmap::MvtStreamScratch scratch;
@@ -243,64 +245,57 @@ void TestStreamedParseMatchesBufferedDecode(const std::string& gzip_pmtiles) {
                                            pull, &source, offset, length,
                                            options, &scratch));
 
-  size_t expected = 0;
-  for (const orcmap::MvtLayer& layer : buffered.layers) {
-    expected += layer.features.size();
-  }
-  ORCMAP_EXPECT_TRUE(expected > 0);
   ORCMAP_EXPECT_EQ(static_cast<int>(cap.features.size()),
-                   static_cast<int>(expected));
-
-  size_t i = 0;
-  for (const orcmap::MvtLayer& layer : buffered.layers) {
-    for (const orcmap::MvtFeature& want : layer.features) {
-      const orcmap::MvtFeature& got = cap.features[i];
-      ORCMAP_EXPECT_EQ(cap.layers[i], layer.name);
-      ORCMAP_EXPECT_TRUE(cap.extents[i] == layer.extent);
-      ORCMAP_EXPECT_TRUE(got.id == want.id);
-      ORCMAP_EXPECT_TRUE(got.geom_type == want.geom_type);
-      ORCMAP_EXPECT_EQ(static_cast<int>(got.geometry.size()),
-                       static_cast<int>(want.geometry.size()));
-      for (size_t r = 0; r < want.geometry.size(); ++r) {
-        ORCMAP_EXPECT_EQ(static_cast<int>(got.geometry[r].size()),
-                         static_cast<int>(want.geometry[r].size()));
-        for (size_t k = 0; k < want.geometry[r].size(); ++k) {
-          ORCMAP_EXPECT_TRUE(got.geometry[r][k].x == want.geometry[r][k].x);
-          ORCMAP_EXPECT_TRUE(got.geometry[r][k].y == want.geometry[r][k].y);
-        }
+                   static_cast<int>(translated.features.size()));
+  for (size_t i = 0; i < translated.features.size(); ++i) {
+    const orcmap::Feature& want = translated.features[i];
+    const orcmap::Feature& got = cap.features[i];
+    ORCMAP_EXPECT_TRUE(got.id == want.id);
+    ORCMAP_EXPECT_EQ(got.layer, want.layer);
+    ORCMAP_EXPECT_TRUE(got.extent == want.extent);
+    ORCMAP_EXPECT_TRUE(got.geometry.type == want.geometry.type);
+    ORCMAP_EXPECT_EQ(static_cast<int>(got.geometry.paths.size()),
+                     static_cast<int>(want.geometry.paths.size()));
+    for (size_t r = 0; r < want.geometry.paths.size(); ++r) {
+      ORCMAP_EXPECT_EQ(static_cast<int>(got.geometry.paths[r].size()),
+                       static_cast<int>(want.geometry.paths[r].size()));
+      for (size_t k = 0; k < want.geometry.paths[r].size(); ++k) {
+        ORCMAP_EXPECT_TRUE(got.geometry.paths[r][k].x ==
+                           want.geometry.paths[r][k].x);
+        ORCMAP_EXPECT_TRUE(got.geometry.paths[r][k].y ==
+                           want.geometry.paths[r][k].y);
       }
-      // Attributes prove the two-pass table resolution worked: these indices
-      // are only resolvable because pass 1 collected keys/values that the
-      // wire format places AFTER the features referencing them.
-      ORCMAP_EXPECT_TRUE(got.attribute_keys == want.attribute_keys);
-      ORCMAP_EXPECT_EQ(static_cast<int>(got.attribute_values.size()),
-                       static_cast<int>(want.attribute_values.size()));
-      for (size_t v = 0; v < want.attribute_values.size(); ++v) {
-        ORCMAP_EXPECT_TRUE(got.attribute_values[v] == want.attribute_values[v]);
-      }
-      ++i;
+    }
+    // Attributes prove two-pass table resolution: these indices are only
+    // resolvable because pass 1 collected keys/values that the wire format
+    // places AFTER the features referencing them.
+    ORCMAP_EXPECT_TRUE(got.property_keys == want.property_keys);
+    ORCMAP_EXPECT_EQ(static_cast<int>(got.property_values.size()),
+                     static_cast<int>(want.property_values.size()));
+    for (size_t v = 0; v < want.property_values.size(); ++v) {
+      ORCMAP_EXPECT_TRUE(got.property_values[v] == want.property_values[v]);
     }
   }
 
-  // The scratch is reusable: a second parse must give the same answer.
+  // Reusing the scratch must give the same answer, which is how the embedded
+  // path uses it -- one scratch for every tile of every frame.
   ParseCapture again;
   options.feature_sink_ctx = &again;
   ORCMAP_EXPECT_TRUE(orcmap::StreamMvtTile(reader.Header().tile_compression,
                                            pull, &source, offset, length,
                                            options, &scratch));
   ORCMAP_EXPECT_EQ(static_cast<int>(again.features.size()),
-                   static_cast<int>(expected));
+                   static_cast<int>(translated.features.size()));
 
   // A refusing sink aborts rather than truncating silently.
   struct Refuse {
-    static bool Sink(const orcmap::MvtLayer&, const orcmap::MvtFeature&,
-                     void* ctx) {
+    static bool Sink(const orcmap::Feature&, void* ctx) {
       ++*static_cast<int*>(ctx);
       return false;
     }
   };
   int calls = 0;
-  orcmap::MvtDecodeOptions refusing;
+  orcmap::MvtStreamOptions refusing;
   refusing.feature_sink = &Refuse::Sink;
   refusing.feature_sink_ctx = &calls;
   ORCMAP_EXPECT_TRUE(!orcmap::StreamMvtTile(reader.Header().tile_compression,
@@ -308,8 +303,8 @@ void TestStreamedParseMatchesBufferedDecode(const std::string& gzip_pmtiles) {
                                             refusing, &scratch));
   ORCMAP_EXPECT_EQ(calls, 1);
 
-  // A sink is mandatory -- this parser has no accumulating mode.
-  orcmap::MvtDecodeOptions no_sink;
+  // A sink is mandatory: this parser has no accumulating mode.
+  orcmap::MvtStreamOptions no_sink;
   ORCMAP_EXPECT_TRUE(!orcmap::StreamMvtTile(reader.Header().tile_compression,
                                             pull, &source, offset, length,
                                             no_sink, &scratch));

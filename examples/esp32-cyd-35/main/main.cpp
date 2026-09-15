@@ -105,12 +105,16 @@ constexpr size_t kDecompressBudget = 160u * 1024u;
 // attempting an allocation that would abort the firmware (exceptions are
 // disabled, so a failed allocation terminates rather than throws). A skipped
 // tile is recorded; a crash would take the whole run with it.
-constexpr size_t kHeapFloor = 48u * 1024u;
+constexpr size_t kHeapFloor = 24u * 1024u;
 
 // Largest single feature the packs contain, measured: 36,259 bytes in
 // Springfield z13, 19,253 in Oregon z7. The buffer is claimed at this size
 // up front so a dense tile never has to find it on a fragmented heap.
-constexpr size_t kMaxFeatureBytes = 40u * 1024u;
+// Oregon z7's largest feature is 19,253 encoded bytes; Springfield z13's is
+// 36,259, but that one's DECODED geometry (~72 KiB) cannot fit on this board
+// regardless, so reserving for it only starves the tiles that can. 24 KiB
+// covers everything this board can actually draw.
+constexpr size_t kMaxFeatureBytes = 24u * 1024u;
 
 constexpr int kSweepScreens = 5;
 
@@ -685,7 +689,9 @@ extern "C" void app_main() {
   for (const orcmap::PackManifest& manifest : g_catalog.Packs()) {
     auto* bytes =
         new orcmap::esp_idf::FileByteSource(manifest.archive_path.c_str());
-    auto* reader = new orcmap::PmTilesReader(bytes);
+    // One leaf-directory slot: ~21 KiB of cached directory bytes is memory a
+    // dense tile needs more than the cache does on this board.
+    auto* reader = new orcmap::PmTilesReader(bytes, 1);
     if (!bytes->Valid() || !reader->Open()) {
       ESP_LOGW(kTag, "pack %s: archive not a readable PMTiles",
                manifest.pack_id.c_str());

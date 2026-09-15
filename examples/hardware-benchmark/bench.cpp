@@ -141,28 +141,27 @@ struct StreamContext {
   BenchFrame* frame = nullptr;
 
   orcmap::TileId tile{};     // the tile these features came from
-  orcmap::Feature feature;   // reused for every feature in the tile
   size_t features = 0;
   double inner_ms = 0.0;     // time attributed to translate/classify/render
 };
 
-bool StreamFeature(const orcmap::MvtLayer& layer,
-                   const orcmap::MvtFeature& in, void* ctx) {
+bool StreamFeature(const orcmap::Feature& decoded, void* ctx) {
   StreamContext& s = *static_cast<StreamContext*>(ctx);
   const BenchHooks& hooks = *s.hooks;
   const int64_t inner_start = Now(hooks);
 
-  int64_t t = Now(hooks);
-  if (!orcmap::TranslateMvtFeature(layer, in, &s.feature)) return false;
-  s.frame->translate_ms += MsSince(hooks, t);
+  // No translate step: the parser decoded straight into this Feature, so
+  // translate_ms is structurally zero rather than merely small.
   ++s.features;
+  orcmap::Feature& feature = const_cast<orcmap::Feature&>(decoded);
+  int64_t t = Now(hooks);
 
   if (s.options->classify_feature != nullptr) {
     t = Now(hooks);
     orcmap::FeatureKind kind = orcmap::FeatureKind::kBackground;
-    if (s.options->classify_feature(s.feature, &kind)) {
-      s.feature.kind = kind;
-      s.feature.kind_assigned = true;
+    if (s.options->classify_feature(feature, &kind)) {
+      feature.kind = kind;
+      feature.kind_assigned = true;
     }
     s.frame->classify_ms += MsSince(hooks, t);
   }
@@ -172,7 +171,7 @@ bool StreamFeature(const orcmap::MvtLayer& layer,
     orcmap::TilePlacement placement;
     placement.tile = s.tile;
     placement.unwrapped_x = unwrapped_x;
-    if (!orcmap::RenderFeatureAt(s.feature, placement, *s.viewport, *s.style,
+    if (!orcmap::RenderFeatureAt(feature, placement, *s.viewport, *s.style,
                                  s.target)) {
       s.frame->error_stage = "render";
     }
@@ -192,6 +191,11 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
                          const BenchHooks& hooks, bool background,
                          BenchFrame* out) {
   BenchFrame frame;
+  if (options.scratch_stream == nullptr) {
+    frame.error_stage = "no-scratch";
+    if (out != nullptr) *out = frame;
+    return false;
+  }
   frame.internal_free_before = Probe(hooks.internal_free);
   frame.psram_free_before = Probe(hooks.psram_free);
 
@@ -286,32 +290,20 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
     stream.frame = &frame;
     stream.tile = tile;
 
-    orcmap::MvtDecodeOptions decode_options;
-    decode_options.include_layer = options.include_layer;
-    decode_options.include_layer_ctx = options.include_layer_ctx;
-    decode_options.feature_sink = &StreamFeature;
-    decode_options.feature_sink_ctx = &stream;
+    orcmap::MvtStreamOptions stream_options;
+    stream_options.include_layer = options.include_layer;
+    stream_options.include_layer_ctx = options.include_layer_ctx;
+    stream_options.feature_sink = &StreamFeature;
+    stream_options.feature_sink_ctx = &stream;
 
-    bool decoded = false;
     t = Now(hooks);
-    if (options.scratch_stream != nullptr) {
-      decoded = reader.StreamTile(tile.z, tile.x, tile.y, decode_options,
-                                  options.scratch_stream);
-      // Pass 2 walked the whole tile, so this is its inflated size.
-      const uint64_t inflated = options.scratch_stream->stream.consumed();
-      frame.bytes_stored += inflated;
-      frame.bytes_decompressed += inflated;
-    } else {
-      std::vector<uint8_t> raw;
-      if (reader.GetTileInflated(tile.z, tile.x, tile.y,
-                                 options.decompress_budget, &raw)) {
-        frame.bytes_stored += raw.size();
-        frame.bytes_decompressed += raw.size();
-        orcmap::MvtTile unused;
-        decoded = orcmap::DecodeMvtTile(raw.data(), raw.size(), decode_options,
-                                        &unused);
-      }
-    }
+    const bool decoded = reader.StreamTile(tile.z, tile.x, tile.y,
+                                           stream_options,
+                                           options.scratch_stream);
+    // Pass 2 walked the whole tile, so this is its inflated size.
+    const uint64_t inflated = options.scratch_stream->stream.consumed();
+    frame.bytes_stored += inflated;
+    frame.bytes_decompressed += inflated;
     // Everything the sink measured is already attributed; what remains is
     // inflate plus protobuf parsing, which streaming interleaves.
     frame.decode_ms += MsSince(hooks, t) - stream.inner_ms;

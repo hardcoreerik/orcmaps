@@ -100,7 +100,12 @@ uint64_t ZxyToTileId(uint8_t z, uint32_t x, uint32_t y) {
 
 // --- PmTilesReader -------------------------------------------------------
 
-PmTilesReader::PmTilesReader(ByteSource* source) : source_(source) {}
+PmTilesReader::PmTilesReader(ByteSource* source, int leaf_cache_slots)
+    : source_(source) {
+  if (leaf_cache_slots < 1) leaf_cache_slots = 1;
+  if (leaf_cache_slots > kLeafCacheSlots) leaf_cache_slots = kLeafCacheSlots;
+  leaf_cache_used_ = leaf_cache_slots;
+}
 
 bool PmTilesReader::Open() {
   open_ = false;
@@ -333,13 +338,14 @@ bool PmTilesReader::FindEntryInSerialized(const uint8_t* data, size_t length,
 
 const std::vector<uint8_t>* PmTilesReader::LeafDirectoryBytes(
     uint64_t offset, uint64_t length) const {
-  for (const LeafCacheSlot& slot : leaf_cache_) {
+  for (int i = 0; i < leaf_cache_used_; ++i) {
+    const LeafCacheSlot& slot = leaf_cache_[i];
     if (slot.valid && slot.offset == offset && slot.length == length) {
       return &slot.bytes;
     }
   }
   LeafCacheSlot& slot = leaf_cache_[leaf_cache_next_];
-  leaf_cache_next_ = (leaf_cache_next_ + 1) % kLeafCacheSlots;
+  leaf_cache_next_ = (leaf_cache_next_ + 1) % leaf_cache_used_;
   slot.valid = false;
   if (!ReadDirectoryBytes(offset, length, &slot.bytes)) {
     slot.bytes.clear();
@@ -406,7 +412,7 @@ size_t ReadThroughByteSource(void* ctx, uint64_t offset, uint8_t* dst,
 }  // namespace
 
 bool PmTilesReader::StreamTile(uint8_t z, uint32_t x, uint32_t y,
-                               const MvtDecodeOptions& options,
+                               const MvtStreamOptions& options,
                                MvtStreamScratch* scratch) const {
   uint64_t offset = 0;
   uint32_t length = 0;

@@ -175,8 +175,40 @@ bool DecodeValue(const uint8_t* data, size_t length, MvtValue* out) {
 
 // --- Geometry command stream ---------------------------------------------
 
-bool DecodeGeometry(const std::vector<uint32_t>& commands, MvtGeomType geom_type,
-                    std::vector<MvtRing>* out) {
+// Templated on the destination ring container so ONE implementation serves
+// both the MVT-shaped output (std::vector<MvtRing> of MvtPoint) and the
+// OrcMaps-shaped output (std::vector<Path> of Point). The two point types are
+// layout-identical two-int32 structs; keeping a single parser is what stops
+// the streaming path and the buffered path drifting apart.
+// Templated on the destination ring container so ONE implementation serves
+// both the MVT-shaped output (std::vector<MvtRing> of MvtPoint) and the
+// OrcMaps-shaped output (std::vector<Path> of Point). The two point types are
+// layout-identical two-int32 structs; keeping a single parser is what stops
+// the streaming path and the buffered path drifting apart.
+//
+// Rings are REUSED, not cleared and re-pushed: a caller decoding a tile's
+// features one at a time keeps each ring's point buffer, so a dense tile
+// does not churn one allocation per ring per feature. `out` is resized down
+// to the ring count this geometry actually used.
+template <typename RingVector>
+bool DecodeGeometryInto(const std::vector<uint32_t>& commands,
+                        MvtGeomType geom_type, RingVector* out) {
+  using RingType = typename RingVector::value_type;
+  using PointType = typename RingType::value_type;
+
+  size_t used = 0;
+  const auto open_ring = [&]() -> RingType& {
+    if (used < out->size()) {
+      (*out)[used].clear();
+    } else {
+      out->emplace_back();
+    }
+    return (*out)[used++];
+  };
+  const auto current_ring = [&]() -> RingType* {
+    return used == 0 ? nullptr : &(*out)[used - 1];
+  };
+
   int32_t cx = 0, cy = 0;
   size_t i = 0;
   while (i < commands.size()) {
@@ -186,34 +218,34 @@ bool DecodeGeometry(const std::vector<uint32_t>& commands, MvtGeomType geom_type
 
     if (cmd_id == 1) {  // MoveTo
       if (geom_type == MvtGeomType::kPoint) {
-        if (out->empty()) out->emplace_back();
-        MvtRing& ring = out->back();
+        // Multipoint: every point joins one ring.
+        if (used == 0) open_ring();
+        RingType& ring = *current_ring();
         for (uint32_t k = 0; k < count; ++k) {
           if (commands.size() - i < 2) return false;
           cx += static_cast<int32_t>(ZigZagDecode(commands[i++]));
           cy += static_cast<int32_t>(ZigZagDecode(commands[i++]));
-          ring.push_back(MvtPoint{cx, cy});
+          ring.push_back(PointType{cx, cy});
         }
       } else {
         for (uint32_t k = 0; k < count; ++k) {
           if (commands.size() - i < 2) return false;
           cx += static_cast<int32_t>(ZigZagDecode(commands[i++]));
           cy += static_cast<int32_t>(ZigZagDecode(commands[i++]));
-          out->emplace_back();
-          out->back().push_back(MvtPoint{cx, cy});
+          open_ring().push_back(PointType{cx, cy});
         }
       }
     } else if (cmd_id == 2) {  // LineTo
-      if (out->empty()) return false;
-      MvtRing& ring = out->back();
+      RingType* ring = current_ring();
+      if (ring == nullptr) return false;
       for (uint32_t k = 0; k < count; ++k) {
         if (commands.size() - i < 2) return false;
         cx += static_cast<int32_t>(ZigZagDecode(commands[i++]));
         cy += static_cast<int32_t>(ZigZagDecode(commands[i++]));
-        ring.push_back(MvtPoint{cx, cy});
+        ring->push_back(PointType{cx, cy});
       }
     } else if (cmd_id == 7) {  // ClosePath
-      if (out->empty() || count != 1) return false;
+      if (used == 0 || count != 1) return false;
       // No parameters; ring closure is implicit (first/last point join),
       // matching the MVT spec -- this decoder does not duplicate the
       // first point onto the end of the ring.
@@ -221,17 +253,24 @@ bool DecodeGeometry(const std::vector<uint32_t>& commands, MvtGeomType geom_type
       return false;  // Unknown command id.
     }
   }
+  out->resize(used);
   return true;
 }
 
 // --- Feature ---------------------------------------------------------------
 
-bool DecodeFeature(const uint8_t* data, size_t length,
-                   const std::vector<std::string>& layer_keys,
-                   const std::vector<MvtValue>& layer_values, MvtFeature* out) {
+// Walks one Feature message's fields into `id`, `type` and the two packed
+// arrays. Shared by both destinations so the wire handling exists once.
+bool ParseFeatureFields(const uint8_t* data, size_t length, uint64_t* id,
+                        MvtGeomType* type, std::vector<uint32_t>* tags_out,
+                        std::vector<uint32_t>* geometry_out) {
   Reader r{data, length};
-  std::vector<uint32_t> tags;
-  std::vector<uint32_t> geometry_commands;
+  std::vector<uint32_t>& tags = *tags_out;
+  std::vector<uint32_t>& geometry_commands = *geometry_out;
+  tags.clear();
+  geometry_commands.clear();
+  *id = 0;
+  *type = MvtGeomType::kUnknown;
 
   while (!r.AtEnd()) {
     uint32_t field_number, wire_type;
@@ -240,7 +279,7 @@ bool DecodeFeature(const uint8_t* data, size_t length,
       case 1: {  // id
         uint64_t v;
         if (wire_type != 0 || !r.ReadVarint(&v)) return false;
-        out->id = v;
+        *id = v;
         break;
       }
       case 2: {  // tags (packed or unpacked repeated uint32)
@@ -267,7 +306,7 @@ bool DecodeFeature(const uint8_t* data, size_t length,
         uint64_t v;
         if (wire_type != 0 || !r.ReadVarint(&v)) return false;
         if (v > 3) return false;
-        out->geom_type = static_cast<MvtGeomType>(v);
+        *type = static_cast<MvtGeomType>(v);
         break;
       }
       case 4: {  // geometry (packed or unpacked repeated uint32)
@@ -295,7 +334,18 @@ bool DecodeFeature(const uint8_t* data, size_t length,
     }
   }
 
-  if (tags.size() % 2 != 0) return false;
+  return tags.size() % 2 == 0;
+}
+
+bool DecodeFeature(const uint8_t* data, size_t length,
+                   const std::vector<std::string>& layer_keys,
+                   const std::vector<MvtValue>& layer_values, MvtFeature* out) {
+  std::vector<uint32_t> tags;
+  std::vector<uint32_t> geometry_commands;
+  if (!ParseFeatureFields(data, length, &out->id, &out->geom_type, &tags,
+                          &geometry_commands)) {
+    return false;
+  }
   for (size_t t = 0; t < tags.size(); t += 2) {
     const uint32_t key_index = tags[t];
     const uint32_t value_index = tags[t + 1];
@@ -305,8 +355,50 @@ bool DecodeFeature(const uint8_t* data, size_t length,
     out->attribute_keys.push_back(layer_keys[key_index]);
     out->attribute_values.push_back(layer_values[value_index]);
   }
+  return DecodeGeometryInto(geometry_commands, out->geom_type, &out->geometry);
+}
 
-  return DecodeGeometry(geometry_commands, out->geom_type, &out->geometry);
+bool DecodeFeatureAsFeature(const uint8_t* data, size_t length,
+                            const std::vector<std::string>& layer_keys,
+                            const std::vector<MvtValue>& layer_values,
+                            const MvtLayer& layer,
+                            FeatureParseScratch* scratch, Feature* out) {
+  if (scratch == nullptr || out == nullptr) return false;
+  MvtGeomType type = MvtGeomType::kUnknown;
+  if (!ParseFeatureFields(data, length, &out->id, &type, &scratch->tags,
+                          &scratch->geometry)) {
+    return false;
+  }
+
+  // Clear contents, keep buffers: one Feature serves every feature in a tile.
+  out->kind_assigned = false;
+  out->kind = FeatureKind::kBackground;
+  out->extent = layer.extent == 0 ? 4096 : layer.extent;
+  out->layer = layer.name;
+  out->property_keys.clear();
+  out->property_values.clear();
+  for (size_t t = 0; t < scratch->tags.size(); t += 2) {
+    const uint32_t key_index = scratch->tags[t];
+    const uint32_t value_index = scratch->tags[t + 1];
+    if (key_index >= layer_keys.size() || value_index >= layer_values.size()) {
+      return false;
+    }
+    out->property_keys.push_back(layer_keys[key_index]);
+    out->property_values.push_back(layer_values[value_index]);
+  }
+
+  switch (type) {
+    case MvtGeomType::kPoint: out->geometry.type = GeomType::kPoint; break;
+    case MvtGeomType::kLineString:
+      out->geometry.type = GeomType::kLineString;
+      break;
+    case MvtGeomType::kPolygon: out->geometry.type = GeomType::kPolygon; break;
+    case MvtGeomType::kUnknown:
+    default: out->geometry.type = GeomType::kUnknown; break;
+  }
+  // Rings are reused in place by the decoder, so the Paths keep their point
+  // buffers between features.
+  return DecodeGeometryInto(scratch->geometry, type, &out->geometry.paths);
 }
 
 // --- Layer -------------------------------------------------------------

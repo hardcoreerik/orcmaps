@@ -91,11 +91,12 @@ struct BenchPipelineOptions {
   // skipped tile is a recorded, visible measurement; a crash is not.
   size_t min_free_internal_bytes = 0;
 
-  // Caller-owned streaming scratch, reused for every tile. When set, tiles
-  // are parsed straight from the archive and the inflated tile is NEVER
-  // materialised -- the only way a board whose largest free block is smaller
-  // than a tile can render one. Null falls back to inflate-then-decode,
-  // which is simpler and fine where PSRAM exists.
+  // Caller-owned streaming scratch, reused for every tile. REQUIRED: tiles
+  // are parsed straight from the archive and no inflated tile is ever
+  // materialised, which is the only way a board whose largest free block is
+  // smaller than a tile can render one. There is deliberately no second,
+  // buffered code path -- one pipeline means a PSRAM board and a no-PSRAM
+  // board cannot diverge.
   //
   // With streaming, inflate and protobuf parsing interleave per feature and
   // cannot be timed apart: their combined cost lands in decode_ms and

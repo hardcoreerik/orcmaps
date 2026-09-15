@@ -387,3 +387,66 @@ One view, every tile present, held. What remains visible is that the frame
 paints progressively over ~1.45 s — unavoidable on a board that cannot hold
 an offscreen framebuffer (320x480x16bpp is 307,200 bytes against ~129 KiB of
 free heap), and the reason the Tab5's drag-blit model was never ported here.
+
+## Removing the duplicate geometry copy: Oregon reaches 7 of 9
+
+The streaming parser now decodes MVT bytes **straight into
+`orcmap::Feature`**. There is no `MvtFeature` in the path at all, so a dense
+feature's geometry is paid for once rather than twice — previously ~72 KiB as
+`MvtPoint` and then another ~72 KiB copied into `Feature`.
+
+One parser serves both shapes: `DecodeGeometryInto` is templated on the ring
+container, so the MVT-shaped output and the OrcMaps-shaped output share the
+same command-stream implementation and cannot drift. `Point` and `MvtPoint`
+are layout-identical two-int32 structs, which is what makes that possible.
+
+Host tests assert the direct decode is identical to decode-then-translate —
+id, layer, extent, geometry type, every ring, every point, and every
+attribute — so the change is a memory change only.
+
+### Two mistakes of mine, both caught by measurement
+
+**Retaining buffers across tiles was a leak in all but name.** Reusing each
+`Path`'s point buffer avoids one allocation per ring per feature *within* a
+tile, but carrying a dense feature's rings for the rest of the run pinned
+~72 KiB: free heap fell to **2,304 bytes** and every subsequent tile was
+refused by the pipeline's heap floor — strictly worse than not reusing at
+all. Oversized buffers are now released between tiles.
+
+**A compile-time knob for the leaf-cache slot count would have been an ODR
+violation.** `kLeafCacheSlots` sizes an array inside `PmTilesReader`, so
+defining it per-target would change `sizeof(PmTilesReader)` between
+translation units. It is a runtime constructor argument instead, clamped to
+the array bound; an unused slot costs an empty vector rather than 21 KiB.
+
+### Sized for the board
+
+- one leaf-directory cache slot instead of two (~21 KiB saved);
+- feature staging reserved at 24 KiB, not 40 KiB — Oregon's largest feature
+  is 19,253 bytes, and reserving for Springfield's 36,259-byte feature only
+  starved the tiles this board can actually draw;
+- heap floor lowered to 24 KiB to match.
+
+### Measured on the device
+
+| | previous | now |
+|---|---|---|
+| world z1 | 4 of 4, 632 features | **4 of 4, 632 features** |
+| oregon z7 | 5 of 9, 396 features | **7 of 9, 641 features** |
+| springfield z13 | 0 of 6 | 0 of 6 |
+| free heap | 104,900 | 121,284 |
+| minimum free | 2,304 | **17,512** |
+
+### What Springfield z13 still needs
+
+It is not a memory-management problem any more. One feature in those tiles
+is 36,259 encoded bytes — roughly 9,000 coordinate pairs — which is ~72 KiB
+of decoded geometry on top of the 32 KiB inflate window and the staging
+buffer, against ~100 KiB free. A single feature does not fit, and polygon
+fill needs the whole ring, so it cannot be drawn in pieces.
+
+That leaves two honest options for z13-class detail on this board: halve the
+point representation (both types are two int32s while an extent fits an
+int16), or build packs whose features are sized for a 480x320 screen. The
+first is an engine change worth doing anyway; the second is the reason these
+particular packs were never right for this hardware.

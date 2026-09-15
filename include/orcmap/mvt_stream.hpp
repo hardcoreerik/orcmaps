@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "orcmap/compression.hpp"
+#include "orcmap/feature.hpp"
 #include "orcmap/mvt.hpp"
 
 namespace orcmap {
@@ -37,6 +38,25 @@ namespace orcmap {
 // emits features. The payload is inflated twice, which trades CPU for the
 // contiguous memory the board does not have.
 
+// Receives one fully decoded OrcMaps Feature. Nothing passed in outlives
+// the call: the same Feature object is reused for every feature in the tile,
+// so copy anything you need to keep.
+//
+// The sink takes a Feature rather than an MvtFeature because the streaming
+// parser decodes STRAIGHT into the OrcMaps type. Building an MvtFeature and
+// then copying it paid for a dense feature's geometry twice -- about 72 KiB
+// each way for the worst feature in these packs -- which no board with
+// ~129 KiB of heap can afford.
+using StreamedFeatureSink = bool (*)(const Feature& feature, void* ctx);
+
+struct MvtStreamOptions {
+  // Layer filter, same contract as MvtDecodeOptions::include_layer.
+  bool (*include_layer)(const char* name, size_t name_len, void* ctx) = nullptr;
+  void* include_layer_ctx = nullptr;
+  StreamedFeatureSink feature_sink = nullptr;
+  void* feature_sink_ctx = nullptr;
+};
+
 // Reusable scratch. Allocate ONE of these and keep it: every buffer inside
 // is reused across tiles, so a steady-state frame performs no large
 // allocation at all.
@@ -54,15 +74,34 @@ struct MvtStreamScratch {
 
   InflatingByteStream stream;
   std::vector<LayerTables> layers;
-  std::vector<uint8_t> feature_bytes;  // one feature at a time
-  MvtFeature feature;                  // reused
-  MvtLayer layer;                      // name/extent/version for the sink
+  std::vector<uint8_t> feature_bytes;  // one feature's encoded bytes
+  Feature feature;                     // reused, decoded in place
+  MvtLayer layer;                      // name/extent/version for the decoder
+  // Packed tag/geometry command buffers, reused across features.
+  std::vector<uint32_t> tags;
+  std::vector<uint32_t> geometry;
 };
 
 // Refuses a single feature larger than this rather than growing without
 // bound on hostile input. The largest feature measured in this project's
 // packs is 36,259 bytes.
 inline constexpr size_t kMaxStreamedFeatureBytes = 256u * 1024u;
+
+// Point capacity the scratch keeps between TILES. Reuse inside a tile avoids
+// one allocation per ring per feature; carrying a dense feature's geometry
+// for the rest of the run is a different thing entirely, and it is a leak in
+// all but name.
+//
+// Measured on a CYD 3.5": without this bound one dense feature's retained
+// rings pinned ~72 KiB, free heap fell to 2,304 bytes, and every subsequent
+// tile was refused by the pipeline's heap floor -- worse than not reusing at
+// all. 4,096 points is ~32 KiB, comfortably above the common case.
+inline constexpr size_t kRetainedGeometryPoints = 4096;
+
+// Encoded-feature bytes the scratch keeps between tiles. Above this the
+// buffer is released, so one unusually large feature does not hold its
+// staging buffer for the rest of the run.
+inline constexpr size_t kMaxRetainedFeatureBytes = 48u * 1024u;
 
 // Parses the compressed tile at [input_offset, input_offset + input_size)
 // pulled through `reader`, emitting each feature to
@@ -84,6 +123,6 @@ bool ReserveMvtStreamScratch(MvtStreamScratch* scratch,
 
 bool StreamMvtTile(Compression compression, CompressedChunkReader reader,
                    void* ctx, uint64_t input_offset, size_t input_size,
-                   const MvtDecodeOptions& options, MvtStreamScratch* scratch);
+                   const MvtStreamOptions& options, MvtStreamScratch* scratch);
 
 }  // namespace orcmap

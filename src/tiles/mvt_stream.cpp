@@ -42,7 +42,7 @@ bool ReadDelimited(InflatingByteStream* in, uint64_t len,
 // payloads are skipped -- their attribute indices cannot be resolved yet,
 // because MVT emits features before the tables they reference.
 bool ReadLayerTables(InflatingByteStream* in, uint64_t layer_len,
-                     const MvtDecodeOptions& options,
+                     const MvtStreamOptions& options,
                      std::vector<uint8_t>* staging,
                      MvtStreamScratch::LayerTables* out) {
   const uint64_t end = in->consumed() + layer_len;
@@ -112,7 +112,7 @@ bool ReadLayerTables(InflatingByteStream* in, uint64_t layer_len,
 // PASS 2 over one layer: decode each feature and hand it to the sink. One
 // feature's bytes and one decoded feature exist at a time.
 bool StreamLayerFeatures(InflatingByteStream* in, uint64_t layer_len,
-                         const MvtDecodeOptions& options,
+                         const MvtStreamOptions& options,
                          const MvtStreamScratch::LayerTables& tables,
                          MvtStreamScratch* scratch) {
   const uint64_t end = in->consumed() + layer_len;
@@ -135,21 +135,18 @@ bool StreamLayerFeatures(InflatingByteStream* in, uint64_t layer_len,
       if (!in->ReadVarint(&len)) return false;
       if (!ReadDelimited(in, len, &scratch->feature_bytes)) return false;
 
-      // Clear, keep capacity: one feature object serves the whole tile.
-      MvtFeature& feature = scratch->feature;
-      feature.id = 0;
-      feature.geom_type = MvtGeomType::kUnknown;
-      for (MvtRing& ring : feature.geometry) ring.clear();
-      feature.geometry.clear();
-      feature.attribute_keys.clear();
-      feature.attribute_values.clear();
-      if (!internal::DecodeFeature(scratch->feature_bytes.data(),
-                                   scratch->feature_bytes.size(), tables.keys,
-                                   tables.values, &feature)) {
-        return false;
-      }
-      if (!options.feature_sink(scratch->layer, feature,
-                                options.feature_sink_ctx)) {
+      // Decoded straight into the reused OrcMaps Feature -- no MvtFeature
+      // exists, so a dense feature's geometry is paid for once, not twice.
+      internal::FeatureParseScratch parse{std::move(scratch->tags),
+                                          std::move(scratch->geometry)};
+      const bool decoded = internal::DecodeFeatureAsFeature(
+          scratch->feature_bytes.data(), scratch->feature_bytes.size(),
+          tables.keys, tables.values, scratch->layer, &parse,
+          &scratch->feature);
+      scratch->tags = std::move(parse.tags);
+      scratch->geometry = std::move(parse.geometry);
+      if (!decoded) return false;
+      if (!options.feature_sink(scratch->feature, options.feature_sink_ctx)) {
         return false;
       }
     } else if (!SkipField(in, wire)) {
@@ -171,7 +168,7 @@ bool ReserveMvtStreamScratch(MvtStreamScratch* scratch,
 
 bool StreamMvtTile(Compression compression, CompressedChunkReader reader,
                    void* ctx, uint64_t input_offset, size_t input_size,
-                   const MvtDecodeOptions& options,
+                   const MvtStreamOptions& options,
                    MvtStreamScratch* scratch) {
   if (scratch == nullptr || options.feature_sink == nullptr) return false;
   scratch->layers.clear();
@@ -225,6 +222,20 @@ bool StreamMvtTile(Compression compression, CompressedChunkReader reader,
       return false;
     }
   }
+  // Release oversized buffers now that the tile is done. Within a tile the
+  // retained capacity is what keeps a dense tile from churning; across
+  // tiles it would simply hold memory the next tile needs.
+  size_t retained_points = 0;
+  for (const Path& path : scratch->feature.geometry.paths) {
+    retained_points += path.capacity();
+  }
+  if (retained_points > kRetainedGeometryPoints) {
+    std::vector<Path>().swap(scratch->feature.geometry.paths);
+  }
+  if (scratch->feature_bytes.capacity() > kMaxRetainedFeatureBytes) {
+    std::vector<uint8_t>(scratch->feature_bytes).swap(scratch->feature_bytes);
+  }
+
   // Both passes must agree on the layer count, or the tile changed under us.
   return layer_index == scratch->layers.size();
 }

@@ -73,7 +73,12 @@ class PmTilesReader {
  public:
   // `source` must outlive this reader and any data returned by it (this
   // reader does not copy source's lifetime, only reads through it).
-  explicit PmTilesReader(ByteSource* source);
+  //
+  // `leaf_cache_slots` caps how many leaf directories are held at once,
+  // clamped to [1, kLeafCacheSlots]. Two suits a board with memory to
+  // spare; pass 1 on a board that would rather re-read a directory than
+  // hold ~21 KiB of it.
+  explicit PmTilesReader(ByteSource* source, int leaf_cache_slots = 2);
 
   // Parses the header and loads+decompresses the root directory. Returns
   // false (and leaves IsOpen() false) on any structural problem: bad magic,
@@ -122,7 +127,7 @@ class PmTilesReader {
   // payload is malformed; `scratch` should be owned and reused by the
   // caller.
   bool StreamTile(uint8_t z, uint32_t x, uint32_t y,
-                  const MvtDecodeOptions& options,
+                  const MvtStreamOptions& options,
                   MvtStreamScratch* scratch) const;
 
   // Resolves a tile to its absolute archive offset and stored length, for a
@@ -190,10 +195,13 @@ class PmTilesReader {
   const std::vector<uint8_t>* LeafDirectoryBytes(uint64_t offset,
                                                  uint64_t length) const;
 
-  // Two slots, not four: a slot is now bytes rather than parsed entries, and
-  // two covers a frame straddling a directory boundary while keeping the
-  // worst case near 42 KiB -- which is the difference between working and
-  // not on a board with ~90 KiB of usable DRAM.
+  // A cached slot holds one directory's decompressed BYTES -- about 21 KiB
+  // for the 4,096-entry directories in this project's packs -- so how many
+  // slots are USED is a real memory decision. The array bound is fixed (a
+  // compile-time knob here would change sizeof(PmTilesReader) per
+  // translation unit, which is an ODR violation waiting to corrupt memory);
+  // the count actually populated is a runtime constructor argument, and an
+  // unused slot costs an empty vector rather than 21 KiB.
   static constexpr int kLeafCacheSlots = 2;
   struct LeafCacheSlot {
     bool valid = false;
@@ -211,6 +219,7 @@ class PmTilesReader {
   // not observable results.
   mutable LeafCacheSlot leaf_cache_[kLeafCacheSlots];
   mutable int leaf_cache_next_ = 0;
+  int leaf_cache_used_ = 2;  // slots actually populated
 };
 
 }  // namespace orcmap
