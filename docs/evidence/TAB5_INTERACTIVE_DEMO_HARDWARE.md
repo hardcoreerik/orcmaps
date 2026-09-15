@@ -1,9 +1,11 @@
 # Tab5 interactive OrcMaps demo — hardware evidence
 
 **This is a real physical M5Stack Tab5 result, not a host simulation.**
-Status: **hardware-verified interactive demo**. Three runs recorded below: the
-first exposed a framing bug, the second confirms that fix, and the third
-follows a user report that zooming out stopped filling the screen.
+Status: **hardware-verified interactive demo**. Four runs recorded below: the
+first exposed a framing bug, the second confirms that fix, the third follows a
+user report that zooming out stopped filling the screen, and the fourth is the
+first boot driven entirely by runtime SD discovery with no compiled-in
+manifests.
 
 Each board has its **own** SD card — the Tab5 and the LilyGO T-Display-S3 do
 not share one — so pack provisioning is per device. Nothing installed on this
@@ -172,6 +174,67 @@ fix touches control limits, not the render pipeline.
 have not been physically photographed, and the z2 floor with a world pack
 installed is asserted by host tests, not observed on hardware.
 
+## Runtime discovery and world view (fourth hardware run)
+
+First boot with **no compiled-in manifests**: the demo scans `/sd/orcmaps`
+and uses whatever is installed. Firmware `876b8d5`, 671,152 bytes, 36% of
+the app partition free; all three image hashes verified on COM17.
+
+Discovery, verbatim from serial:
+
+```
+discovery: 3 manifest(s), 3 installed, 0 rejected
+installed oregon z1-13 priority 10
+installed springfield-97477 z0-15 priority 20
+installed world z0-7 priority 0
+```
+
+All three packs on the card installed, none rejected. This also confirms the
+`build_world_overview.py` bounds fix on real media: before it, the world
+manifest failed `ValidBounds()` by 2e-8 and would have been refused here.
+
+### Boot frame: the world view, filled by wrapping
+
+| Field | Value |
+|---|---:|
+| pack | `world` / `orcmaps-overview-1` (engine-selected, not hardcoded) |
+| zoom | **2**, derived by `WorldViewZoom` from 1280x600 |
+| centre | 0.000000, 0.000000 |
+| viewport | 1280 x 600 |
+| tiles visible (distinct) | **16** |
+| **placements (drawn)** | **24** |
+| tiles missing | **0** |
+| features | 730 |
+| bytes stored / decompressed | 47,436 / 60,276 |
+| lookup / inflate / decode | 229.353 / 8.671 / 83.292 ms |
+| translate / classify / render | 17.648 / 0.404 / 266.015 ms |
+| **frame total** | **632.273 ms** |
+| internal min / largest | 263,003 / 253,952 |
+| PSRAM min / largest | 29,394,972 / 29,360,128 |
+| report file | `/sd/orcmaps/orcmaps-benchmark-0014.jsonl` |
+| result | PASS |
+
+**`placements` (24) exceeding `tiles_visible` (16) is the wrap working, and
+the numbers are exactly predicted, not approximately right.** At z2 the world
+is 4x4 tiles = 1024 px against a 1280 px map area, so the visible X range is
+tile -1 through 4: six columns, four rows = 24 drawn instances, of which only
+16 are distinct tiles (x -1 wraps to 3, x 4 wraps to 0). Each distinct tile is
+fetched and decoded once and drawn at each of its placements, which is why the
+expensive stages stay proportional to 16.
+
+So the whole world is visible with **no empty margin** on a display the world
+does not fit, and `tiles_missing: 0` confirms nothing was requested that the
+pack lacks.
+
+At 632.273 ms this frame is **less than half** the 1,301 ms Springfield z15
+frame — fewer bytes (47 KB vs 430 KB) and far less geometry. Do not compare
+the two as an optimization: they are different packs at different zooms.
+
+**Still not observed on hardware:** the world -> Oregon -> Springfield
+transition needs someone to pan and zoom into Oregon, and whether the SD
+JSONL now contains data (it was 0 bytes before) cannot be read while the card
+is in the device.
+
 ## Comparability warning
 
 This is **not** directly comparable to the earlier ~4.4 s (previously 11.3 s)
@@ -217,7 +280,11 @@ scenarios bind their pack explicitly rather than relaxing any coverage rule.
 | Measured frame written to numbered SD JSONL | **FAIL** — see "SD report files are empty" |
 | Full-coverage render at engine-derived zoom | PASS (18/18 tiles, z15) |
 | Centre matches extract centre | PASS (44.060008, -123.007500) |
-| Catalogue-derived zoom-out floor | IMPLEMENTED, z15 on this card, NOT PHOTOGRAPHED |
+| Catalogue-derived zoom-out floor | PASS (z2 with the world pack installed) |
+| Runtime SD pack discovery (no compiled-in manifest) | PASS (3 found, 3 installed, 0 rejected) |
+| World view derived from display size | PASS (z2 from 1280x600) |
+| Map extends around itself (world-copy placement) | PASS (24 placements / 16 distinct tiles, 0 missing) |
+| World -> Oregon -> Springfield selection on device | NOT YET RECORDED (needs interactive pan/zoom) |
 | Partial-coverage rendering + label | IMPLEMENTED, NOT YET PHOTOGRAPHED |
 | Touch pan / zoom / style / info physically exercised | NOT YET RECORDED |
 | World -> regional transition on device | NOT YET RECORDED (world pack absent) |
