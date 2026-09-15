@@ -141,9 +141,10 @@ Fix, keeping the limit engine-derived rather than a per-board constant:
 
 On this card the floor is **z15**, so `-` is inert — the honest consequence of
 a card holding one small extract. With the built z0-7 world overview copied to
-`/orcmaps/world-overview.pmtiles` the floor drops to **z3** (one z0 tile is
-256 px, so 1280 px of map area is not covered by the whole world until z3).
-Provisioning, not rendering, is what unlocks zoom-out here.
+`/orcmaps/world-overview.pmtiles` the floor drops to **z2** — the world wraps
+around itself, so only its height must reach the map area, and
+2^2 x 256 = 1024 >= 600. Provisioning, not rendering, is what unlocks
+zoom-out here.
 
 Third run, same device and card, after the fix:
 
@@ -168,8 +169,8 @@ Unchanged from the second run within noise (1,301.201 ms vs 1,299.126 ms); the
 fix touches control limits, not the render pipeline.
 
 **Not yet recorded:** the clamped `-` button and the new info-panel reason line
-have not been physically photographed, and the z3 floor with a world pack
-installed is arithmetic plus a host test, not a hardware observation.
+have not been physically photographed, and the z2 floor with a world pack
+installed is asserted by host tests, not observed on hardware.
 
 ## Comparability warning
 
@@ -243,10 +244,12 @@ independent record until it actually contains data.
   (`world-overview-z7.pmtiles` -> `/orcmaps/world-overview.pmtiles`, 9,737,500
   bytes, SHA-256 verified on the card and matching the firmware's compiled-in
   manifest exactly), together with its manifest and `.sha256`. The derived
-  zoom floor should therefore drop from z15 to **z3**, and boot should frame
-  the world instead of the regional extract. **Not yet observed on hardware:**
-  the card was provisioned from a PC and has not been booted in the device
-  since.
+  zoom floor should therefore drop from z15 to **z2**, and boot should open on
+  the world view (z2, centred on 0,0) instead of the regional extract, with
+  the map extending around itself to fill the 1280 px width from a 1024 px
+  world. **Not yet observed on hardware:** the card was provisioned from a PC,
+  and the firmware carrying world-copy placement has been built but
+  deliberately not flashed yet.
 - The SD report path writes nothing (see "SD report files are empty").
 - `build_world_overview.py` writes bounds as `85.0511288`, which
   `ValidBounds()` rejects (it requires <= `85.05112878`). The demo compiles

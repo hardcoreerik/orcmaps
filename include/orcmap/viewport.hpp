@@ -12,9 +12,15 @@ namespace orcmap {
 // Overzoom (source tile z != viewport zoom) is rejected, not guessed.
 // X wraps the world (antimeridian). Y is clamped, never wrapped.
 //
-// Unique TileIds only: a tile that would appear twice under wrapping is
-// returned once. Extremely wide views of a wrapped world are not an
-// infinite scene graph -- see EnumerateVisibleTiles.
+// Two enumeration modes, deliberately distinct:
+//   - EnumerateVisibleTiles returns unique TileIds only; a tile that would
+//     appear twice under wrapping is returned once. Use it to decide what to
+//     fetch and decode.
+//   - EnumerateVisibleTilePlacements returns one entry per drawn instance,
+//     including repeats across world copies, so a world narrower than the
+//     viewport extends around itself instead of leaving empty margin. Use it
+//     to decide what to draw and where.
+// Neither is an infinite scene graph: both are bounded by the screen.
 //
 // tile_size_px is screen pixels per map tile at `zoom` (Web Mercator
 // convention defaults to 256). Tests may set it equal to the framebuffer
@@ -73,6 +79,48 @@ bool FillBounds(Viewport* viewport, const GeoBounds& bounds);
 // maximum can cover the viewport.
 bool MinFillZoom(const Viewport& viewport, const GeoBounds& bounds,
                  uint8_t* out_zoom);
+
+// Smallest zoom at which the world is at least as tall as the viewport.
+//
+// This is the natural "whole world" view for a given display. Horizontal
+// extent needs no test: with world-copy placement (see TilePlacement) the map
+// repeats around itself, so width is always covered. Height cannot repeat --
+// Mercator Y is clamped, never wrapped -- so height alone decides.
+//
+// A caller with a global pack should clamp the result to that pack's zoom
+// range. Returns false on an invalid viewport or when no zoom is tall enough.
+bool WorldViewZoom(const Viewport& viewport, uint8_t* out_zoom);
+
+// One drawn instance of a tile. `tile` is wrapped into [0, 2^z) and is what
+// you look up in a pack; `unwrapped_x` is where that instance sits in world
+// space and is what places it on screen, so the same tile can be drawn at
+// several longitudes when the viewport is wider than the world.
+//
+// This is what makes the map extend around itself instead of leaving empty
+// margin beside a world narrower than the screen.
+struct TilePlacement {
+  TileId tile;
+  int64_t unwrapped_x = 0;
+};
+
+// Every drawn instance of every tile intersecting the viewport, including
+// repeats across world copies. Order matches EnumerateVisibleTiles
+// (north-to-south, then west-to-east in screen space).
+//
+// Unlike EnumerateVisibleTiles, the same TileId MAY appear more than once --
+// once per world copy on screen. Decode each distinct TileId once and draw it
+// at each of its placements; re-decoding per placement is wasted work.
+//
+// Returns false and clears `out` if `out` is null, zoom is invalid, or
+// width/height/tile_size_px are <= 0.
+bool EnumerateVisibleTilePlacements(const Viewport& viewport,
+                                    std::vector<TilePlacement>* out);
+
+// Placement of `tile` at the world copy nearest the viewport centre -- the
+// single-copy rule MakeTileScreenMap uses. Returns false on invalid zoom,
+// zoom mismatch, or out-of-range tile indices.
+bool NearestTilePlacement(const Viewport& viewport, TileId tile,
+                          TilePlacement* out);
 bool ZoomAtScreenPoint(Viewport* viewport, double screen_x, double screen_y,
                        int zoom_delta);
 
@@ -90,6 +138,13 @@ struct TileScreenMap {
 bool MakeTileScreenMap(const Viewport& viewport, TileId tile, uint32_t extent,
                        TileScreenMap* out);
 
+// As MakeTileScreenMap, but places the tile at its placement's world copy
+// rather than at the copy nearest the centre. Use this whenever you drew
+// placements, or repeats will all land on top of each other.
+bool MakeTilePlacementScreenMap(const Viewport& viewport,
+                                const TilePlacement& placement,
+                                uint32_t extent, TileScreenMap* out);
+
 // Unique Web Mercator source tiles that intersect the viewport at
 // viewport.zoom (no overzoom). Order: north-to-south, then west-to-east
 // in screen space (wrapped X increases to the right).
@@ -100,8 +155,10 @@ bool MakeTileScreenMap(const Viewport& viewport, TileId tile, uint32_t extent,
 //
 // Does not consult map storage: a returned tile may be absent from a
 // pack. Duplicate TileIds are never emitted (z0 + a wide viewport yields
-// one 0/0/0, not five). A unique TileId is not instantiated at multiple
-// world copies; that is out of scope for embedded viewports.
+// one 0/0/0, not five), which is what makes this the right input to
+// fetch/decode. It is NOT the right input to drawing when the world is
+// narrower than the viewport, because each tile carries only one position:
+// use EnumerateVisibleTilePlacements for that.
 bool EnumerateVisibleTiles(const Viewport& viewport, std::vector<TileId>* out);
 
 // Cheap path after MakeTileScreenMap. Writes saturated int screen coords

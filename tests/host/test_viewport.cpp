@@ -436,6 +436,123 @@ void TestMinFillZoomFloorIsScreenAndCoverageDependent() {
   ORCMAP_EXPECT_TRUE(!orcmap::MinFillZoom(tab5, springfield, nullptr));
 }
 
+void TestWorldViewZoomIsHeightDrivenOnly() {
+  // 1280x600 at 256 px tiles: z2's world is 1024 px, which covers 600 px of
+  // height, so z2 is the world view even though 1024 < 1280 -- the missing
+  // width is filled by wrapping, not by zooming in.
+  orcmap::Viewport tab5 = MakeView(0.0, 0.0, 0, 1280, 600, 256);
+  uint8_t z = 99;
+  ORCMAP_EXPECT_TRUE(orcmap::WorldViewZoom(tab5, &z));
+  ORCMAP_EXPECT_EQ(static_cast<int>(z), 2);
+
+  // A short screen needs less: 170 px is covered by z0's 256 px world.
+  orcmap::Viewport lilygo = MakeView(0.0, 0.0, 0, 320, 170, 256);
+  ORCMAP_EXPECT_TRUE(orcmap::WorldViewZoom(lilygo, &z));
+  ORCMAP_EXPECT_EQ(static_cast<int>(z), 0);
+
+  // Width must not influence the result at all.
+  orcmap::Viewport wide = MakeView(0.0, 0.0, 0, 4096, 600, 256);
+  uint8_t wide_z = 99;
+  ORCMAP_EXPECT_TRUE(orcmap::WorldViewZoom(wide, &wide_z));
+  ORCMAP_EXPECT_EQ(static_cast<int>(wide_z), 2);
+
+  ORCMAP_EXPECT_TRUE(!orcmap::WorldViewZoom(tab5, nullptr));
+}
+
+void TestGlobalBoundsFillByWrappingSoFloorDrops() {
+  // A world-spanning pack is never short of width, because it repeats. Its
+  // fill zoom must therefore be height-driven and match WorldViewZoom --
+  // this is what lets the Tab5 zoom out to z2 instead of stopping at z3.
+  const orcmap::GeoBounds world{-180.0, -orcmap::kMercatorMaxLatDeg, 180.0,
+                                orcmap::kMercatorMaxLatDeg};
+  orcmap::Viewport v = MakeView(0.0, 0.0, 0, 1280, 600, 256);
+  uint8_t fill = 99;
+  uint8_t world_view = 99;
+  ORCMAP_EXPECT_TRUE(orcmap::MinFillZoom(v, world, &fill));
+  ORCMAP_EXPECT_TRUE(orcmap::WorldViewZoom(v, &world_view));
+  ORCMAP_EXPECT_EQ(static_cast<int>(fill), static_cast<int>(world_view));
+  ORCMAP_EXPECT_EQ(static_cast<int>(fill), 2);
+
+  // A pack that stops just short of the antimeridian does NOT get the
+  // wrapping exemption, so it still needs the width test.
+  const orcmap::GeoBounds almost{-179.0, -orcmap::kMercatorMaxLatDeg, 179.0,
+                                 orcmap::kMercatorMaxLatDeg};
+  uint8_t almost_fill = 0;
+  ORCMAP_EXPECT_TRUE(orcmap::MinFillZoom(v, almost, &almost_fill));
+  ORCMAP_EXPECT_TRUE(almost_fill > fill);
+}
+
+void TestPlacementsFillAViewportWiderThanTheWorld() {
+  // z2 world is 1024 px; a 1280 px viewport must be covered by repeating
+  // tiles, so placements exceed distinct tiles and the drawn span reaches
+  // both screen edges.
+  orcmap::Viewport v = MakeView(0.0, 0.0, 2, 1280, 600, 256);
+  std::vector<orcmap::TilePlacement> placements;
+  ORCMAP_EXPECT_TRUE(orcmap::EnumerateVisibleTilePlacements(v, &placements));
+  ORCMAP_EXPECT_TRUE(!placements.empty());
+
+  std::vector<orcmap::TileId> unique;
+  ORCMAP_EXPECT_TRUE(orcmap::EnumerateVisibleTiles(v, &unique));
+  ORCMAP_EXPECT_TRUE(placements.size() > unique.size());
+
+  // Every placement's wrapped X must be a legal tile index, and at least one
+  // tile must appear at two different world copies.
+  const uint32_t n = orcmap::TilesPerAxis(2);
+  bool saw_repeat = false;
+  double min_left = 1e9;
+  double max_right = -1e9;
+  for (const orcmap::TilePlacement& p : placements) {
+    ORCMAP_EXPECT_TRUE(p.tile.x < n);
+    orcmap::TileScreenMap map;
+    ORCMAP_EXPECT_TRUE(
+        orcmap::MakeTilePlacementScreenMap(v, p, 4096, &map));
+    if (map.origin_sx < min_left) min_left = map.origin_sx;
+    if (map.origin_sx + 256.0 > max_right) max_right = map.origin_sx + 256.0;
+    for (const orcmap::TilePlacement& q : placements) {
+      if (&p == &q) continue;
+      if (q.tile.x == p.tile.x && q.tile.y == p.tile.y &&
+          q.unwrapped_x != p.unwrapped_x) {
+        saw_repeat = true;
+      }
+    }
+  }
+  ORCMAP_EXPECT_TRUE(saw_repeat);
+  // No gap at either edge: the drawn span must cover the whole width.
+  ORCMAP_EXPECT_TRUE(min_left <= 0.0);
+  ORCMAP_EXPECT_TRUE(max_right >= 1280.0);
+}
+
+void TestPlacementsMatchNearestTileWhenNoRepeatOccurs() {
+  // Deep zoom: the world is far wider than the screen, so no tile repeats
+  // and placement must agree exactly with the pre-existing nearest-copy
+  // mapping. This keeps RenderFeatureTile's behavior unchanged.
+  orcmap::Viewport v = MakeView(44.06, -123.0075, 15, 1280, 600, 256);
+  std::vector<orcmap::TilePlacement> placements;
+  std::vector<orcmap::TileId> unique;
+  ORCMAP_EXPECT_TRUE(orcmap::EnumerateVisibleTilePlacements(v, &placements));
+  ORCMAP_EXPECT_TRUE(orcmap::EnumerateVisibleTiles(v, &unique));
+  ORCMAP_EXPECT_EQ(static_cast<int>(placements.size()),
+                   static_cast<int>(unique.size()));
+
+  for (const orcmap::TilePlacement& p : placements) {
+    orcmap::TileScreenMap placed;
+    orcmap::TileScreenMap nearest;
+    ORCMAP_EXPECT_TRUE(
+        orcmap::MakeTilePlacementScreenMap(v, p, 4096, &placed));
+    ORCMAP_EXPECT_TRUE(
+        orcmap::MakeTileScreenMap(v, p.tile, 4096, &nearest));
+    ORCMAP_EXPECT_NEAR(placed.origin_sx, nearest.origin_sx, 1e-9);
+    ORCMAP_EXPECT_NEAR(placed.origin_sy, nearest.origin_sy, 1e-9);
+  }
+
+  // A placement whose unwrapped X disagrees with its wrapped tile is
+  // rejected rather than silently drawn in the wrong place.
+  orcmap::TilePlacement bad = placements[0];
+  bad.unwrapped_x += 1;
+  orcmap::TileScreenMap map;
+  ORCMAP_EXPECT_TRUE(!orcmap::MakeTilePlacementScreenMap(v, bad, 4096, &map));
+}
+
 void TestProjectionRoundTripAfterPanAndZoom() {
   orcmap::Viewport v = MakeView(44.05, -123.022, 14, 320, 170, 256);
   ORCMAP_EXPECT_TRUE(orcmap::PanByPixels(&v, 17.0, -9.0));
@@ -490,6 +607,10 @@ void RunViewportTests() {
   TestFillBoundsRejectsUnfillableBounds();
   TestMinFillZoomAgreesWithFillBoundsWithoutMoving();
   TestMinFillZoomFloorIsScreenAndCoverageDependent();
+  TestWorldViewZoomIsHeightDrivenOnly();
+  TestGlobalBoundsFillByWrappingSoFloorDrops();
+  TestPlacementsFillAViewportWiderThanTheWorld();
+  TestPlacementsMatchNearestTileWhenNoRepeatOccurs();
   TestFitBoundsWorldOregonAndSpringfield();
   TestProjectionRoundTripAfterPanAndZoom();
   TestZoomAtScreenPointPreservesAnchor();

@@ -138,15 +138,41 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
 
   const int64_t frame_start = Now(hooks);
 
-  std::vector<orcmap::TileId> tiles;
+  // Placements, not plain tiles: a viewport wider than the world draws the
+  // same tile at several longitudes so the map extends around itself. Group
+  // them so each distinct tile is fetched and decoded ONCE and only the
+  // render step repeats -- otherwise wrapping would multiply the expensive
+  // stages and make the measurement meaningless.
+  std::vector<orcmap::TilePlacement> placements;
   const int64_t enum_start = Now(hooks);
-  if (!orcmap::EnumerateVisibleTiles(viewport, &tiles)) {
+  if (!orcmap::EnumerateVisibleTilePlacements(viewport, &placements)) {
     frame.error_stage = "enumerate";
     if (out != nullptr) *out = frame;
     return false;
   }
+
+  std::vector<orcmap::TileId> tiles;
+  std::vector<std::vector<int64_t>> copies;
+  for (const orcmap::TilePlacement& p : placements) {
+    size_t index = tiles.size();
+    for (size_t i = 0; i < tiles.size(); ++i) {
+      if (tiles[i].z == p.tile.z && tiles[i].x == p.tile.x &&
+          tiles[i].y == p.tile.y) {
+        index = i;
+        break;
+      }
+    }
+    if (index == tiles.size()) {
+      tiles.push_back(p.tile);
+      copies.emplace_back();
+    }
+    copies[index].push_back(p.unwrapped_x);
+  }
   frame.enumerate_ms = MsSince(hooks, enum_start);
+  // tiles_visible stays the count of DISTINCT tiles, so it remains
+  // comparable with runs recorded before world-copy placement existed.
   frame.tiles_visible = tiles.size();
+  frame.placements = placements.size();
 
   if (background && !orcmap::ClearMapBackground(viewport, style, target)) {
     frame.error_stage = "background";
@@ -154,7 +180,8 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
     return false;
   }
 
-  for (const orcmap::TileId& tile : tiles) {
+  for (size_t ti = 0; ti < tiles.size(); ++ti) {
+    const orcmap::TileId& tile = tiles[ti];
     std::vector<uint8_t> stored;
     int64_t t = Now(hooks);
     const bool got = reader.GetTile(tile.z, tile.x, tile.y, &stored);
@@ -213,8 +240,14 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
     }
 
     t = Now(hooks);
-    if (!orcmap::RenderFeatureTile(features, tile, viewport, style, target)) {
-      frame.error_stage = "render";
+    for (const int64_t unwrapped_x : copies[ti]) {
+      orcmap::TilePlacement placement;
+      placement.tile = tile;
+      placement.unwrapped_x = unwrapped_x;
+      if (!orcmap::RenderFeatureTileAt(features, placement, viewport, style,
+                                       target)) {
+        frame.error_stage = "render";
+      }
     }
     frame.render_ms += MsSince(hooks, t);
 
@@ -252,6 +285,7 @@ void EmitFrameRecord(const BenchHooks& hooks, const char* scenario_id,
   line.Add("\"viewport_h\":%d,", viewport.height_px);
 
   line.Add("\"tiles_visible\":%u,", static_cast<unsigned>(frame.tiles_visible));
+  line.Add("\"placements\":%u,", static_cast<unsigned>(frame.placements));
   line.Add("\"tiles_present\":%u,", static_cast<unsigned>(frame.tiles_present));
   line.Add("\"tiles_missing\":%u,", static_cast<unsigned>(frame.tiles_missing));
   line.Add("\"features\":%u,", static_cast<unsigned>(frame.features_total));

@@ -436,7 +436,34 @@ void ResolveActiveSource() {
 // coordinate 169 px west / 162 px south of the *extract's* centre, which
 // piled all the uncovered area onto the left edge and pushed 82 px of
 // usable pack data off-screen to the right.
+// The world view for THIS display: the smallest zoom whose world is at least
+// as tall as the map area, centred on the Mercator origin. Horizontal extent
+// needs no zoom of its own -- the map extends around itself -- so on
+// 1280x600 this is z2, where the 1024 px world is fully visible and the
+// remaining 256 px is filled by the wrap rather than left empty.
+//
+// Clamped into the pack's stored zoom range so a pack that starts deeper
+// than the ideal world view still opens on something it actually has.
+bool FocusWorldView(const orcmap::PackManifest& manifest) {
+  orcmap::Viewport probe = g_viewport;
+  probe.width_px = g_map_w;
+  probe.height_px = g_map_h;
+  uint8_t zoom = 0;
+  if (!orcmap::WorldViewZoom(probe, &zoom)) return false;
+  if (zoom < manifest.min_zoom) zoom = manifest.min_zoom;
+  if (zoom > manifest.max_zoom) zoom = manifest.max_zoom;
+  if (!orcmap::SetZoom(&g_viewport, zoom)) return false;
+  return orcmap::SetCenter(&g_viewport, 0.0, 0.0);
+}
+
+bool SpansWholeWorld(const orcmap::PackManifest& manifest) {
+  return manifest.bounds.max_lon_deg - manifest.bounds.min_lon_deg >= 360.0;
+}
+
 bool FocusPack(const orcmap::PackManifest& manifest) {
+  // A global pack gets the world view, which is what "open on the whole
+  // world" means on a screen that the world does not exactly fit.
+  if (SpansWholeWorld(manifest) && FocusWorldView(manifest)) return true;
   // Prefer filling the screen with map data (correct centre, no empty
   // margin, zoom derived from this display's width/height). Fall back to
   // framing the whole coverage area when the pack is too small to fill
@@ -461,9 +488,10 @@ uint8_t ActiveMaxZoom() {
 // effectively nothing below that. No render or clear step was failing.
 //
 // The floor is a property of the catalogue, so provisioning fixes it: with
-// the z0-7 world overview on the card the floor drops to z0 and the zoom-out
-// button reaches the whole globe. `g_zoom_floor_reason` records which case
-// produced the number so the UI can say so instead of just going inert.
+// the z0-7 world overview on the card the floor drops to z2 -- the world
+// wraps horizontally, so only its height has to reach the map area, and
+// 2^2 * 256 = 1024 >= 600. `g_zoom_floor_reason` records which case produced
+// the number so the UI can say so instead of just going inert.
 uint8_t g_zoom_floor = 0;
 const char* g_zoom_floor_reason = "";
 

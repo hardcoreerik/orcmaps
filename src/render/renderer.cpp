@@ -98,9 +98,20 @@ bool ClearMapBackground(const Viewport& viewport, const MapStyle& style,
 bool RenderFeatureTile(const FeatureTile& features, TileId source_tile,
                        const Viewport& viewport, const MapStyle& style,
                        RenderTarget* target) {
+  // Unchanged behaviour: draw at the world copy nearest the centre. The
+  // wrapping rule stays in viewport.cpp rather than being duplicated here.
+  TilePlacement nearest;
+  if (!NearestTilePlacement(viewport, source_tile, &nearest)) return false;
+  return RenderFeatureTileAt(features, nearest, viewport, style, target);
+}
+
+bool RenderFeatureTileAt(const FeatureTile& features,
+                         const TilePlacement& placement,
+                         const Viewport& viewport, const MapStyle& style,
+                         RenderTarget* target) {
   if (target == nullptr) return false;
   if (!ZoomIsValid(viewport.zoom)) return false;
-  if (source_tile.z != viewport.zoom) return false;
+  if (placement.tile.z != viewport.zoom) return false;
 
   TileScreenMap map;
   uint32_t prepared_extent = 0;
@@ -109,7 +120,7 @@ bool RenderFeatureTile(const FeatureTile& features, TileId source_tile,
   for (const Feature& feature : features.features) {
     const uint32_t extent = feature.extent == 0 ? 4096u : feature.extent;
     if (!have_map || extent != prepared_extent) {
-      if (!MakeTileScreenMap(viewport, source_tile, extent, &map)) {
+      if (!MakeTilePlacementScreenMap(viewport, placement, extent, &map)) {
         return false;
       }
       prepared_extent = extent;

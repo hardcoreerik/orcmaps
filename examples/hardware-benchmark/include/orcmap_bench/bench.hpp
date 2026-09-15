@@ -78,7 +78,10 @@ struct BenchFrame {
   bool ok = false;
   const char* error_stage = nullptr;
 
-  size_t tiles_visible = 0;
+  size_t tiles_visible = 0;  // distinct tiles fetched/decoded
+  // Drawn tile instances, >= tiles_visible. Larger when the viewport is
+  // wider than the world and tiles repeat across world copies.
+  size_t placements = 0;
   size_t tiles_present = 0;
   size_t tiles_missing = 0;
   size_t features_total = 0;

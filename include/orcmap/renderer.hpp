@@ -36,4 +36,13 @@ bool RenderFeatureTile(const FeatureTile& features, TileId source_tile,
                        const Viewport& viewport, const MapStyle& style,
                        RenderTarget* target);
 
+// As RenderFeatureTile, but draws the tile at a specific world copy. Pair it
+// with EnumerateVisibleTilePlacements so a world narrower than the viewport
+// extends around itself instead of leaving empty margin. Decode each distinct
+// TileId once and call this per placement.
+bool RenderFeatureTileAt(const FeatureTile& features,
+                         const TilePlacement& placement,
+                         const Viewport& viewport, const MapStyle& style,
+                         RenderTarget* target);
+
 }  // namespace orcmap

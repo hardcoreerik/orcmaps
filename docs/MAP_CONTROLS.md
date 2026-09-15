@@ -50,13 +50,45 @@ must show empty area no matter how the user pans — the installed bounds simply
 cannot cover the display. It ignores pack `min_zoom`/`max_zoom`; clamping to
 what is actually stored belongs to the caller, which knows the catalogue.
 
-The floor is a real limit and not an off-by-one: one z0 tile is 256 px, so even
-a whole-world pack cannot cover a 1280 px-wide map area until z3. A small
+A pack spanning the full 360 degrees of longitude is exempt from the width
+test, because it wraps around itself and so covers any width; its floor is
+height-driven and equals `WorldViewZoom` (z2 on 1280x600). A pack stopping
+even slightly short of the antimeridian does not get that exemption. A small
 extract yields a much higher floor on the same screen — the 0.095 deg x
 0.06 deg Springfield extract first covers 1280x600 at z15, and covers 86.5% of
 it at z14, 35.0% at z13 and 8.8% at z12. A UI that lets zoom-out run past the
 floor is not failing to redraw; it is correctly showing that no installed pack
 reaches that far out. Provisioning, not rendering, is what lowers the floor.
+
+## World view and wrapping around
+
+`WorldViewZoom` gives the natural whole-world view for a display: the smallest
+zoom whose world is at least as **tall** as the viewport. Width is deliberately
+not tested, because the map repeats horizontally — Mercator X wraps, Y is
+clamped and cannot. On a 1280x600 map area this is z2, where the 1024 px world
+is entirely visible and the remaining 256 px is filled by the wrap instead of
+being left empty. On a 320x170 display it is z0.
+
+Wrapping is why there are two enumeration functions, and choosing the wrong
+one is the easiest mistake here:
+
+| function | returns | use for |
+|---|---|---|
+| `EnumerateVisibleTiles` | unique `TileId`s, one position each | deciding what to **fetch and decode** |
+| `EnumerateVisibleTilePlacements` | one `TilePlacement` per drawn instance, repeats included | deciding what to **draw, and where** |
+
+A `TilePlacement` pairs a wrapped `tile` (what you look up in a pack) with an
+`unwrapped_x` (which world copy it is). Draw it with `RenderFeatureTileAt` or
+place it with `MakeTilePlacementScreenMap`; the plain `RenderFeatureTile` and
+`MakeTileScreenMap` place a tile at the copy nearest the centre, which is
+correct only when nothing repeats. `NearestTilePlacement` exposes that
+single-copy rule.
+
+Decode each distinct tile **once** and draw it at each of its placements.
+Fetching per placement would multiply the expensive stages for no benefit;
+the benchmark harness records `tiles_visible` (distinct, so it stays
+comparable with runs predating placements) alongside `placements` (drawn
+instances) so the difference is visible in the data.
 
 `ZoomAtScreenPoint` preserves the geographic point below the supplied screen
 coordinate. This is the portable behavior needed by touch, mouse-wheel, and
@@ -67,6 +99,10 @@ Mercator clamping, world/Oregon/Springfield fit, `FillBounds` centring and
 genuine coverage, `FillBounds` screen-dependence across two display sizes,
 unfillable bounds, tiny displays, projection round trips, anchored zoom,
 `MinFillZoom` agreeing with `FillBounds` while leaving the camera untouched,
-and floors that rise as coverage shrinks or the screen grows.
+floors that rise as coverage shrinks or the screen grows, `WorldViewZoom`
+being height-driven and width-independent, world-spanning bounds filling by
+wrapping, placements covering a viewport wider than the world with at least
+one tile repeated, and placements agreeing exactly with the nearest-copy
+mapping when nothing repeats.
 Touch drag/zoom bindings are physically exercised by the Tab5 demo; no
 automated physical touch-control test exists.

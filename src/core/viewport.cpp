@@ -225,15 +225,42 @@ bool MinFillZoom(const Viewport& viewport, const GeoBounds& bounds,
   // Ascending: the first zoom whose viewport fits inside the bounds is the
   // smallest one that fills the screen, so the map is as wide-area as it
   // can be without showing empty margin.
+  // Bounds spanning the whole planet wrap around themselves, so the viewport
+  // is covered horizontally at every zoom and only height can fail. Without
+  // this, a global pack would be judged unable to fill any screen wider than
+  // the world -- which is exactly the empty margin world-copy placement
+  // exists to remove.
+  const bool spans_world = lon_span >= 360.0;
+
   for (int zoom = 0; zoom <= kMaxZoom; ++zoom) {
     const double scale =
         static_cast<double>(TilesPerAxis(static_cast<uint8_t>(zoom))) *
         viewport.tile_size_px;
     const bool covers_width =
+        spans_world ||
         static_cast<double>(viewport.width_px) <= lon_span / 360.0 * scale;
     const bool covers_height =
         static_cast<double>(viewport.height_px) <= y_span * scale;
     if (covers_width && covers_height) {
+      *out_zoom = static_cast<uint8_t>(zoom);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool WorldViewZoom(const Viewport& viewport, uint8_t* out_zoom) {
+  if (out_zoom == nullptr || viewport.tile_size_px <= 0 ||
+      viewport.width_px <= 0 || viewport.height_px <= 0) {
+    return false;
+  }
+  // Width is deliberately not tested: world-copy placement repeats the map
+  // horizontally, so any width is covered. Height is clamped, not wrapped.
+  for (int zoom = 0; zoom <= kMaxZoom; ++zoom) {
+    const double world_px =
+        static_cast<double>(TilesPerAxis(static_cast<uint8_t>(zoom))) *
+        viewport.tile_size_px;
+    if (static_cast<double>(viewport.height_px) <= world_px) {
       *out_zoom = static_cast<uint8_t>(zoom);
       return true;
     }
@@ -285,6 +312,101 @@ bool ZoomAtScreenPoint(Viewport* viewport, double screen_x, double screen_y,
               viewport->tile_size_px;
   const LatLon adjusted = TileCoordToLatLon(center, viewport->zoom);
   return SetCenter(viewport, adjusted.lat_deg, adjusted.lon_deg);
+}
+
+bool NearestTilePlacement(const Viewport& viewport, TileId tile,
+                          TilePlacement* out) {
+  if (out == nullptr) return false;
+  if (!ZoomIsValid(viewport.zoom)) return false;
+  if (tile.z != viewport.zoom) return false;
+  const uint32_t n = TilesPerAxis(viewport.zoom);
+  if (n == 0 || tile.x >= n || tile.y >= n) return false;
+  const TileCoord center = LatLonToTileCoord(
+      viewport.center_lat_deg, viewport.center_lon_deg, viewport.zoom);
+  const double dx = WrappedTileDeltaX(static_cast<double>(tile.x), center.x, n);
+  out->tile = tile;
+  // center.x + dx is an exact integer tile index in double form; the tile
+  // index is what MakeTileScreenMap effectively used.
+  out->unwrapped_x = static_cast<int64_t>(std::llround(center.x + dx));
+  return true;
+}
+
+bool MakeTilePlacementScreenMap(const Viewport& viewport,
+                                const TilePlacement& placement,
+                                uint32_t extent, TileScreenMap* out) {
+  if (out == nullptr) return false;
+  out->valid = false;
+  if (!ZoomIsValid(viewport.zoom)) return false;
+  if (placement.tile.z != viewport.zoom) return false;
+  const uint32_t n = TilesPerAxis(viewport.zoom);
+  if (n == 0 || placement.tile.y >= n) return false;
+  // The placement's own world copy is authoritative here, so there is no
+  // nearest-copy wrapping: unwrapped_x already says where this instance is.
+  if (WrapTileX(placement.unwrapped_x, n) != placement.tile.x) return false;
+
+  const double ext = extent == 0 ? 1.0 : static_cast<double>(extent);
+  const double tile_px = viewport.tile_size_px <= 0
+                             ? 1.0
+                             : static_cast<double>(viewport.tile_size_px);
+  const TileCoord center = LatLonToTileCoord(
+      viewport.center_lat_deg, viewport.center_lon_deg, viewport.zoom);
+  out->zoom = viewport.zoom;
+  out->origin_sx =
+      (static_cast<double>(placement.unwrapped_x) - center.x) * tile_px +
+      static_cast<double>(viewport.width_px) * 0.5;
+  out->origin_sy =
+      (static_cast<double>(placement.tile.y) - center.y) * tile_px +
+      static_cast<double>(viewport.height_px) * 0.5;
+  out->scale = tile_px / ext;
+  out->valid = true;
+  return true;
+}
+
+bool EnumerateVisibleTilePlacements(const Viewport& viewport,
+                                    std::vector<TilePlacement>* out) {
+  if (out == nullptr) return false;
+  out->clear();
+  if (!ZoomIsValid(viewport.zoom)) return false;
+  if (viewport.width_px <= 0 || viewport.height_px <= 0) return false;
+  if (viewport.tile_size_px <= 0) return false;
+  const uint32_t n = TilesPerAxis(viewport.zoom);
+  if (n == 0) return false;
+
+  const TileCoord center = LatLonToTileCoord(
+      viewport.center_lat_deg, viewport.center_lon_deg, viewport.zoom);
+  const double ts = static_cast<double>(viewport.tile_size_px);
+  const double half_w = static_cast<double>(viewport.width_px) * 0.5 / ts;
+  const double half_h = static_cast<double>(viewport.height_px) * 0.5 / ts;
+
+  int64_t x0 = static_cast<int64_t>(std::floor(center.x - half_w));
+  int64_t x1 = static_cast<int64_t>(std::ceil(center.x + half_w)) - 1;
+  int64_t y0 = static_cast<int64_t>(std::floor(center.y - half_h));
+  int64_t y1 = static_cast<int64_t>(std::ceil(center.y + half_h)) - 1;
+  if (x1 < x0) return true;
+
+  const int64_t n64 = static_cast<int64_t>(n);
+  if (y1 < 0 || y0 >= n64) return true;
+  if (y0 < 0) y0 = 0;
+  if (y1 >= n64) y1 = n64 - 1;
+  if (y0 > y1) return true;
+
+  // Unlike EnumerateVisibleTiles, the X range is NOT collapsed to one world:
+  // every copy on screen is emitted, which is what fills a viewport wider
+  // than the world. The range is still bounded by the screen, so this is not
+  // an unbounded scene graph.
+  const int64_t x_count = x1 - x0 + 1;
+  out->reserve(static_cast<size_t>(x_count) *
+               static_cast<size_t>(y1 - y0 + 1));
+  for (int64_t y = y0; y <= y1; ++y) {
+    for (int64_t ux = x0; ux <= x1; ++ux) {
+      TilePlacement p;
+      p.tile = TileId{viewport.zoom, WrapTileX(ux, n),
+                      static_cast<uint32_t>(y)};
+      p.unwrapped_x = ux;
+      out->push_back(p);
+    }
+  }
+  return true;
 }
 
 bool MakeTileScreenMap(const Viewport& viewport, TileId tile, uint32_t extent,
