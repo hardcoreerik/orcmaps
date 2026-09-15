@@ -82,37 +82,47 @@ java -Xmx6g -jar planetiler.jar --osm-path=oregon-latest.osm.pbf \
 | **Density** | **332 B/km^2** |
 | Share of global land | 0.17% |
 
-Scaling that rate to 148.9 M km^2 of land:
+### The measured figure is authoritative; the global figure is not
 
-| Global mean density vs Oregon | Global z1-13 | Archives at 2 GiB | Fits the 30.4 GB card? |
-|---|---:|---:|---|
-| same (upper bound) | 49.5 GB | 24 | **no** |
-| half | 24.7 GB | 12 | yes, tight |
-| a third | 16.5 GB | 8 | yes |
-| a fifth | 9.9 GB | 5 | yes |
-| a tenth | 4.9 GB | 3 | yes |
+**Authoritative:** Oregon z1-13 = 84,615,534 bytes. That is a build we ran
+and can reproduce.
 
-Oregon is a developed US state with good OSM coverage but also large empty
-high desert and forest, so it is a fair "developed country" sample rather
-than a worst case. Much of the world (Sahara, Siberia, Antarctica, open
-ocean coastlines) carries far less OSM data, while western Europe and Japan
-carry more. The realistic band is therefore **roughly 10-25 GB**, with
-49.5 GB as a hard upper bound that **does not fit this card**.
+**Planning estimate only — order of magnitude:** everything below. It is a
+single regional sample scaled by land area, which is not a sound basis for a
+global total. Dense regions (western Europe, Japan, Korea, urban India) will
+exceed Oregon's 332 B/km^2, possibly by a wide margin; sparse regions
+(Sahara, Siberia, Antarctica, much of the ocean-adjacent coastline) will be
+far below it. The distribution is also heavily skewed rather than uniform,
+so an area-weighted mean from one sample can be wrong in either direction.
 
-This is the first defensible size figure in the project: it comes from a
-build we ran, not from recalled public numbers.
+| Global mean density vs Oregon | Global z1-13 | Archives at 2 GiB |
+|---|---:|---:|
+| same as Oregon | ~49.5 GB | ~24 |
+| half | ~24.7 GB | ~12 |
+| a third | ~16.5 GB | ~8 |
+| a fifth | ~9.9 GB | ~5 |
+| a tenth | ~4.9 GB | ~3 |
+
+Read this as "the answer is plausibly in the 5-50 GB range, so plan for
+multiple archives and do not assume it fits one card", **not** as a bound.
+49.5 GB is *not* a hard upper bound — it is simply what uniform
+Oregon-density scaling produces, and real dense regions can exceed that
+rate.
+
+Only a measured multi-region or planet build would settle it, and no planet
+build is required at this checkpoint.
 
 ## File layout that follows from the limits
 
-- Global z1-13 **cannot be one file**: at 2 GiB per archive the likely band
-  needs **5-12 archives**, split geographically (continent or
-  sub-continent), and the upper bound needs 24.
+- Global z1-13 **cannot be one file** at any plausible size: at 2 GiB per
+  archive it needs several, split geographically (continent or
+  sub-continent). This conclusion holds across the whole estimate range and
+  does not depend on the estimate being accurate.
 - Each archive needs its own manifest, and coverage must tile the globe
   without gaps, because `ResolvePack()` requires *full* coverage of the
   visible bounds and will otherwise fall through to partial rendering.
-- At the top of the band the card is the binding constraint, not our
-  software. A larger card, or dropping to z12 globally with z13 only where
-  wanted, both resolve it.
+- Whether it fits one 32 GB card is genuinely unknown. If it does not, a
+  larger card, or z12 globally with z13 only where wanted, both resolve it.
 
 ## Attribution finding: OpenMapTiles credit is missing
 

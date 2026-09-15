@@ -1,0 +1,10 @@
+^F:\AI\ORCMAPS-GLOBAL-PACKS-CONTROLS\BUILD-PACK-VERIFY\CMAKEFILES\50C51ADB4C3A1A57641151A6552E58AD\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SF:/Ai/OrcMaps-global-packs-controls/tools/pack-verify -BF:/Ai/OrcMaps-global-packs-controls/build-pack-verify --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file F:/Ai/OrcMaps-global-packs-controls/build-pack-verify/orcmaps_pack_verify.slnx
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

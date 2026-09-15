@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\tools\pack-verify\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\src\core\geo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\src\core\pack.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\src\core\pack_json.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\src\core\pack_discovery.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\src\tiles\pmtiles_reader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\src\tiles\compression.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\adapters\host\file_byte_source.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\adapters\host\pack_filesystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\third_party\miniz\miniz.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="F:\Ai\OrcMaps-global-packs-controls\third_party\miniz\miniz_tinfl.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="F:\Ai\OrcMaps-global-packs-controls\tools\pack-verify\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{35D94F25-9EF2-3A27-8613-F11FA2EDB546}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

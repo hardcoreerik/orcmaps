@@ -24,9 +24,12 @@ add_executable(orcmap_host_tests
     test_render.cpp
     test_compression.cpp
     test_pack.cpp
+    test_pack_discovery.cpp
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/core/viewport.cpp
     ${ORCMAP_ROOT}/src/core/pack.cpp
+    ${ORCMAP_ROOT}/src/core/pack_json.cpp
+    ${ORCMAP_ROOT}/src/core/pack_discovery.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_translate.cpp
@@ -36,6 +39,7 @@ add_executable(orcmap_host_tests
     ${ORCMAP_ROOT}/src/render/renderer.cpp
     ${ORCMAP_ROOT}/src/render/clip.cpp
     ${ORCMAP_ROOT}/adapters/host/file_byte_source.cpp
+    ${ORCMAP_ROOT}/adapters/host/pack_filesystem.cpp
     ${ORCMAP_ROOT}/adapters/host/framebuffer_target.cpp
     ${ORCMAP_ROOT}/third_party/miniz/miniz.c
     ${ORCMAP_ROOT}/third_party/miniz/miniz_tinfl.c

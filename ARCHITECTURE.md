@@ -75,7 +75,7 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Tile/rendered-tile cache | `src/cache/` | Not implemented (empty dir); `RenderedTileCacheKey` shape exists in `include/orcmap/cache_key.hpp` |
 | Pack builder | `tools/pack-builder/` | PARTIAL: Springfield/97477 host pack script (Planetiler, not a runtime dep) |
 | Pack inspector | `tools/pack-inspect/` | Implemented (host). Uses `EnumerateVisibleTiles`. |
-| Pack verifier | `tools/pack-verify/` | Not implemented (empty dir) |
+| Pack verifier | `tools/pack-verify/` | Implemented (host): runs the same `DiscoverPacks()` as the firmware over a directory, reports installs/rejections and manifest-vs-archive-header disagreement |
 | Generic ESP32 example | `examples/generic-esp32/` | PARTIAL: ESP-IDF compile/link smoke test of the portable core (no graphics framework) |
 | M5GFX example | `examples/m5gfx/` | PARTIAL: ESP-IDF compile proof of DisplayTarget + synthetic FeatureTile (M5GFX, no M5Unified) |
 | Host render preview | `examples/host-render/` | PARTIAL: synthetic 1280x720 PPM |
@@ -89,7 +89,10 @@ mapping is EXPERIMENTAL, not the tile-content schema.
 | Consumer build gate | `tests/consumer/` | Implemented, passing |
 | Data provenance registry | `data/sources/*.json` | Implemented, 9 records (4 `CONFIRMED`: Natural Earth, OpenStreetMap, geoBoundaries gbOpen, Google Open Buildings; 5 `REVIEW_REQUIRED` -- see `docs/DATA_PROVENANCE_REGISTRY.md`) |
 | Pack model/catalog/resolver | `include/orcmap/pack.hpp`, `src/core/pack.cpp` | Implemented and host-tested: validation, deterministic identity, catalog, and exactly one eligible local basemap. |
-| Pack manifest artifacts | `docs/PACK_MANIFEST_SCHEMA.md`, `examples/m5stack-tab5/test-pack/` | PARTIAL: schema and Springfield triplet exist; runtime JSON discovery and on-device file hashing do not. |
+| Pack manifest JSON reader | `include/orcmap/pack_json.hpp`, `src/core/pack_json.cpp` | Implemented and host-tested: bounded (64 KiB, depth 12), unknown keys ignored, wrong types rejected. No filesystem, no general-purpose JSON API. |
+| Runtime pack discovery | `include/orcmap/pack_discovery.hpp`, `src/core/pack_discovery.cpp` | Implemented and host-tested: lists ONE directory (no recursion) behind a `PackFileSystem` interface, validates, pairs archive by filename stem, reports every rejection. Offline; no network catalog. |
+| Discovery filesystem adapters | `adapters/esp_idf/pack_filesystem.cpp`, `adapters/host/pack_filesystem.cpp` | Implemented. No display/M5GFX dependency; the board supplies the directory path. |
+| Pack manifest artifacts | `docs/PACK_MANIFEST_SCHEMA.md`, `examples/m5stack-tab5/test-pack/` | Implemented: schema, triplets, and runtime JSON discovery. On-device SHA-256 verification does NOT exist; discovery checks archive presence and size only. |
 
 ## Repository layout
 

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -78,6 +79,46 @@ class WorldOverviewBuilderTests(unittest.TestCase):
             self.assertEqual(manifest["input_hashes"], {"ne.zip": "a" * 64})
             self.assertEqual(archive.with_suffix(".sha256").read_text().split()[0],
                              BUILDER.sha256(archive))
+
+
+class WorldOverviewBoundsTests(unittest.TestCase):
+    """The emitted bounds must be loadable by the engine, not merely close."""
+
+    def engine_mercator_limit(self):
+        text = (Path(BUILDER.__file__).parents[2] / "include" / "orcmap"
+                / "geo.hpp").read_text(encoding="utf-8")
+        match = re.search(r"kMercatorMaxLatDeg\s*=\s*([0-9.]+)", text)
+        self.assertIsNotNone(match, "kMercatorMaxLatDeg not found in geo.hpp")
+        return float(match.group(1))
+
+    def test_builder_constant_matches_the_engine_header(self):
+        self.assertEqual(self.engine_mercator_limit(),
+                         BUILDER.MERCATOR_MAX_LAT_DEG)
+
+    def test_emitted_bounds_are_within_the_engine_limit(self):
+        # The original defect: 85.0511288 > 85.05112878, so ValidBounds() --
+        # and therefore runtime SD discovery -- rejected every manifest this
+        # builder wrote. Rounding a bound outward is never safe.
+        limit = self.engine_mercator_limit()
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / "world-overview-z7.pmtiles"
+            archive.write_bytes(b"test pack")
+            BUILDER.write_sidecars(archive, 7, {"ne.zip": "a" * 64},
+                                   {"go_pmtiles": "pmtiles 1.28.2"},
+                                   [["pmtiles", "extract"]], None)
+            bounds = json.loads(
+                archive.with_suffix(".manifest.json").read_text())["bounds"]
+        self.assertLessEqual(abs(bounds["min_lat"]), limit)
+        self.assertLessEqual(abs(bounds["max_lat"]), limit)
+        self.assertEqual(bounds["min_lat"], -limit)
+        self.assertEqual(bounds["max_lat"], limit)
+
+    def test_identity_is_unchanged_by_the_fix(self):
+        # pack_id embeds llround(lat * 1e7); both the old rounded value and
+        # the exact constant yield 850511288, so fixing the bound does not
+        # rename existing packs.
+        self.assertEqual(round(85.0511288 * 1e7),
+                         round(BUILDER.MERCATOR_MAX_LAT_DEG * 1e7))
 
 
 if __name__ == "__main__":

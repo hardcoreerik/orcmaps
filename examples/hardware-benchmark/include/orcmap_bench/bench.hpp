@@ -22,6 +22,7 @@
 #include <cstdint>
 
 #include "orcmap/feature.hpp"
+#include "orcmap/pack_discovery.hpp"
 #include "orcmap/pmtiles.hpp"
 #include "orcmap/render_target.hpp"
 #include "orcmap/style.hpp"
@@ -168,6 +169,13 @@ void EmitIdentityRecord(const BenchHooks& hooks, const BenchIdentity& identity);
 // of a mounted file, which needs filesystem APIs this component avoids).
 void EmitStorageRecord(const BenchHooks& hooks, size_t block_bytes,
                        uint64_t bytes, double elapsed_ms);
+
+// Emits one record per pack that runtime discovery refused. A user who
+// copied a pack and does not see it needs to know why, and serial JSONL is
+// the authoritative channel -- a rejection must never be visible only as a
+// missing map.
+void EmitRejectedPackRecord(const BenchHooks& hooks,
+                            const orcmap::RejectedPack& rejected);
 
 // Escapes a JSON string body into `out`. Exposed for host tests, which are
 // the only place the escaping rules are actually asserted.

@@ -335,6 +335,23 @@ void EmitIdentityRecord(const BenchHooks& hooks,
   Finish(hooks, &line);
 }
 
+void EmitRejectedPackRecord(const BenchHooks& hooks,
+                            const orcmap::RejectedPack& rejected) {
+  LineBuffer line;
+  Begin(&line, "pack_rejected");
+  char escaped[160];
+  JsonEscape(rejected.manifest_name.c_str(), escaped, sizeof(escaped));
+  line.Add("\"manifest\":\"%s\",", escaped);
+  line.Add("\"reason\":\"%s\",", orcmap::PackRejectionName(rejected.rejection));
+  line.Add("\"json_error\":\"%s\",",
+           orcmap::PackJsonErrorName(rejected.json_error));
+  line.Add("\"validation_error\":%d,",
+           static_cast<int>(rejected.validation_error));
+  JsonEscape(rejected.detail.c_str(), escaped, sizeof(escaped));
+  line.Add("\"detail\":\"%s\"", escaped);
+  Finish(hooks, &line);
+}
+
 void EmitStorageRecord(const BenchHooks& hooks, size_t block_bytes,
                        uint64_t bytes, double elapsed_ms) {
   LineBuffer line;

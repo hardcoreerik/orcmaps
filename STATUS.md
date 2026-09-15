@@ -26,8 +26,14 @@ input bindings and viewport overzoom are not. Integer zoom is 0..31.
 `tools/pack-builder` can reproduce the Springfield pack, acquire the pinned
 Natural Earth 5.1.2 world-overview source bundle, and **build world-overview
 PMTiles** — five candidates (z0-4 … z0-8) exist host-side as immutable
-archive/manifest/checksum triplets. No cutoff is selected. Runtime manifest
-JSON discovery and on-device SHA-256 verification are not implemented.
+archive/manifest/checksum triplets. No cutoff is selected.
+
+Runtime manifest JSON discovery **is** now implemented and host-tested
+(`orcmap::DiscoverPacks`), and the Tab5 demo boots from whatever is in
+`/sd/orcmaps` with no compiled-in manifest. On-device SHA-256 verification
+is still **not** implemented: discovery checks that each archive exists and
+matches the size its manifest declares, which is a cheap pairing check, not
+an integrity proof.
 
 **EXPERIMENTAL:** profile-aware feature classification supports measured
 OpenMapTiles 3.16 Springfield tiles and the narrow `orcmaps-overview-1`
@@ -92,9 +98,11 @@ candidates). Neither is final. Do not finalize OpenMapTiles, Shortbread,
 - `orcmap::AttributionInfo` / `orcmap::MapSourceInfo` /
   `CollectRequiredAttribution()` — the runtime attribution API shape
   (`include/orcmap/attribution.hpp`, `include/orcmap/map_source.hpp`),
-  host-tested. Nothing populates a real `MapSourceInfo` from an opened
-  pack yet (runtime JSON discovery is not implemented) — this is
-  the API a future `MapEngine` will feed, not a complete feature.
+  host-tested. Runtime discovery now parses each pack's declared credits
+  into `PackManifest::attribution`, and the Tab5 demo displays them from
+  there, so attribution is no longer firmware-hardcoded. Nothing populates
+  the separate `MapSourceInfo` aggregate yet — that remains the API a
+  future `MapEngine` will feed.
 - Data provenance registry: 9 reviewed datasets under `data/sources/*.json`
   (Natural Earth, OpenStreetMap, U.S. Census TIGER/Line, NOAA ETOPO, USGS
   National Map (deliberate non-approval placeholder), USDOT NAD, Overture
@@ -133,7 +141,7 @@ candidates). Neither is final. Do not finalize OpenMapTiles, Shortbread,
 - `RenderFeatureTile` + `RenderTarget` + `orcmap::host::FramebufferTarget`
   — FeatureTile → ResolveFeatureStyle → Viewport → pixels, no M5GFX.
   Unclassified features skipped. First polygon path only.
-- Host test suite: **132 test functions, all passing**.
+- Host test suite: **140 test functions, all passing**.
 - `EnumerateVisibleTiles` (unique TileIds, X wrap, Y clamp).
   `TileScreenMap` uses shortest wrapped X delta. Overzoom still rejected.
 - `RenderTarget::DrawLine` takes `width_px` from `MapPaint`. Shared
@@ -260,7 +268,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Result as of this writing: `100% tests passed, 0 tests failed out of 1`
-(one `ctest` entry, `orcmap_host_tests`, itself running 132 test functions
+(one `ctest` entry, `orcmap_host_tests`, itself running 140 test functions
 covering geo math, PMTiles, style, attribution, MVT, Feature/MVT
 translation, Viewport, clip, host render, compression, and experimental
 OpenMapTiles-like classification — see `ARCHITECTURE.md`

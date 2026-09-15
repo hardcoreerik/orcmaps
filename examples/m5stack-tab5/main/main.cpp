@@ -17,10 +17,12 @@
 
 #include "orcmap/compression.hpp"
 #include "orcmap/esp_idf/file_byte_source.hpp"
+#include "orcmap/esp_idf/pack_filesystem.hpp"
 #include "orcmap/experimental/mvt_classify.hpp"
 #include "orcmap/feature.hpp"
 #include "orcmap/m5gfx/display_target.hpp"
 #include "orcmap/pack.hpp"
+#include "orcmap/pack_discovery.hpp"
 #include "orcmap/pmtiles.hpp"
 #include "orcmap/renderer.hpp"
 #include "orcmap/style.hpp"
@@ -51,8 +53,8 @@ namespace {
 constexpr char kTag[] = "orcmap_tab5";
 constexpr char kBenchVersion[] = "tab5-bench-1";
 
-constexpr char kWorldPath[] = "/sd/orcmaps/world-overview.pmtiles";
-constexpr char kRegionalPath[] = "/sd/orcmaps/springfield.pmtiles";
+// The board owns the path; OrcMaps core never names an SD mount.
+constexpr char kPackDir[] = "/sd/orcmaps";
 constexpr char kReportDir[] = "/sd/orcmaps";
 
 // Chrome geometry for 1280x720. The map is the product; chrome is two thin
@@ -236,87 +238,6 @@ void OpenNumberedReport() {
 // skip validation just because the values are local.
 // ---------------------------------------------------------------------------
 
-orcmap::PackManifest MakeWorldManifest() {
-  orcmap::PackManifest m;
-  m.pack_id =
-      "5.1.2__orcmaps-overview-1__overview__world__"
-      "b-1800000000_-850511288_1800000000_850511288__z0-7";
-  m.pack_version = "1";
-  m.display_name = "World overview";
-  m.region_id = "world";
-  m.region_name = "World";
-  m.bounds.min_lon_deg = -180.0;
-  m.bounds.max_lon_deg = 180.0;
-  // Use the engine's own Mercator limit, not the manifest JSON's rounded
-  // 85.0511288: ValidBounds() requires <= kMercatorMaxLatDeg (85.05112878),
-  // so the rounded value is rejected by 2e-8. llround(x * 1e7) still yields
-  // +/-850511288, so pack_id identity is unchanged.
-  // NOTE: build_world_overview.py writes the rounded value, which means the
-  // generated manifest JSON on disk does not currently pass
-  // ValidatePackManifest(). That builder rounding needs fixing before
-  // runtime JSON discovery can load these packs.
-  m.bounds.min_lat_deg = -orcmap::kMercatorMaxLatDeg;
-  m.bounds.max_lat_deg = orcmap::kMercatorMaxLatDeg;
-  m.min_zoom = 0;
-  m.max_zoom = 7;
-  m.content_profile = "overview";
-  m.pmtiles_version = 3;
-  m.schema_version = "orcmaps-overview-1";
-  m.source_snapshot = "5.1.2";
-  m.builder = "Planetiler / go-pmtiles";
-  m.builder_version = "Planetiler 0.10.2; go-pmtiles 1.28.2";
-  m.builder_commit = "0e5588c4a6e8c29a270a33afe8df62027d889604";
-  m.build_date = "2026-09-14";
-  m.provenance_ids = {"natural-earth"};
-  m.pack_class = "clean";
-  // Natural Earth requires no attribution; the courtesy credit is shown in
-  // Info rather than presented as a legal requirement.
-  m.size_bytes = 9737500;
-  m.output_sha256 =
-      "a6942c11782eb843235bbfdf78de89de0c6fea25c9a5a37abb67aab5cca4028c";
-  m.priority = 0;  // Regional detail outranks the overview where eligible.
-  m.archive_path = kWorldPath;
-  return m;
-}
-
-orcmap::PackManifest MakeRegionalManifest() {
-  orcmap::PackManifest m;
-  m.pack_id =
-      "geofabrik-oregon-2026-09-14__openmaptiles-3.16__standard__"
-      "springfield-97477__b-1230550000_440300000_-1229600000_440900000__z0-15";
-  m.pack_version = "1";
-  m.display_name = "Springfield regional";
-  m.region_id = "springfield-97477";
-  m.region_name = "Springfield, Oregon";
-  m.bounds.min_lon_deg = -123.055;
-  m.bounds.min_lat_deg = 44.03;
-  m.bounds.max_lon_deg = -122.96;
-  m.bounds.max_lat_deg = 44.09;
-  m.min_zoom = 0;
-  m.max_zoom = 15;
-  m.content_profile = "standard";
-  m.pmtiles_version = 3;
-  m.schema_version = "openmaptiles-3.16";
-  m.source_snapshot = "geofabrik-oregon-2026-09-14";
-  m.builder = "Planetiler / go-pmtiles";
-  m.builder_version = "Planetiler 0.10.2; go-pmtiles 1.28.2";
-  m.builder_commit = "0e5588c4a6e8c29a270a33afe8df62027d889604";
-  m.build_date = "2026-09-14";
-  m.provenance_ids = {"openstreetmap"};
-  m.pack_class = "open";
-  orcmap::AttributionInfo osm;
-  osm.required = true;
-  osm.text = "(c) OpenStreetMap contributors";
-  osm.url = "https://www.openstreetmap.org/copyright";
-  m.attribution.push_back(osm);
-  m.size_bytes = 3507636;
-  m.output_sha256 =
-      "8bf23873915668f41d098b98df32b11a6d08ec6754a63d885fce2f29abe4adfd";
-  m.priority = 10;
-  m.archive_path = kRegionalPath;
-  return m;
-}
-
 const char* ValidationErrorName(orcmap::PackValidationError error) {
   switch (error) {
     case orcmap::PackValidationError::kNone: return "none";
@@ -343,8 +264,10 @@ struct MapSource {
   const orcmap::PackManifest* manifest = nullptr;
 };
 
-MapSource g_world;
-MapSource g_regional;
+// One entry per pack discovered on the card. Nothing here knows the names
+// "world", "springfield" or "oregon": the demo works with whatever the user
+// installed, and roles are derived from manifest metadata.
+std::vector<MapSource> g_sources;
 MapSource g_active;
 
 orcmap::PackCatalog g_catalog;
@@ -366,15 +289,46 @@ int MapTop() { return kTopBarH; }
 
 MapSource* SourceForManifest(const orcmap::PackManifest* manifest) {
   if (manifest == nullptr) return nullptr;
-  if (g_regional.manifest != nullptr &&
-      manifest->pack_id == g_regional.manifest->pack_id) {
-    return &g_regional;
-  }
-  if (g_world.manifest != nullptr &&
-      manifest->pack_id == g_world.manifest->pack_id) {
-    return &g_world;
+  for (MapSource& source : g_sources) {
+    if (source.manifest != nullptr &&
+        source.manifest->pack_id == manifest->pack_id) {
+      return &source;
+    }
   }
   return nullptr;
+}
+
+// Widest installed coverage, by longitude span then by lower priority. This
+// is what the "World" control goes to: on a normally provisioned card it is
+// the overview pack, but if the user only installed a regional pack it is
+// that one, and the demo still opens on a real map.
+MapSource* WidestSource() {
+  MapSource* best = nullptr;
+  double best_span = -1.0;
+  for (MapSource& source : g_sources) {
+    if (source.manifest == nullptr) continue;
+    const double span = source.manifest->bounds.max_lon_deg -
+                        source.manifest->bounds.min_lon_deg;
+    if (span > best_span) {
+      best_span = span;
+      best = &source;
+    }
+  }
+  return best;
+}
+
+// Deepest detail available, by max_zoom. This is the "Detail" control: the
+// pack a user would navigate into, whatever region it happens to cover.
+MapSource* DeepestSource() {
+  MapSource* best = nullptr;
+  for (MapSource& source : g_sources) {
+    if (source.manifest == nullptr) continue;
+    if (best == nullptr ||
+        source.manifest->max_zoom > best->manifest->max_zoom) {
+      best = &source;
+    }
+  }
+  return best;
 }
 
 // Presentation-layer overlap test. The engine's Contains() rule is NOT
@@ -597,7 +551,9 @@ void DrawChrome() {
   };
   const Button buttons[] = {
       {"World", 20, 150}, {"-", 190, 90}, {"+", 290, 90},
-      {"Springfield", 400, 220}, {"Style", 640, 130}, {"Info", 790, 120},
+      // "Detail", not a region name: the demo no longer knows which region
+      // is installed, so the control is labelled by what it does.
+      {"Detail", 400, 220}, {"Style", 640, 130}, {"Info", 790, 120},
   };
   M5.Display.setTextDatum(middle_center);
   M5.Display.setTextSize(2);
@@ -744,12 +700,12 @@ void RunScenario(const orcmap_bench::BenchScenario& scenario,
   // partial coverage instead of hiding it.
   MapSource* source = nullptr;
   if (scenario.pack_region_id != nullptr) {
-    if (g_regional.manifest != nullptr &&
-        g_regional.manifest->region_id == scenario.pack_region_id) {
-      source = &g_regional;
-    } else if (g_world.manifest != nullptr &&
-               g_world.manifest->region_id == scenario.pack_region_id) {
-      source = &g_world;
+    for (MapSource& candidate : g_sources) {
+      if (candidate.manifest != nullptr &&
+          candidate.manifest->region_id == scenario.pack_region_id) {
+        source = &candidate;
+        break;
+      }
     }
   }
   if (source == nullptr || source->reader == nullptr) {
@@ -801,7 +757,11 @@ void RunBenchmarks() {
   M5.Display.drawString("Running benchmarks...", M5.Display.width() / 2,
                         MapTop() + g_map_h / 2);
 
-  BenchmarkSequentialRead(kRegionalPath, g_regional.bytes->Size(), hooks);
+  // Measure whichever pack is actually installed, not a fixed filename.
+  if (MapSource* deepest = DeepestSource()) {
+    BenchmarkSequentialRead(deepest->manifest->archive_path.c_str(),
+                            deepest->bytes->Size(), hooks);
+  }
 
   // The original Springfield z14 proof stays a repeatable scenario so past
   // hardware numbers remain comparable.
@@ -831,11 +791,11 @@ bool HitButton(int x, int y, int bx, int bw) {
 
 void HandleButtonTap(int x, int y) {
   if (HitButton(x, y, 20, 150)) {  // World
-    if (g_world.manifest != nullptr) {
-      FocusPack(*g_world.manifest);
+    if (MapSource* widest = WidestSource()) {
+      FocusPack(*widest->manifest);
     } else {
       orcmap::SetZoom(&g_viewport, g_zoom_floor);
-      orcmap::SetCenter(&g_viewport, 20.0, 0.0);
+      orcmap::SetCenter(&g_viewport, 0.0, 0.0);
     }
     Redraw();
   } else if (HitButton(x, y, 190, 90)) {  // -
@@ -854,11 +814,12 @@ void HandleButtonTap(int x, int y) {
       orcmap::ZoomIn(&g_viewport);
       Redraw();
     }
-  } else if (HitButton(x, y, 400, 220)) {  // Springfield
-    // Engine-derived framing: correct centre and the largest zoom that
-    // actually fits this display. No per-board zoom constant.
-    if (g_regional.manifest != nullptr) {
-      FocusPack(*g_regional.manifest);
+  } else if (HitButton(x, y, 400, 220)) {  // Detail
+    // Jumps to the deepest installed pack, whatever region that is.
+    // Engine-derived framing: correct centre and a zoom that fits this
+    // display, with no per-board or per-region constant.
+    if (MapSource* deepest = DeepestSource()) {
+      FocusPack(*deepest->manifest);
       Redraw();
     }
   } else if (HitButton(x, y, 640, 130)) {  // Style
@@ -903,60 +864,70 @@ extern "C" void app_main() {
   if (!MountSd()) Fail("SD CARD NOT FOUND", "insert a card with /orcmaps");
   SplashLine(280, kChromeOk, "SD card     OK");
 
-  // Pack manifests: compiled in, but still validated for real.
-  orcmap::PackManifest world = MakeWorldManifest();
-  orcmap::PackManifest regional = MakeRegionalManifest();
-  for (const orcmap::PackManifest* m : {&world, &regional}) {
-    const orcmap::PackValidationError err = orcmap::ValidatePackManifest(*m);
-    if (err != orcmap::PackValidationError::kNone) {
-      ESP_LOGE(kTag, "manifest %s invalid: %s", m->pack_id.c_str(),
-               ValidationErrorName(err));
-      Fail("MAP PACK METADATA INVALID", ValidationErrorName(err));
+  // Runtime discovery: whatever the user copied to /sd/orcmaps is what the
+  // demo shows. No pack is compiled in, and no pack is special-cased -- the
+  // board supplies the directory, the engine decides what is usable.
+  static orcmap::esp_idf::PackFileSystem pack_fs;
+  orcmap::DiscoveryReport discovery;
+  orcmap::DiscoverPacks(pack_fs, kPackDir, &g_catalog, &discovery);
+
+  if (!discovery.directory_listed) {
+    Fail("NO /orcmaps DIRECTORY ON CARD",
+         "create /orcmaps and copy a pack triplet into it");
+  }
+  ESP_LOGI(kTag, "discovery: %u manifest(s), %u installed, %u rejected",
+           static_cast<unsigned>(discovery.manifests_seen),
+           static_cast<unsigned>(discovery.packs_added),
+           static_cast<unsigned>(discovery.rejected.size()));
+  // Every rejection is reported, never silently dropped: a user who copied
+  // a pack and does not see it needs to know why.
+  for (const orcmap::RejectedPack& bad : discovery.rejected) {
+    ESP_LOGW(kTag, "rejected %s: %s (json=%s, manifest=%s) %s",
+             bad.manifest_name.c_str(), orcmap::PackRejectionName(bad.rejection),
+             orcmap::PackJsonErrorName(bad.json_error),
+             ValidationErrorName(bad.validation_error), bad.detail.c_str());
+    orcmap_bench::EmitRejectedPackRecord(MakeHooks(), bad);
+  }
+
+  std::snprintf(line, sizeof(line), "Packs       %u installed, %u rejected",
+                static_cast<unsigned>(discovery.packs_added),
+                static_cast<unsigned>(discovery.rejected.size()));
+  SplashLine(320, discovery.packs_added > 0 ? kChromeOk : kChromeWarn, line);
+
+  if (g_catalog.Packs().empty()) {
+    Fail("NO USABLE MAP PACKS IN /orcmaps",
+         discovery.manifests_seen > 0 ? "every manifest was rejected"
+                                      : "copy a .pmtiles + .manifest.json pair");
+  }
+
+  // Open one reader per installed pack. Readers are heap-allocated and never
+  // freed: they live as long as the demo, and the catalog's manifests are
+  // stable once discovery has finished.
+  for (const orcmap::PackManifest& manifest : g_catalog.Packs()) {
+    auto* bytes = new orcmap::esp_idf::FileByteSource(
+        manifest.archive_path.c_str());
+    auto* reader = new orcmap::PmTilesReader(bytes);
+    if (!bytes->Valid() || !reader->Open()) {
+      // Discovery already confirmed the file exists at the right size, so
+      // this is a container-level problem, not a missing file.
+      ESP_LOGW(kTag, "pack %s: archive present but not a readable PMTiles",
+               manifest.pack_id.c_str());
+      continue;
     }
+    MapSource source;
+    source.bytes = bytes;
+    source.reader = reader;
+    source.manifest = &manifest;
+    g_sources.push_back(source);
+    ESP_LOGI(kTag, "installed %s z%u-%u priority %d", manifest.region_id.c_str(),
+             static_cast<unsigned>(manifest.min_zoom),
+             static_cast<unsigned>(manifest.max_zoom), manifest.priority);
   }
+  if (g_sources.empty()) Fail("MAP ARCHIVES UNREADABLE", "re-copy the packs");
 
-  // Either pack alone is enough to show a usable map. Whatever the user
-  // actually copied to the card, they get geography rather than a dead end.
-  static orcmap::esp_idf::FileByteSource world_bytes(kWorldPath);
-  static orcmap::PmTilesReader world_reader(&world_bytes);
-  bool have_world = world_bytes.Valid() && world_reader.Open();
-  SplashLine(320, have_world ? kChromeOk : kChromeWarn,
-             have_world ? "World pack  OK"
-                        : "World pack  not installed");
-
-  static orcmap::esp_idf::FileByteSource regional_bytes(kRegionalPath);
-  static orcmap::PmTilesReader regional_reader(&regional_bytes);
-  bool have_regional = regional_bytes.Valid() && regional_reader.Open();
-  SplashLine(360, have_regional ? kChromeOk : kChromeWarn,
-             have_regional ? "Region pack OK"
-                           : "Region pack not installed");
-
-  if (!have_world && !have_regional) {
-    Fail("NO MAP PACKS FOUND",
-         "copy world-overview.pmtiles to /orcmaps on the SD card");
-  }
-  if (have_world && !g_catalog.Add(world)) {
-    ESP_LOGW(kTag, "world pack rejected by catalog");
-    have_world = false;
-  }
-  if (have_regional && !g_catalog.Add(regional)) {
-    ESP_LOGW(kTag, "regional pack rejected by catalog");
-    have_regional = false;
-  }
-  if (g_catalog.Packs().empty()) Fail("MAP PACK METADATA REJECTED", nullptr);
-
-  // Bind readers to the catalog's stored manifests so pointers stay valid.
-  for (const orcmap::PackManifest& m : g_catalog.Packs()) {
-    if (m.archive_path == kWorldPath) {
-      g_world.bytes = &world_bytes;
-      g_world.reader = &world_reader;
-      g_world.manifest = &m;
-    } else if (m.archive_path == kRegionalPath) {
-      g_regional.bytes = &regional_bytes;
-      g_regional.reader = &regional_reader;
-      g_regional.manifest = &m;
-    }
-  }
+  std::snprintf(line, sizeof(line), "Opened      %u pack(s)",
+                static_cast<unsigned>(g_sources.size()));
+  SplashLine(360, kChromeOk, line);
 
   g_map_w = dw;
   g_map_h = dh - kTopBarH - kBottomBarH;
@@ -996,10 +967,11 @@ extern "C" void app_main() {
   // by the engine from that pack's own bounds. The example supplies only
   // the viewport size -- centre and zoom are derived, so this is correct
   // on any display without a per-board constant.
-  const orcmap::PackManifest* initial =
-      have_world ? g_world.manifest : g_regional.manifest;
-  if (initial == nullptr || !FocusPack(*initial)) {
-    orcmap::SetCenter(&g_viewport, 20.0, 0.0);
+  // Open on the widest thing installed, so the user starts at a world view
+  // and navigates inward -- world overview, then regional detail.
+  MapSource* initial = WidestSource();
+  if (initial == nullptr || !FocusPack(*initial->manifest)) {
+    orcmap::SetCenter(&g_viewport, 0.0, 0.0);
     orcmap::SetZoom(&g_viewport, g_zoom_floor);
   }
 

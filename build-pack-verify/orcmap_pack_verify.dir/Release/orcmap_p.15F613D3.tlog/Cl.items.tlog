@@ -1,0 +1,11 @@
+F:\Ai\OrcMaps-global-packs-controls\tools\pack-verify\main.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\main.obj
+F:\Ai\OrcMaps-global-packs-controls\src\core\geo.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\geo.obj
+F:\Ai\OrcMaps-global-packs-controls\src\core\pack.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\pack.obj
+F:\Ai\OrcMaps-global-packs-controls\src\core\pack_json.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\pack_json.obj
+F:\Ai\OrcMaps-global-packs-controls\src\core\pack_discovery.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\pack_discovery.obj
+F:\Ai\OrcMaps-global-packs-controls\src\tiles\pmtiles_reader.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\pmtiles_reader.obj
+F:\Ai\OrcMaps-global-packs-controls\src\tiles\compression.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\compression.obj
+F:\Ai\OrcMaps-global-packs-controls\adapters\host\file_byte_source.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\file_byte_source.obj
+F:\Ai\OrcMaps-global-packs-controls\adapters\host\pack_filesystem.cpp;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\pack_filesystem.obj
+F:\Ai\OrcMaps-global-packs-controls\third_party\miniz\miniz.c;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\miniz.obj
+F:\Ai\OrcMaps-global-packs-controls\third_party\miniz\miniz_tinfl.c;F:\Ai\OrcMaps-global-packs-controls\build-pack-verify\orcmap_pack_verify.dir\Release\miniz_tinfl.obj

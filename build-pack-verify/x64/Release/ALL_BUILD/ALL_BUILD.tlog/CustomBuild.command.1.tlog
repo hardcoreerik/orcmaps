@@ -1,0 +1,10 @@
+^F:\AI\ORCMAPS-GLOBAL-PACKS-CONTROLS\TOOLS\PACK-VERIFY\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SF:/Ai/OrcMaps-global-packs-controls/tools/pack-verify -BF:/Ai/OrcMaps-global-packs-controls/build-pack-verify --check-stamp-file F:/Ai/OrcMaps-global-packs-controls/build-pack-verify/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

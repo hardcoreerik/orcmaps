@@ -16,6 +16,11 @@ import sys
 
 ROOT = Path(__file__).parents[2]
 SOURCES = Path(__file__).with_name("world_overview_sources.json")
+
+# The Web Mercator latitude limit, byte-identical to orcmap::kMercatorMaxLatDeg
+# in include/orcmap/geo.hpp. ValidBounds() requires |lat| <= this value, so any
+# rounding here makes the emitted manifest unloadable.
+MERCATOR_MAX_LAT_DEG = 85.05112878
 PROFILE = Path(__file__).with_name("world_overview_profile.json")
 JAVA_PROFILE = Path(__file__).with_name("WorldOverviewProfile.java")
 BOUNDS = (-1800000000, -850511288, 1800000000, 850511288)
@@ -110,8 +115,13 @@ def write_sidecars(archive: Path, max_zoom: int, input_hashes: dict[str, str],
         "display_name": f"OrcMaps World Overview z0-z{max_zoom}",
         "region_id": "world",
         "region_name": "World",
-        "bounds": {"min_lon": -180.0, "min_lat": -85.0511288,
-                   "max_lon": 180.0, "max_lat": 85.0511288},
+        # Must match the engine's kMercatorMaxLatDeg exactly. 85.0511288 is
+        # LARGER than 85.05112878, so ValidBounds() -- and therefore runtime
+        # discovery -- rejected every manifest this builder emitted. Rounding
+        # a bound outward is never safe: llround(x * 1e7) still yields
+        # +/-850511288, so pack_id identity is unchanged by the fix.
+        "bounds": {"min_lon": -180.0, "min_lat": -MERCATOR_MAX_LAT_DEG,
+                   "max_lon": 180.0, "max_lat": MERCATOR_MAX_LAT_DEG},
         "min_zoom": 0,
         "max_zoom": max_zoom,
         "content_profile": "overview",
