@@ -271,42 +271,11 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
     ++frame.tiles_present;
     counted_present = true;
 
-    // Lookup + STREAMING inflate. The compressed payload is pulled from the
-    // archive in small pieces and never held alongside the inflated bytes:
-    // on a board without PSRAM the binding limit is the largest CONTIGUOUS
-    // block, not total free memory, and holding both needed two large blocks
-    // where only one exists.
-    //
-    // `raw` is the caller's reusable scratch buffer when supplied, so the one
-    // remaining large allocation happens once, early, rather than per tile
-    // on an already-fragmented heap.
-    std::vector<uint8_t> local_raw;
-    std::vector<uint8_t>& raw =
-        options.scratch_inflated != nullptr ? *options.scratch_inflated
-                                            : local_raw;
-    t = Now(hooks);
-    const bool inflated = reader.GetTileInflated(
-        tile.z, tile.x, tile.y, options.decompress_budget, &raw);
-    frame.inflate_ms += MsSince(hooks, t);
-    if (!inflated) {
-      frame.error_stage = "inflate";
-      continue;
-    }
-    frame.bytes_stored += raw.size();  // inflated; compressed is never held
-    frame.bytes_decompressed += raw.size();
-
-    // STREAMING decode/translate/classify/render.
-    //
-    // Nothing materialises a whole MvtTile or FeatureTile: each feature is
-    // translated into one reused Feature, classified, drawn at every
-    // placement, and discarded. Measured on real packs, materialising cost
-    // 6-9x the inflated bytes -- up to 1,011 KiB for a single Oregon z7
-    // tile -- which is why a no-PSRAM board could not render mid zooms at
-    // all. Streaming makes the peak the inflated bytes plus one feature.
-    //
-    // Stage timings are accumulated inside the sink, so decode/translate/
-    // classify/render stay separately attributable even though they now
-    // interleave per feature.
+    // Parse the tile. With a streaming scratch the inflated tile is never
+    // materialised: features arrive through the sink as the payload is
+    // inflated and parsed, so the largest allocation is one feature's bytes
+    // rather than the whole tile. Without one, fall back to
+    // inflate-then-decode.
     StreamContext stream;
     stream.hooks = &hooks;
     stream.options = &options;
@@ -314,8 +283,8 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
     stream.style = &style;
     stream.target = target;
     stream.placements = &copies[ti];
-    stream.tile = tile;
     stream.frame = &frame;
+    stream.tile = tile;
 
     orcmap::MvtDecodeOptions decode_options;
     decode_options.include_layer = options.include_layer;
@@ -323,17 +292,29 @@ bool RenderMeasuredFrame(orcmap::PmTilesReader& reader,
     decode_options.feature_sink = &StreamFeature;
     decode_options.feature_sink_ctx = &stream;
 
-    orcmap::MvtTile unused;  // stays empty: the sink consumes every feature
+    bool decoded = false;
     t = Now(hooks);
-    const bool decoded = orcmap::DecodeMvtTile(raw.data(), raw.size(),
-                                               decode_options, &unused);
-    // Everything the sink measured is already attributed; what remains here
-    // is protobuf parsing itself.
-    frame.decode_ms += MsSince(hooks, t) - stream.inner_ms;
-    if (options.scratch_inflated == nullptr) {
-      raw.clear();
-      raw.shrink_to_fit();
+    if (options.scratch_stream != nullptr) {
+      decoded = reader.StreamTile(tile.z, tile.x, tile.y, decode_options,
+                                  options.scratch_stream);
+      // Pass 2 walked the whole tile, so this is its inflated size.
+      const uint64_t inflated = options.scratch_stream->stream.consumed();
+      frame.bytes_stored += inflated;
+      frame.bytes_decompressed += inflated;
+    } else {
+      std::vector<uint8_t> raw;
+      if (reader.GetTileInflated(tile.z, tile.x, tile.y,
+                                 options.decompress_budget, &raw)) {
+        frame.bytes_stored += raw.size();
+        frame.bytes_decompressed += raw.size();
+        orcmap::MvtTile unused;
+        decoded = orcmap::DecodeMvtTile(raw.data(), raw.size(), decode_options,
+                                        &unused);
+      }
     }
+    // Everything the sink measured is already attributed; what remains is
+    // inflate plus protobuf parsing, which streaming interleaves.
+    frame.decode_ms += MsSince(hooks, t) - stream.inner_ms;
     if (!decoded) {
       frame.error_stage = "decode";
       continue;

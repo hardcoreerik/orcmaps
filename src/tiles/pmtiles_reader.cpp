@@ -321,6 +321,17 @@ size_t ReadThroughByteSource(void* ctx, uint64_t offset, uint8_t* dst,
 
 }  // namespace
 
+bool PmTilesReader::StreamTile(uint8_t z, uint32_t x, uint32_t y,
+                               const MvtDecodeOptions& options,
+                               MvtStreamScratch* scratch) const {
+  uint64_t offset = 0;
+  uint32_t length = 0;
+  if (!LocateTile(z, x, y, &offset, &length)) return false;
+  if (length == 0) return false;
+  return StreamMvtTile(header_.tile_compression, &ReadThroughByteSource,
+                       source_, offset, length, options, scratch);
+}
+
 bool PmTilesReader::GetTileInflated(uint8_t z, uint32_t x, uint32_t y,
                                     size_t max_output_size,
                                     std::vector<uint8_t>* out) const {

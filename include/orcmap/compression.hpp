@@ -59,6 +59,58 @@ bool DecompressStreaming(Compression compression, CompressedChunkReader reader,
                          void* ctx, uint64_t input_offset, size_t input_size,
                          size_t max_output_size, std::vector<uint8_t>* output);
 
+// Forward-only view of an inflating payload: bytes are produced on demand
+// through a 32 KiB LZ77 window and consumed as they appear, so a caller can
+// walk a compressed tile without ever holding the inflated tile.
+//
+// This is what makes a dense tile renderable on a board whose largest free
+// block is smaller than the inflated tile. Measured on a CYD 3.5":
+// 69,632-byte largest block against a 111,366-byte inflated Oregon z7 tile.
+// The whole scratch below is ~43 KiB and is reusable, so the steady state
+// needs no large contiguous allocation at all.
+//
+// Forward-only by construction: there is no seek. A parser needing two
+// passes calls Begin() again, which re-inflates from the start.
+class InflatingByteStream {
+ public:
+  // Allocates the window, inflater state and input chunk on first use and
+  // keeps them for every subsequent Begin(), so repeated tiles do not
+  // re-allocate. Returns false if the scratch cannot be allocated.
+  bool Begin(Compression compression, CompressedChunkReader reader, void* ctx,
+             uint64_t input_offset, size_t input_size);
+
+  // Exact reads/skips over the inflated byte sequence. False means the
+  // stream ended early or the payload is malformed -- never a short read.
+  bool Read(uint8_t* dst, size_t count);
+  bool Skip(uint64_t count);
+  bool ReadVarint(uint64_t* value);
+  bool AtEnd();
+
+  // Inflated bytes consumed so far.
+  uint64_t consumed() const { return consumed_; }
+
+ private:
+  bool Fill();  // produce the next run of inflated bytes into the window
+
+  Compression compression_ = Compression::kUnknown;
+  CompressedChunkReader reader_ = nullptr;
+  void* ctx_ = nullptr;
+  uint64_t input_offset_ = 0;
+  size_t input_size_ = 0;      // compressed bytes of the deflate stream
+  size_t input_consumed_ = 0;
+  uint64_t consumed_ = 0;
+  uint64_t expected_output_ = 0;
+
+  std::vector<uint8_t> window_;   // 32 KiB LZ77 ring, also the output buffer
+  std::vector<uint8_t> state_;    // tinfl_decompressor
+  std::vector<uint8_t> chunk_;    // compressed input staging
+  size_t window_pos_ = 0;         // ring write position
+  size_t avail_start_ = 0;        // unconsumed run start within window_
+  size_t avail_len_ = 0;
+  bool finished_ = false;
+  bool failed_ = false;
+};
+
 bool DecompressPayload(Compression compression, const uint8_t* input,
                        size_t input_size, size_t max_output_size,
                        std::vector<uint8_t>* output);

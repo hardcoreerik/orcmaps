@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "orcmap/feature.hpp"
+#include "orcmap/mvt_stream.hpp"
 #include "orcmap/pack_discovery.hpp"
 #include "orcmap/pmtiles.hpp"
 #include "orcmap/render_target.hpp"
@@ -90,12 +91,17 @@ struct BenchPipelineOptions {
   // skipped tile is a recorded, visible measurement; a crash is not.
   size_t min_free_internal_bytes = 0;
 
-  // Optional caller-owned inflate buffer, reused for every tile. Reserve it
-  // ONCE, as early in startup as possible: on a board without PSRAM the
-  // limit is the largest contiguous block, and a buffer claimed while the
-  // heap is still unfragmented stays usable for the rest of the run. Null
-  // falls back to a per-tile local buffer, which is fine where PSRAM exists.
-  std::vector<uint8_t>* scratch_inflated = nullptr;
+  // Caller-owned streaming scratch, reused for every tile. When set, tiles
+  // are parsed straight from the archive and the inflated tile is NEVER
+  // materialised -- the only way a board whose largest free block is smaller
+  // than a tile can render one. Null falls back to inflate-then-decode,
+  // which is simpler and fine where PSRAM exists.
+  //
+  // With streaming, inflate and protobuf parsing interleave per feature and
+  // cannot be timed apart: their combined cost lands in decode_ms and
+  // inflate_ms stays 0. Said plainly here so the field is not read as
+  // "inflate became free".
+  orcmap::MvtStreamScratch* scratch_stream = nullptr;
 };
 
 // One measured frame. All timings are milliseconds; all byte counts are

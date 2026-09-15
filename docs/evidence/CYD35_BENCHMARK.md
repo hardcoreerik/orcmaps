@@ -228,3 +228,66 @@ of all three packs total 3.6 KiB, and `sizeof(tinfl_decompressor)` is ~8 KiB
 
 (1) is the better engineering answer; (2) is the faster route to a working
 demo. They are not exclusive.
+
+## CORRECTION: the memory figures above were optimistic
+
+Every "free heap" and "largest block" number earlier in this document — and
+in the commits that produced them — came from
+`heap_caps_get_free_size(MALLOC_CAP_INTERNAL)`. **That metric is misleading
+on this chip.** It counts the 69 KiB instruction-RAM region (and part of
+D/IRAM) which `malloc` cannot hand out for a byte buffer. Re-probed with
+`MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT`, which is what a `std::vector`
+actually gets:
+
+| | reported before | actually allocatable |
+|---|---:|---:|
+| free heap | 190,264 | **91,732** |
+| largest free block | 69,632 | **47,104**, falling to 14,336 |
+| minimum free seen | 126,860 | **16,208** |
+
+So the board has roughly **half** the data memory I had been reporting. The
+earlier conclusions about *which* tiles fail were right — they were measured
+from behaviour — but the headroom analysis was wrong, and that changes the
+answer.
+
+## Why end-to-end streaming is not enough here
+
+The streaming parser was built as planned (`mvt_stream.{hpp,cpp}`,
+two-pass over `InflatingByteStream`) and is correct: host tests assert it
+emits features byte-identical to the buffered decoder, attributes included,
+which is the proof that two-pass table resolution works. It is a real
+reduction and the Tab5 uses it too.
+
+But its footprint against the corrected budget does not fit:
+
+| component | bytes | note |
+|---|---:|---|
+| LZ77 window | 32,768 | fixed by DEFLATE; cannot be smaller |
+| inflater state | ~8,400 | `tinfl_decompressor` |
+| input chunk | 2,048 | |
+| all-layer key/value tables | up to 24,423 | worst measured, Oregon z7 |
+| one feature's encoded bytes | up to 36,259 | worst measured, Springfield z13 |
+| **total** | **~104,000** | against **91,732** available |
+
+And the largest single piece (36 KiB) sits right at the 47 KiB largest-block
+limit, which then collapses to 14 KiB. Measured result: Oregon z7 and
+Springfield z13 still render 0 tiles; world z1 renders 2 of 4.
+
+Going further would mean streaming *within* a feature, and that does not
+work either: a 36 KiB encoded feature decodes to roughly 9,000 points, which
+is ~72 KiB of `MvtPoint` — **larger than its encoded form**. Polygon fill
+needs the whole ring, so it cannot be drawn incrementally the way a
+polyline could.
+
+## Conclusion: the data is wrong for this board, not only the code
+
+These packs were built for a 1280x720 Tab5 at extent 4096 — sixteen times
+the coordinate resolution a 480x320 screen can show — and contain single
+features of 36 KiB. No streaming strategy makes that fit in 91 KiB with a
+47 KiB largest block.
+
+The remaining path is a pack built for this display: coarser simplification,
+fewer layers, lower extent. That is a data change, and it is the honest
+answer rather than a shortcut — the engine work above stands on its own
+(it is what makes the world view render at all, and it reduces Tab5 memory),
+but "every tile loads on a CYD" needs tiles sized for a CYD.

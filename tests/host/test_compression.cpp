@@ -5,6 +5,7 @@
 #include "orcmap/feature.hpp"
 #include "orcmap/mvt.hpp"
 #include "orcmap/mvt_translate.hpp"
+#include "orcmap/mvt_stream.hpp"
 #include "orcmap/pmtiles.hpp"
 #include "orcmap/renderer.hpp"
 #include "orcmap/style.hpp"
@@ -13,6 +14,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <algorithm>
 #include <vector>
 
 #include "test_util.hpp"
@@ -131,6 +133,188 @@ void TestCorruptGzipPayload(const std::string& gz_path) {
 // the gate on the change that let a no-PSRAM board render mid-zoom tiles: it
 // halves the large-allocation requirement, and it must not alter one byte of
 // output while doing so.
+// The forward-only inflating stream must reproduce the inflated bytes
+// exactly, in any read pattern, while never holding the whole payload.
+void TestInflatingStreamMatchesBufferedInflate(const std::string& gzip_pmtiles) {
+  orcmap::host::FileByteSource source(gzip_pmtiles);
+  ORCMAP_EXPECT_TRUE(source.Valid());
+  orcmap::PmTilesReader reader(&source);
+  ORCMAP_EXPECT_TRUE(reader.Open());
+
+  std::vector<uint8_t> want;
+  ORCMAP_EXPECT_TRUE(reader.GetTileInflated(0, 0, 0, 1u << 20, &want));
+  ORCMAP_EXPECT_TRUE(!want.empty());
+
+  uint64_t offset = 0;
+  uint32_t length = 0;
+  ORCMAP_EXPECT_TRUE(reader.LocateTileForTest(0, 0, 0, &offset, &length));
+
+  const auto pull = [](void* ctx, uint64_t off, uint8_t* dst,
+                       size_t len) -> size_t {
+    return static_cast<orcmap::ByteSource*>(ctx)->Read(off, dst, len);
+  };
+
+  // Awkward read sizes on purpose: 1, then 7, then 13, ... so reads cross
+  // the window's refill boundary at unaligned offsets.
+  orcmap::InflatingByteStream stream;
+  ORCMAP_EXPECT_TRUE(stream.Begin(reader.Header().tile_compression, pull,
+                                  &source, offset, length));
+  std::vector<uint8_t> got;
+  const size_t sizes[] = {1, 7, 13, 64, 3, 255, 2};
+  size_t si = 0;
+  while (got.size() < want.size()) {
+    size_t n = sizes[si++ % 7];
+    if (n > want.size() - got.size()) n = want.size() - got.size();
+    std::vector<uint8_t> buf(n);
+    ORCMAP_EXPECT_TRUE(stream.Read(buf.data(), n));
+    got.insert(got.end(), buf.begin(), buf.end());
+  }
+  ORCMAP_EXPECT_TRUE(got == want);
+  ORCMAP_EXPECT_TRUE(stream.consumed() == want.size());
+  ORCMAP_EXPECT_TRUE(stream.AtEnd());
+  // Reading past the end fails rather than returning garbage.
+  uint8_t past = 0;
+  ORCMAP_EXPECT_TRUE(!stream.Read(&past, 1));
+
+  // Skip must land in exactly the same place as reading.
+  orcmap::InflatingByteStream skipper;
+  ORCMAP_EXPECT_TRUE(skipper.Begin(reader.Header().tile_compression, pull,
+                                   &source, offset, length));
+  const uint64_t jump = want.size() / 2;
+  ORCMAP_EXPECT_TRUE(skipper.Skip(jump));
+  std::vector<uint8_t> tail(want.size() - jump);
+  ORCMAP_EXPECT_TRUE(skipper.Read(tail.data(), tail.size()));
+  ORCMAP_EXPECT_TRUE(std::equal(tail.begin(), tail.end(), want.begin() + jump));
+
+  // Re-Begin restarts from the top, which is what a two-pass parser needs.
+  ORCMAP_EXPECT_TRUE(skipper.Begin(reader.Header().tile_compression, pull,
+                                   &source, offset, length));
+  std::vector<uint8_t> again(want.size());
+  ORCMAP_EXPECT_TRUE(skipper.Read(again.data(), again.size()));
+  ORCMAP_EXPECT_TRUE(again == want);
+}
+
+// END-TO-END STREAMING PARSE must emit exactly what the buffered decoder
+// produces. This is the gate on the change that removes the whole-tile
+// buffer: if the two ever diverged, a board with PSRAM and a board without
+// would draw different maps from the same pack.
+struct ParseCapture {
+  std::vector<orcmap::MvtFeature> features;
+  std::vector<std::string> layers;
+  std::vector<uint32_t> extents;
+};
+
+bool CaptureParsed(const orcmap::MvtLayer& layer,
+                   const orcmap::MvtFeature& feature, void* ctx) {
+  ParseCapture& cap = *static_cast<ParseCapture*>(ctx);
+  cap.layers.push_back(layer.name);
+  cap.extents.push_back(layer.extent);
+  cap.features.push_back(feature);
+  return true;
+}
+
+void TestStreamedParseMatchesBufferedDecode(const std::string& gzip_pmtiles) {
+  orcmap::host::FileByteSource source(gzip_pmtiles);
+  ORCMAP_EXPECT_TRUE(source.Valid());
+  orcmap::PmTilesReader reader(&source);
+  ORCMAP_EXPECT_TRUE(reader.Open());
+
+  // Reference: inflate the whole tile, then decode it.
+  std::vector<uint8_t> raw;
+  ORCMAP_EXPECT_TRUE(reader.GetTileInflated(0, 0, 0, 1u << 20, &raw));
+  orcmap::MvtTile buffered;
+  ORCMAP_EXPECT_TRUE(
+      orcmap::DecodeMvtTile(raw.data(), raw.size(), &buffered));
+
+  uint64_t offset = 0;
+  uint32_t length = 0;
+  ORCMAP_EXPECT_TRUE(reader.LocateTileForTest(0, 0, 0, &offset, &length));
+  const auto pull = [](void* ctx, uint64_t off, uint8_t* dst,
+                       size_t len) -> size_t {
+    return static_cast<orcmap::ByteSource*>(ctx)->Read(off, dst, len);
+  };
+
+  ParseCapture cap;
+  orcmap::MvtDecodeOptions options;
+  options.feature_sink = &CaptureParsed;
+  options.feature_sink_ctx = &cap;
+  orcmap::MvtStreamScratch scratch;
+  ORCMAP_EXPECT_TRUE(orcmap::StreamMvtTile(reader.Header().tile_compression,
+                                           pull, &source, offset, length,
+                                           options, &scratch));
+
+  size_t expected = 0;
+  for (const orcmap::MvtLayer& layer : buffered.layers) {
+    expected += layer.features.size();
+  }
+  ORCMAP_EXPECT_TRUE(expected > 0);
+  ORCMAP_EXPECT_EQ(static_cast<int>(cap.features.size()),
+                   static_cast<int>(expected));
+
+  size_t i = 0;
+  for (const orcmap::MvtLayer& layer : buffered.layers) {
+    for (const orcmap::MvtFeature& want : layer.features) {
+      const orcmap::MvtFeature& got = cap.features[i];
+      ORCMAP_EXPECT_EQ(cap.layers[i], layer.name);
+      ORCMAP_EXPECT_TRUE(cap.extents[i] == layer.extent);
+      ORCMAP_EXPECT_TRUE(got.id == want.id);
+      ORCMAP_EXPECT_TRUE(got.geom_type == want.geom_type);
+      ORCMAP_EXPECT_EQ(static_cast<int>(got.geometry.size()),
+                       static_cast<int>(want.geometry.size()));
+      for (size_t r = 0; r < want.geometry.size(); ++r) {
+        ORCMAP_EXPECT_EQ(static_cast<int>(got.geometry[r].size()),
+                         static_cast<int>(want.geometry[r].size()));
+        for (size_t k = 0; k < want.geometry[r].size(); ++k) {
+          ORCMAP_EXPECT_TRUE(got.geometry[r][k].x == want.geometry[r][k].x);
+          ORCMAP_EXPECT_TRUE(got.geometry[r][k].y == want.geometry[r][k].y);
+        }
+      }
+      // Attributes prove the two-pass table resolution worked: these indices
+      // are only resolvable because pass 1 collected keys/values that the
+      // wire format places AFTER the features referencing them.
+      ORCMAP_EXPECT_TRUE(got.attribute_keys == want.attribute_keys);
+      ORCMAP_EXPECT_EQ(static_cast<int>(got.attribute_values.size()),
+                       static_cast<int>(want.attribute_values.size()));
+      for (size_t v = 0; v < want.attribute_values.size(); ++v) {
+        ORCMAP_EXPECT_TRUE(got.attribute_values[v] == want.attribute_values[v]);
+      }
+      ++i;
+    }
+  }
+
+  // The scratch is reusable: a second parse must give the same answer.
+  ParseCapture again;
+  options.feature_sink_ctx = &again;
+  ORCMAP_EXPECT_TRUE(orcmap::StreamMvtTile(reader.Header().tile_compression,
+                                           pull, &source, offset, length,
+                                           options, &scratch));
+  ORCMAP_EXPECT_EQ(static_cast<int>(again.features.size()),
+                   static_cast<int>(expected));
+
+  // A refusing sink aborts rather than truncating silently.
+  struct Refuse {
+    static bool Sink(const orcmap::MvtLayer&, const orcmap::MvtFeature&,
+                     void* ctx) {
+      ++*static_cast<int*>(ctx);
+      return false;
+    }
+  };
+  int calls = 0;
+  orcmap::MvtDecodeOptions refusing;
+  refusing.feature_sink = &Refuse::Sink;
+  refusing.feature_sink_ctx = &calls;
+  ORCMAP_EXPECT_TRUE(!orcmap::StreamMvtTile(reader.Header().tile_compression,
+                                            pull, &source, offset, length,
+                                            refusing, &scratch));
+  ORCMAP_EXPECT_EQ(calls, 1);
+
+  // A sink is mandatory -- this parser has no accumulating mode.
+  orcmap::MvtDecodeOptions no_sink;
+  ORCMAP_EXPECT_TRUE(!orcmap::StreamMvtTile(reader.Header().tile_compression,
+                                            pull, &source, offset, length,
+                                            no_sink, &scratch));
+}
+
 void TestStreamingInflateMatchesTwoStep(const std::string& gzip_pmtiles) {
   orcmap::host::FileByteSource source(gzip_pmtiles);
   ORCMAP_EXPECT_TRUE(source.Valid());
@@ -235,4 +419,6 @@ void RunCompressionTests(const std::string& pmtiles_path,
   TestCorruptGzipPayload(gz_path);
   TestGzipPmtilesToPixels(gzip_pmtiles, mvt_path);
   TestStreamingInflateMatchesTwoStep(gzip_pmtiles);
+  TestInflatingStreamMatchesBufferedInflate(gzip_pmtiles);
+  TestStreamedParseMatchesBufferedDecode(gzip_pmtiles);
 }

@@ -32,6 +32,7 @@ add_executable(orcmap_host_tests
     ${ORCMAP_ROOT}/src/core/pack_discovery.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
+    ${ORCMAP_ROOT}/src/tiles/mvt_stream.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_translate.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_classify_experimental.cpp
     ${ORCMAP_ROOT}/src/tiles/compression.cpp

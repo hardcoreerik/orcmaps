@@ -128,8 +128,14 @@ orcmap_bench::BenchHooks MakeHooks() {
   return hooks;
 }
 
+// The Tab5 has PSRAM and does not need streaming, but it uses the same
+// pipeline: one scratch, reused, so tiles cost one feature at a time here
+// too. Keeping both boards on one path is the point of the shared harness.
+orcmap::MvtStreamScratch g_stream_scratch;
+
 orcmap_bench::BenchPipelineOptions MakePipelineOptions() {
   orcmap_bench::BenchPipelineOptions options;
+  options.scratch_stream = &g_stream_scratch;
   options.include_layer = &orcmap::experimental::IncludeNoTextBasemapLayer;
   options.decompress_budget = kDecompressBudget;
   options.classify_feature = &orcmap::experimental::TryClassifyFeature;

@@ -98,13 +98,9 @@ constexpr int kPanelH = 480;
 // The budget is an upper bound per tile payload, not a reservation; measured
 // OpenMapTiles tiles decompress to roughly 4-40 KB each. 192 KB is generous
 // for that while still being refused long before it could exhaust the heap.
+// Unused by the streaming path (nothing is inflated whole any more); kept
+// for the fallback path and as the guard on a hostile payload.
 constexpr size_t kDecompressBudget = 160u * 1024u;
-// Reusable inflate buffer, claimed ONCE at startup while the heap is still
-// unfragmented. Measured on this board: 211,788 bytes free but a largest
-// free block of only 106,496 once the readers were open, while the densest
-// Oregon z7 tile inflates to 111,366 bytes -- so the buffer has to be taken
-// before that fragmentation happens, and then reused for every tile.
-constexpr size_t kInflateScratchBytes = 132u * 1024u;
 // Below this much free internal memory the harness skips a tile instead of
 // attempting an allocation that would abort the firmware (exceptions are
 // disabled, so a failed allocation terminates rather than throws). A skipped
@@ -184,12 +180,17 @@ Cyd35Display g_display;
 sdmmc_card_t* g_card = nullptr;
 
 int64_t NowUs() { return esp_timer_get_time(); }
-size_t InternalFree() { return heap_caps_get_free_size(MALLOC_CAP_INTERNAL); }
-size_t InternalMin() {
-  return heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
-}
+
+// MALLOC_CAP_INTERNAL alone is MISLEADING on this chip: it counts the 69 KiB
+// instruction-RAM region, which malloc cannot hand out for data. Reporting
+// it made the largest usable block look like 69,632 bytes when the real
+// figure for a byte buffer is smaller. Every probe here therefore asks for
+// 8-bit-addressable internal memory -- what a std::vector can actually get.
+constexpr uint32_t kDataCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+size_t InternalFree() { return heap_caps_get_free_size(kDataCaps); }
+size_t InternalMin() { return heap_caps_get_minimum_free_size(kDataCaps); }
 size_t InternalLargest() {
-  return heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+  return heap_caps_get_largest_free_block(kDataCaps);
 }
 
 // Serial is authoritative; the SD copy is best-effort and never blocks.
@@ -218,11 +219,16 @@ orcmap_bench::BenchHooks MakeHooks() {
   return hooks;
 }
 
-std::vector<uint8_t> g_inflate_scratch;
+// One streaming scratch for the whole run: ~43 KiB of inflate window,
+// inflater state and input chunk, plus the per-tile tables and one feature's
+// bytes. Reused for every tile, so a steady-state frame makes no large
+// allocation -- and no allocation here exceeds ~36 KiB, which is what lets a
+// fragmented heap with a 69 KiB largest block render a 111 KiB tile.
+orcmap::MvtStreamScratch g_stream_scratch;
 
 orcmap_bench::BenchPipelineOptions MakePipelineOptions() {
   orcmap_bench::BenchPipelineOptions options;
-  options.scratch_inflated = &g_inflate_scratch;
+  options.scratch_stream = &g_stream_scratch;
   options.include_layer = &orcmap::experimental::IncludeNoTextBasemapLayer;
   options.decompress_budget = kDecompressBudget;
   options.classify_feature = &orcmap::experimental::TryClassifyFeature;
@@ -621,12 +627,6 @@ extern "C" void app_main() {
                 static_cast<unsigned>(InternalFree() / 1024));
   StatusLine(70, TFT_GREEN, line);
 
-  // The inflate buffer is REUSED but deliberately NOT pre-reserved.
-  // Measured on this board: reserving 132 KiB up front claimed the largest
-  // free block and left a 77,824-byte maximum behind, which made every tile
-  // fail -- worse than not reserving at all (106,496 bytes largest, world
-  // tiles rendering). It grows to the first tile's size and is then reused,
-  // which avoids per-tile churn without carving up the heap.
   if (!MountSd()) {
     Fail("SD CARD NOT FOUND", "insert a card with /orcmaps");
   }

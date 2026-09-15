@@ -5,6 +5,7 @@
 
 #include "orcmap/byte_source.hpp"
 #include "orcmap/compression.hpp"
+#include "orcmap/mvt_stream.hpp"
 
 namespace orcmap {
 
@@ -113,6 +114,24 @@ class PmTilesReader {
 
   // True if this archive stores the tile, without reading its bytes.
   bool TileExists(uint8_t z, uint32_t x, uint32_t y) const;
+
+  // Parses a tile straight from the archive, emitting features to
+  // options.feature_sink, WITHOUT ever holding the inflated tile. This is
+  // the path a board with no PSRAM needs: see include/orcmap/mvt_stream.hpp
+  // for the measured reason. Returns false if the tile is absent or the
+  // payload is malformed; `scratch` should be owned and reused by the
+  // caller.
+  bool StreamTile(uint8_t z, uint32_t x, uint32_t y,
+                  const MvtDecodeOptions& options,
+                  MvtStreamScratch* scratch) const;
+
+  // Resolves a tile to its absolute archive offset and stored length, for a
+  // caller that wants to stream the compressed bytes itself. Exposed for the
+  // streaming parser and its tests.
+  bool LocateTileForTest(uint8_t z, uint32_t x, uint32_t y, uint64_t* offset,
+                         uint32_t* length) const {
+    return LocateTile(z, x, y, offset, length);
+  }
 
  private:
   struct DirEntry {

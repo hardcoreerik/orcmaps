@@ -1,5 +1,7 @@
 #include "orcmap/mvt.hpp"
 
+#include "mvt_internal.hpp"
+
 #include <cstring>
 
 namespace orcmap {
@@ -106,6 +108,10 @@ int64_t ZigZagDecode(uint64_t n) {
 }
 
 // --- Value (Layer.values[] entry) ---------------------------------------
+
+}  // namespace
+
+namespace internal {
 
 bool DecodeValue(const uint8_t* data, size_t length, MvtValue* out) {
   Reader r{data, length};
@@ -307,6 +313,10 @@ bool DecodeFeature(const uint8_t* data, size_t length,
 
 // Name + top-level framing only. Nested key/value/feature payloads are
 // skipped as length-delimited blobs (no MvtValue / MvtFeature allocation).
+}  // namespace internal
+
+namespace {
+
 bool InspectLayerName(const uint8_t* data, size_t length, std::string* name) {
   Reader r{data, length};
   bool has_name = false;
@@ -370,7 +380,7 @@ bool DecodeLayer(const uint8_t* data, size_t length,
         size_t value_len;
         if (wire_type != 2 || !r.ReadLengthDelimited(&value_data, &value_len)) return false;
         MvtValue value;
-        if (!DecodeValue(value_data, value_len, &value)) return false;
+        if (!internal::DecodeValue(value_data, value_len, &value)) return false;
         values.push_back(std::move(value));
         break;
       }
@@ -411,7 +421,8 @@ bool DecodeLayer(const uint8_t* data, size_t length,
       feature.geometry.clear();
       feature.attribute_keys.clear();
       feature.attribute_values.clear();
-      if (!DecodeFeature(feature_data, feature_len, keys, values, &feature)) {
+      if (!internal::DecodeFeature(feature_data, feature_len, keys, values,
+                                   &feature)) {
         return false;
       }
       if (!options.feature_sink(*out, feature, options.feature_sink_ctx)) {
@@ -424,7 +435,10 @@ bool DecodeLayer(const uint8_t* data, size_t length,
   out->features.reserve(feature_blobs.size());
   for (const auto& [feature_data, feature_len] : feature_blobs) {
     MvtFeature feature;
-    if (!DecodeFeature(feature_data, feature_len, keys, values, &feature)) return false;
+    if (!internal::DecodeFeature(feature_data, feature_len, keys, values,
+                                 &feature)) {
+      return false;
+    }
     out->features.push_back(std::move(feature));
   }
   return true;
