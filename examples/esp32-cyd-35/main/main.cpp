@@ -162,9 +162,11 @@ class Cyd35Display : public lgfx::LGFX_Device {
       // LovyanGFX's rgb_order = false.
       config.rgb_order = false;
       config.dlen_16bit = false;
-      // The XPT2046 touch controller shares this SPI bus (unused here, but
-      // the panel must still release the bus between transactions).
-      config.bus_shared = true;
+      // The XPT2046 touch controller shares this bus physically, but this
+      // firmware never drives it and the SD card is on a different host
+      // (SPI3), so nothing else contends. Telling LovyanGFX it owns the bus
+      // saves re-acquiring it on every transaction.
+      config.bus_shared = false;
       panel_.config(config);
     }
     {
@@ -485,9 +487,21 @@ void RenderFrame() {
   orcmap::Viewport map_vp = g_viewport;
   map_vp.width_px = kDisplayW;
   map_vp.height_px = kDisplayH;
+
+  // Hold ONE SPI transaction open for the whole frame.
+  //
+  // There is no offscreen framebuffer on this board -- 480x320 is 307,200
+  // bytes at RGB565, 153,600 at 8bpp and 76,800 even at 4bpp, against
+  // 138,628 free once the streaming scratch is accounted for -- so drawing
+  // goes straight to the panel. Without this, every line, rect and pixel
+  // begins and ends its own SPI transaction. Batching them removes that
+  // per-primitive setup; it does not remove the progressive paint, which
+  // needs a framebuffer this board cannot hold.
+  g_display.startWrite();
   orcmap_bench::RenderMeasuredFrame(*g_active.reader, map_vp, *g_style, &target,
                                     MakePipelineOptions(), MakeHooks(),
                                     /*background=*/true, &g_last_frame);
+  g_display.endWrite();
 }
 
 // ---------------------------------------------------------------------------
