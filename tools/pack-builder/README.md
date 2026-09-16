@@ -163,3 +163,44 @@ python tools/pack-builder/build_world_overview.py `
 Remove `--dry-run` to build. Existing immutable outputs are refused unless
 `--force` is explicit. PMTiles, manifests, checksums, compiled classes, and
 renders remain under ignored `data/local/world-overview/build/`.
+
+## provision_pack.py -- pin to SD card
+
+`provision_pack.py` is the PC half of a device setup wizard. Where
+`build_regional_pack.py` takes full provenance on the command line,
+this takes a pin and a radius and derives everything else from the
+**source pack's own manifest**, so a cut pack cannot record a provenance
+that disagrees with what it was cut from.
+
+```bash
+python tools/pack-builder/provision_pack.py \
+  --source-manifest data/local/oregon.manifest.json \
+  --lat 44.0521 --lon -123.0867 --radius-km 50 \
+  --name home-eugene --display-name "Home: Eugene OR" \
+  --sd-root G:/ --builder-commit "$(git rev-parse HEAD)"
+```
+
+It writes `<sd-root>/orcmaps/<name>.pmtiles` plus the `.manifest.json` and
+`.sha256` sidecars **on the same filename stem**, which is how
+`src/core/pack_discovery.cpp` pairs an archive to its manifest. Renaming one
+without the others is the single mistake that silently breaks discovery, so
+staging moves all three or none.
+
+Behaviour that matters:
+
+- A pin outside the source pack's coverage is **refused**, rather than
+  producing an empty pack that looks valid.
+- A box that overruns the source is **clamped to the source's coverage**, so
+  the manifest never claims tiles the archive lacks (the device compares the
+  two and rejects a mismatch).
+- The requested zoom range is **narrowed** to what the source holds.
+- stdout is machine-readable JSON; the `pmtiles` CLI's progress goes to
+  stderr so a wizard can parse the result.
+
+Measured on an 84 MB Oregon source, z1-13 (go-pmtiles 1.28.2):
+
+| Radius | Tiles | Pack size | Time |
+| --- | --- | --- | --- |
+| 25 km | 384 | 4.06 MB | 276 ms |
+| 50 km | 1,218 | 7.34 MB | 249 ms |
+| 100 km | 4,526 | 20.30 MB | 295 ms |
