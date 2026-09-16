@@ -18,6 +18,7 @@ idf_component_register(
          "src/core/pack.cpp"
          "src/core/pack_json.cpp"
          "src/core/pack_discovery.cpp"
+         "src/core/location_picker.cpp"
          "adapters/esp_idf/pack_filesystem.cpp"
          "src/tiles/pmtiles_reader.cpp"
          "src/tiles/mvt_decoder.cpp"

@@ -25,11 +25,13 @@ add_executable(orcmap_host_tests
     test_compression.cpp
     test_pack.cpp
     test_pack_discovery.cpp
+    test_location_picker.cpp
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/core/viewport.cpp
     ${ORCMAP_ROOT}/src/core/pack.cpp
     ${ORCMAP_ROOT}/src/core/pack_json.cpp
     ${ORCMAP_ROOT}/src/core/pack_discovery.cpp
+    ${ORCMAP_ROOT}/src/core/location_picker.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
     ${ORCMAP_ROOT}/src/tiles/mvt_stream.cpp
