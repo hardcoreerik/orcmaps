@@ -30,11 +30,13 @@ idf_component_register(
          "src/render/renderer.cpp"
          "src/render/clip.cpp"
          "adapters/esp_idf/file_byte_source.cpp"
+         "adapters/esp_idf/partition_byte_source.cpp"
          "third_party/miniz/miniz.c"
          "third_party/miniz/miniz_tinfl.c"
     INCLUDE_DIRS "include" "adapters/m5gfx/include" "adapters/esp_idf/include"
     PRIV_INCLUDE_DIRS "third_party/miniz"
     REQUIRES ""
+    PRIV_REQUIRES "esp_partition"
 )
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE

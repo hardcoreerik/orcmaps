@@ -26,6 +26,7 @@ add_executable(orcmap_host_tests
     test_pack.cpp
     test_pack_discovery.cpp
     test_location_picker.cpp
+    test_byte_range.cpp
     ${ORCMAP_ROOT}/src/core/geo.cpp
     ${ORCMAP_ROOT}/src/core/viewport.cpp
     ${ORCMAP_ROOT}/src/core/pack.cpp

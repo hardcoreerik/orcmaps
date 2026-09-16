@@ -18,6 +18,7 @@ void RunCompressionTests(const std::string& pmtiles_path,
 void RunPackTests();
 void RunPackDiscoveryTests();
 void RunLocationPickerTests();
+void RunByteRangeTests(const std::string& fixture_path);
 
 int main(int argc, char** argv) {
   const std::string fixture_path =
@@ -39,6 +40,7 @@ int main(int argc, char** argv) {
   RunPackTests();
   RunPackDiscoveryTests();
   RunLocationPickerTests();
+  RunByteRangeTests(fixture_path);
 
   if (orcmap::test::g_failures == 0) {
     std::printf("PASS: all OrcMaps host tests passed\n");
