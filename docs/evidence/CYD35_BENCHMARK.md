@@ -504,3 +504,45 @@ decoded geometry, which is the dominant cost in the tiles that still fail —
 and would restore real headroom rather than spending the last of it. It
 needs a range check so an unusual extent is refused rather than silently
 truncated.
+
+## Negative result: holding one SPI transaction per frame is SLOWER
+
+With no offscreen framebuffer possible on this board, the obvious remaining
+lever was SPI transaction overhead: every line, rect and pixel begins and
+ends its own transaction, so holding one open across the frame
+(`startWrite()`/`endWrite()`) should remove that setup cost.
+
+It made rendering **worse**, on identical work (same tiles present, same
+feature counts):
+
+| scenario | render, per-primitive | render, one transaction | change |
+|---|---:|---:|---:|
+| oregon z7 | 925.5 ms | 981.0 ms | +6.0% |
+| springfield z13 | 615.5 ms | 722.5 ms | +17.4% |
+| world z1 | 616.8 ms | 735.8 ms | +19.3% |
+
+LovyanGFX evidently batches better when each primitive manages its own
+transaction than when one is held open across thousands of small writes.
+
+Two variables were changed at once initially (`startWrite` plus
+`bus_shared = false`); isolating them showed `bus_shared` made no measurable
+difference at all — byte-identical timings — so the regression is
+`startWrite`/`endWrite` alone. Reverting restored the baseline exactly
+(925.6 / 615.5 / 616.7 against the original 925.5 / 615.5 / 616.8), which is
+the confirmation that the experiment was clean.
+
+Recorded so it is not "optimised" again on intuition. This is the second
+call-overhead hypothesis on this board to measure as no-better-or-worse; the
+first was stroke run coalescing, which cut FillRect calls ~100x for no
+change. **Draw-call overhead is not where this renderer spends its time.**
+
+### Why no offscreen or band buffer
+
+A full framebuffer does not fit at any depth: 480x320 is 307,200 bytes at
+RGB565, 153,600 at 8bpp and 76,800 even at 4bpp with a palette, against
+138,628 free once the 67,792-byte streaming scratch is accounted for.
+
+Band buffers do fit (480x64 is 61,440 bytes) but are incompatible with
+single-pass streaming: each feature is drawn once, in stream order, and may
+span any band, so banding needs either the tile's features held in memory or
+the tile re-decoded once per band.
