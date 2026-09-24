@@ -1,127 +1,106 @@
 # ESP-IDF 5.5.4 build, ESP32-P4 code size, and memory audit
 
-**Scope:** measurements taken on 2026-09-24 in a Linux cloud container, against
-`main` at `8784b9e` plus two fixes (`<algorithm>` include in a host test, z4/z5
-derivation in the world builder). This is **before** the LocationPicker,
-PartitionByteSource, streaming-decode and provision-tool commits reached
-GitHub, so none of those are included in any number below.
+**Scope:** release 0.2.0. `main` at `c91ff19` (streaming decode,
+`LocationPicker`, `PartitionByteSource`, `provision_pack.py`) plus the
+release fixes on top of it. Measured 2026-09-24 in a Linux cloud container.
+The first round of measurements, on `8784b9e` before streaming, is kept at
+the end for comparison.
 
-Nothing here was run on hardware. Heap figures are **host x86-64**; ESP32-P4
-pointers and `size_t` are half as wide, so device figures will be lower but were
-**not measured**.
+Nothing here was run on hardware. Heap figures are **host x86-64**; they
+show structure, not ESP32 numbers.
 
 ## Toolchain
 
 - ESP-IDF **v5.5.4** (git tag), `riscv32-esp-elf-gcc` esp-14.2.0_20260121.
-- The `espressif/idf:v5.5.4` image could not be pulled (Docker Hub 429). ESP-IDF
-  was installed natively instead. `dl.espressif.com` was unreachable, so the
-  Python environment was installed without the constraints file. This affects
-  only Python tool versions, not the compiler or ESP-IDF sources.
+- The `espressif/idf:v5.5.4` Docker image could not be pulled (Docker Hub
+  429). ESP-IDF was installed natively. `dl.espressif.com` was unreachable, so
+  the Python environment was installed without its constraints file; this
+  affects only Python tool versions, not the compiler or ESP-IDF sources.
 - The component registry was unreachable. M5GFX **0.2.27**
   (`93b480bb349749202c8a2a953065c8ae95f58320`) and M5Unified **0.2.20**
   (`774d920cd6851a5231748b56ece1b073645f313f`) were taken from their GitHub
-  tags and added as local components with `IDF_COMPONENT_MANAGER=0`. The
-  registry packages were not compared against these tags.
+  tags and added as local components with `IDF_COMPONENT_MANAGER=0`.
 
 ## Compile results (target esp32p4)
 
-| Example | Result | Notes |
+| Build | Result | Notes |
 |---|---|---|
 | `examples/generic-esp32` | **builds** | Unmodified. |
-| `examples/m5gfx` | **builds** | Scratch copy: M5GFX from its GitHub tag instead of the registry. |
-| `examples/m5stack-tab5` | **builds** | Scratch copy: M5GFX and M5Unified from their GitHub tags. |
+| `examples/m5gfx` | **builds** | Scratch copy; M5GFX from its GitHub tag. |
+| `examples/m5stack-tab5` | **builds** | Scratch copy; M5GFX/M5Unified from their GitHub tags. |
+| OrcSDR-shaped probe | **builds** | Calls every API in `docs/ORCSDR_INTEGRATION.md`. |
+| Managed `git:` dependency, pinned by SHA | **resolves and builds** | `orcmaps: {git: https://github.com/hardcoreerik/orcmaps.git, version: <sha>}`, `REQUIRES orcmaps`. Lock file records `source.type: git`. |
 
-No compiler warnings were emitted from OrcMaps sources; the warnings in the
-logs come from ESP-IDF headers (`periph_ctrl.h`, `gpio_ll.h`) included by
-M5GFX.
+No compiler warnings came from OrcMaps sources. The remaining warnings are
+in ESP-IDF headers included by M5GFX.
 
-**Checkout folder name matters.** The in-repo examples use the repository
-folder's name as the component name (`REQUIRES OrcMaps`), so a checkout named
-`orcmaps` (a default `git clone` on a case-sensitive file system) fails with
-`Failed to resolve component 'OrcMaps'`. This affects only the in-repo examples.
-A component-manager consumer names the component by its dependency key.
+In-repo examples use the checkout folder name as the component name
+(`REQUIRES OrcMaps`), so a checkout named `orcmaps` on a case-sensitive file
+system fails to configure them. A managed dependency is not affected.
 
 ## Code size: OrcMaps component on ESP32-P4
 
-`esp_idf_size --archives` on the `examples/m5stack-tab5` image, which runs the
-full pipeline (PMTiles, gzip, MVT decode, translate, style, render, pack
-discovery). The linker drops unused code, so this is the cost of what that
-demo calls.
+`esp_idf_size --archives`, `libOrcMaps.a` only. The linker drops unused code,
+so the figure depends on what the application calls.
 
-| Optimization | `libOrcMaps.a` flash `.text` | flash `.rodata` | internal `.bss` | Total flash |
-|---|---:|---:|---:|---:|
-| `-O2` (`CONFIG_COMPILER_OPTIMIZATION_PERF`, the Tab5 example default) | 79,016 B | 1,339 B | 416 B | **80,355 B** |
-| `-Os` (`CONFIG_COMPILER_OPTIMIZATION_SIZE`) | 41,752 B | 1,358 B | 416 B | **43,110 B** |
+| Image | Optimization | Flash `.text` | Flash `.rodata` | Total flash | Internal `.bss` |
+|---|---|---:|---:|---:|---:|
+| **OrcSDR-shaped probe** | `-O2` | 79,518 B | 1,367 B | **80,885 B** | 208 B |
+| **OrcSDR-shaped probe** | `-Os` | 43,324 B | 1,386 B | **44,710 B** | 208 B |
+| `examples/m5stack-tab5` | `-O2` | 80,036 B | 1,339 B | 81,375 B | 416 B |
+| `examples/m5stack-tab5` | `-Os` | 43,470 B | 1,358 B | 44,828 B | 416 B |
+| `examples/m5gfx` (calls almost nothing) | `-O2` | 5,290 B | 220 B | 5,510 B | 208 B |
 
-Not included:
+The probe uses:
 
-- The M5GFX `DisplayTarget` is header-only, so it compiles into the
-  consumer's own component.
-- `libstdc++`/`libc`/`libm` code shared with the application.
-- The z0-z4 world pack (871,343 B). It is data, and it is larger than
-  OrcSDR's ~470 KB of free app-partition space, so it cannot go into the app
-  image. It needs its own data partition (read with `PartitionByteSource`).
+- `PartitionByteSource`, `PmTilesReader::StreamTile` and `LocationPicker`
+  for the first-boot world picker;
+- `esp_idf::PackFileSystem`, `DiscoverPacks`, `ResolvePack` and
+  `FileByteSource` for the SD packs;
+- `ClearMapBackground`, `RenderFeatureAt`, the experimental classifier and
+  the M5GFX `DisplayTarget`.
 
-`examples/m5gfx` links only 5,510 B of OrcMaps, because it calls almost none of
-the pipeline. Don't use it as the size figure.
+Its `main` is 8.7 KB at -O2, including the header-only M5GFX adapter.
 
-## Memory audit
+The z0-z4 world pack (871,343 B) is data and does not count here. It does
+not fit OrcSDR's ~470 KB free app space, so it needs its own data
+partition.
 
-### Where the pipeline allocates
+## Memory audit (streaming pipeline)
 
-All pipeline memory comes from `std::vector` (the default allocator, so
-`malloc`/`new`). OrcMaps never calls `heap_caps_malloc` and never asks for
-internal or DMA memory. Main allocation sites:
+OrcMaps allocates only through `new`/`malloc`. It never calls
+`heap_caps_malloc` and never asks for internal or DMA memory. ESP-IDF's
+`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL` therefore decides which heap each block
+comes from.
 
-| Site | What | Size driver |
-|---|---|---|
-| `PmTilesReader` root directory | `std::vector<DirEntry>` (24 B/entry on 32-bit) | root dir ≤ 16 KiB compressed |
-| `PmTilesReader` leaf cache | 4 slots of `std::vector<DirEntry>` | leaf entries × 24 B each, held for the reader's lifetime |
-| Tile read + `DecompressPayload` | stored bytes + decompressed bytes | tile size (Tab5 sweep: up to hundreds of KB) |
-| `DecodeMvtTile` | features, geometry and tag vectors | thousands of small blocks per busy tile |
-| `TranslateMvtToFeatureTile` | per-feature paths and property vectors | same |
-| Renderer / `DisplayTarget::FillPolygon` | per-polygon `xy` and scanline crossings | ring size |
-| `tinfl_decompress_mem_to_mem` (miniz) | `tinfl_decompressor` **on the calling task's stack** | **8,364 B** on RV32 (measured with `sizeof` under riscv32-esp-elf-gcc) |
+Stack: before this release, `DecompressPayload`, which is used for PMTiles
+directory reads, put miniz's `tinfl_decompressor` on the calling task's
+stack: 8,364 B on RV32 (`sizeof` under riscv32-esp-elf-gcc). 0.2.0 moves it
+to the heap, as the streaming inflater already did.
 
-### Host peak (valgrind DHAT, one 1280x720 frame, x86-64)
+Host heap profile: valgrind DHAT, one 1280x720 frame through
+`PmTilesReader::StreamTile` + `RenderFeatureAt`, scratch reserved with 64 KiB
+for features. It counts blocks allocated from OrcMaps code that are live at
+the process peak, excluding the host framebuffer and the test's file buffer.
 
-| Frame | Live heap at peak, excluding the host framebuffer | of which blocks < 8 KiB | blocks ≥ 8 KiB |
-|---|---:|---:|---:|
-| Springfield z14 (`examples/m5stack-tab5/test-pack`) | ~2.35 MB | ~28,200 blocks, ~1.73 MB | 15 blocks, ~0.61 MB |
-| World z0-z4 pack at z2 | ~0.35 MB | ~2,800 blocks, ~0.23 MB | 2 blocks, ~0.12 MB |
+| Frame | Pipeline heap live | Blocks < 8 KiB | Blocks ≥ 8 KiB |
+|---|---:|---:|---|
+| Springfield z14 (`examples/m5stack-tab5/test-pack`), 15 of 24 tiles present | ~344 KB | ~2,800 blocks, ~163 KB | 98,304 (ring vector), 41,207 (feature bytes), 32,768 (window), 8,376 (inflater state) |
+| World z0-z4 pack at z2, 16 tiles | ~121 KB | 41 blocks, ~14 KB | 65,536 (reserved feature buffer), 32,768, 8,376 |
 
-The size split is approximate: blocks are grouped by allocation site, using
-the site's average block size.
+The 0.1.0 batch path held **~2.35 MB** for the same Springfield frame
+(~28,200 small blocks). The large buffers are reserved once and reused, and
+at `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192` they go to PSRAM. The small
+per-feature blocks go to internal RAM first. That is the figure to watch
+inside OrcSDR.
 
-### What this means on an ESP32-P4 with little internal RAM
+## World z0-z4 pack
 
-- ESP-IDF sends a `malloc` smaller than `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`
-  to internal RAM first, and falls back to PSRAM when internal RAM runs out. Most of
-  the pipeline's heap use is **small blocks**, so a busy tile can fill
-  internal RAM transiently before the fallback happens. That starves other
-  users (Wi-Fi, DMA buffers) unless internal RAM is reserved.
-- The Tab5 demo's verified configuration is `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192`
-  plus `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=40960`: the reserve keeps 40 KiB of
-  internal RAM for explicit internal/DMA allocations.
-- Large buffers (tile bytes, decompressed payloads, big leaf directories)
-  already go to PSRAM under that configuration. No OrcMaps allocation is
-  hard-wired to internal RAM.
-- The miniz decompressor state (8,364 B) is on the stack. A task that renders
-  maps needs roughly 16 KiB of stack; the Tab5 demo runs in a 16,384 B main task.
-
-No core code was changed for this audit. A per-call heap choice would mean an
-allocator parameter on every `std::vector` in the public types: that's an API
-change, not a small one. Moving the miniz state from the stack to the heap is
-small, but it touches the decode path, which is also being changed in the
-streaming-decode commits that have not been pushed yet.
-
-## World z0-z4 pack reproduction
-
-`tools/pack-builder/build_world_overview.py` (Planetiler 0.10.2, go-pmtiles
-1.28.2, Java 21.0.10, Natural Earth 5.1.2 acquired with
-`acquire_world_overview_sources.py`) was run on Linux. The z4, z5 and z6
-archives came out **byte-identical** to the ones recorded in
-`WORLD_OVERVIEW_HOST_MEASUREMENTS.md`:
+`tools/pack-builder/build_world_overview.py`, with Planetiler 0.10.2,
+go-pmtiles 1.28.2 and Java 21.0.10, was run on Linux against Natural Earth
+5.1.2 acquired with `acquire_world_overview_sources.py`. The z4, z5 and z6
+archives are **byte-identical** to the ones recorded in
+`WORLD_OVERVIEW_HOST_MEASUREMENTS.md`, which were built on Windows:
 
 | Archive | Bytes | SHA-256 |
 |---|---:|---|
@@ -131,14 +110,28 @@ archives came out **byte-identical** to the ones recorded in
 | z0-z7 | 9,737,500 | `a6942c11782eb843235bbfdf78de89de0c6fea25c9a5a37abb67aab5cca4028c` |
 | z0-z8 | 17,165,758 | `fbebdddd333221fd862c6c71dc4b40d434b07fefee6838a53ea7a210e0f8cb66` |
 
-The z4 archive was checked on the host with the existing tools:
+The z4 checks:
 
-- `tools/pack-verify` installs it as `world` (class `clean`, no required
-  credits).
-- `tools/pack-inspect header` reads it as PMTiles v3, MVT, gzip, z0-4,
-  341 addressed tiles.
-- `tools/pack-inspect preview` renders a 1280x720 world view at z2 (16/16
-  tiles found) and an Oregon view at z4 (24/24 tiles found).
+- `tools/pack-verify` installs it as `world`: class `clean`, no required
+  credits, manifest sources `natural-earth` only.
+- `tools/embedded-world-check` reads the archive inside an 0xFF-padded
+  917,504-byte partition image, the way `PartitionByteSource` exposes flash.
+  `PmTilesReader` opens it, and `LocationPicker` frames it at 1280x720,
+  930x720 and 480x320 (opening zoom z2, z2 and z1). Each run streams the
+  opening view, a pick at Springfield, Oregon zoomed to z4, and a half-screen
+  drag. **Every visible tile was present and decoded; none missing, none
+  failed.**
+- Rendering shows a pre-existing defect: some tiles appear as lighter
+  patches with unfilled land, and boundaries are visible only in those
+  patches. The batch renderer (`pack-inspect preview`) produces the same
+  image, and so did `8784b9e` before streaming. The renderer fills polygons
+  from their first ring only; see `docs/ORCSDR_INTEGRATION.md` section 8.
 
-It was not opened through `PartitionByteSource` or framed with
-`LocationPicker`, because neither exists on the published `main` yet.
+## Earlier round: `8784b9e`, before streaming
+
+- `libOrcMaps.a` in `examples/m5stack-tab5`: 80,355 B flash at -O2, 43,110 B
+  at -Os. Streaming, discovery and the picker added about 1 KB at -O2
+  (Tab5 image).
+- Host heap for the Springfield z14 frame with the batch decoder: ~2.35 MB
+  live, ~28,200 blocks under 8 KiB (~1.73 MB), 15 blocks of 8 KiB or more
+  (~0.61 MB).

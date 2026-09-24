@@ -76,10 +76,20 @@ bool DecompressPayload(Compression compression, const uint8_t* input,
   }
 
   output->resize(isize);
-  const size_t written = tinfl_decompress_mem_to_mem(
-      output->data(), output->size(), deflate_start, deflate_len,
-      TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
-  if (written == TINFL_DECOMPRESS_MEM_TO_MEM_FAILED || written != isize) {
+  // Same work as tinfl_decompress_mem_to_mem, but with the decompressor on
+  // the heap: it is ~8 KiB (8,364 B on RV32), which would otherwise have to
+  // fit on the calling task's stack -- internal RAM on an ESP32 -- for every
+  // PMTiles directory read. InflatingByteStream holds its state the same way.
+  std::vector<uint8_t> state(sizeof(tinfl_decompressor));
+  tinfl_decompressor* decompressor =
+      reinterpret_cast<tinfl_decompressor*>(state.data());
+  tinfl_init(decompressor);
+  size_t in_len = deflate_len;
+  size_t written = output->size();
+  const tinfl_status status = tinfl_decompress(
+      decompressor, deflate_start, &in_len, output->data(), output->data(),
+      &written, TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
+  if (status != TINFL_STATUS_DONE || written != isize) {
     output->clear();
     return false;
   }

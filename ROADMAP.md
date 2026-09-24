@@ -314,7 +314,7 @@ network access or a remote service.
 
 ## Release milestones
 
-No tagged release yet. First candidate: `v0.1.0` once Phase 2 exit
-criteria are met (one real tile decoded, styled, and drawn) — this file's
-own `idf_component.yml` already declares `version: "0.1.0"` as the
-in-development version, not yet a tagged release.
+First tagged release: `v0.2.0` (`idf_component.yml` declares
+`version: "0.2.0"`). 0.1.0 was the untagged in-development version. What
+changed is in `CHANGELOG.md`; the consumer contract is
+`docs/ORCSDR_INTEGRATION.md`.

@@ -326,8 +326,9 @@ local-only today.
 
 ## Integration status
 
-Not integrated with OrcSDR. `idf_component.yml` exists and declares
-version `0.1.0`. The in-tree `examples/generic-esp32` consumes the
+Not integrated with OrcSDR. `idf_component.yml` declares version `0.2.0`,
+the first tagged release (`v0.2.0`, `CHANGELOG.md`); the contract OrcSDR
+integrates against is `docs/ORCSDR_INTEGRATION.md`. The in-tree `examples/generic-esp32` consumes the
 component via `EXTRA_COMPONENT_DIRS` (local convenience, not the
 version-pinned `git:` + SHA pattern OrcSDR will use). `idf_component.yml`'s
 declared ESP-IDF floor is `>=5.0` — deliberately broad, so it doesn't
