@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build local Natural Earth z6/z7/z8 OrcMaps overview packs without networking."""
+"""Build local Natural Earth z4-z8 OrcMaps overview packs without networking."""
 
 from __future__ import annotations
 
@@ -24,6 +24,12 @@ MERCATOR_MAX_LAT_DEG = 85.05112878
 PROFILE = Path(__file__).with_name("world_overview_profile.json")
 JAVA_PROFILE = Path(__file__).with_name("WorldOverviewProfile.java")
 BOUNDS = (-1800000000, -850511288, 1800000000, 850511288)
+
+
+# z8 is built by Planetiler; the others are go-pmtiles extracts of it. z4 is
+# the firmware-embedded world candidate (docs/ORCMAPS_EMBEDDED_WORLD_FIRMWARE_CONCEPT.md).
+DERIVED_ZOOMS = (7, 6, 5, 4)
+ALL_ZOOMS = (8,) + DERIVED_ZOOMS
 
 
 def load_json(path: Path) -> dict:
@@ -79,7 +85,10 @@ def pack_id(max_zoom: int) -> str:
 
 def command_output(command: list[str]) -> str:
     result = subprocess.run(command, check=True, text=True, capture_output=True)
-    return (result.stdout + result.stderr).strip()
+    # The JVM prints "Picked up JAVA_TOOL_OPTIONS: ..." first when that
+    # variable is set; it is host configuration, not a tool version.
+    lines = (result.stdout + result.stderr).strip().splitlines()
+    return "\n".join(line for line in lines if not line.startswith("Picked up "))
 
 
 def validate_tools(java: str, javac: str, planetiler_jar: Path,
@@ -167,7 +176,7 @@ def build_commands(profile: dict, sources: dict, source_root: Path, output_dir: 
          "--maxzoom=8", "--tile_compression=gzip", "--force"],
     ]
     master = output_dir / "world-overview-z8.pmtiles"
-    for zoom in (7, 6):
+    for zoom in DERIVED_ZOOMS:
         commands.append([str(pmtiles_cli), "extract", str(master),
                          str(output_dir / f"world-overview-z{zoom}.partial.pmtiles"),
                          "--minzoom=0", f"--maxzoom={zoom}"])
@@ -203,11 +212,11 @@ def main(argv: list[str] | None = None) -> int:
                                    args.pmtiles_cli)
     commands = build_commands(profile, sources, args.source_root, args.output_dir,
                               args.planetiler_jar, args.java, args.javac, args.pmtiles_cli)
-    outputs = [args.output_dir / f"world-overview-z{zoom}.pmtiles" for zoom in (8, 7, 6)]
+    outputs = [args.output_dir / f"world-overview-z{zoom}.pmtiles" for zoom in ALL_ZOOMS]
     if not args.force and any(path.exists() or path.with_suffix(".manifest.json").exists() for path in outputs):
         raise FileExistsError("refusing to replace an existing immutable overview pack")
     if args.dry_run:
-        print(json.dumps({"commands": commands, "pack_ids": [pack_id(z) for z in (8, 7, 6)]}, indent=2))
+        print(json.dumps({"commands": commands, "pack_ids": [pack_id(z) for z in ALL_ZOOMS]}, indent=2))
         return 0
     args.output_dir.mkdir(parents=True, exist_ok=True)
     classes = args.output_dir / "classes"
@@ -221,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         for command, output in zip(commands[2:], outputs[1:]):
             subprocess.run(command, check=True)
             os.replace(Path(command[3]), output)
-        for index, (zoom, output) in enumerate(zip((8, 7, 6), outputs)):
+        for index, (zoom, output) in enumerate(zip(ALL_ZOOMS, outputs)):
             write_sidecars(output, zoom, input_hashes, tool_versions, commands,
                            None if index == 0 else outputs[0].name)
     finally:

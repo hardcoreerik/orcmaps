@@ -148,7 +148,7 @@ build-pack-inspect/Release/orcmap_pack_inspect.exe preview data/local/springfiel
 
 `build_world_overview.py` builds one z0-z8 master from the already provisioned
 Natural Earth 5.1.2 files, then uses official go-pmtiles v1.28.2 to derive z7
-and z6 candidates. It validates the local source hashes, source record, Java,
+and z6 candidates, plus the z5 and z4 firmware-fallback candidates. It validates the local source hashes, source record, Java,
 Planetiler, and go-pmtiles versions before running. It never downloads data or
 tools.
 

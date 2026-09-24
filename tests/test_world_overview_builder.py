@@ -53,8 +53,10 @@ class WorldOverviewBuilderTests(unittest.TestCase):
             Path("C:/planetiler.jar"), "java", "javac", Path("C:/pmtiles.exe"),
             ROOT / "tools/pack-builder/WorldOverviewProfile.java")
         text = json.dumps(commands)
-        self.assertEqual([c[1] for c in commands if len(c) > 1 and c[1] == "extract"],
-                         ["extract", "extract"])
+        extracts = [c for c in commands if len(c) > 1 and c[1] == "extract"]
+        self.assertEqual([c[-1] for c in extracts],
+                         [f"--maxzoom={z}" for z in BUILDER.DERIVED_ZOOMS])
+        self.assertIn("--maxzoom=4", text)
         self.assertEqual(text.count("world-overview-z8.partial.pmtiles"), 1)
         self.assertNotIn("http", text)
         self.assertNotIn("download", text.lower())
