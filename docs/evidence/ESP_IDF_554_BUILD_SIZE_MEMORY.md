@@ -47,8 +47,8 @@ so the figure depends on what the application calls.
 |---|---|---:|---:|---:|---:|
 | **OrcSDR-shaped probe** | `-O2` | 79,518 B | 1,367 B | **80,885 B** | 208 B |
 | **OrcSDR-shaped probe** | `-Os` | 43,324 B | 1,386 B | **44,710 B** | 208 B |
-| `examples/m5stack-tab5` | `-O2` | 79,978 B | 1,339 B | 81,317 B | 416 B |
-| `examples/m5stack-tab5` | `-Os` | 43,376 B | 1,358 B | 44,734 B | 416 B |
+| `examples/m5stack-tab5` | `-O2` | 80,036 B | 1,339 B | 81,375 B | 416 B |
+| `examples/m5stack-tab5` | `-Os` | 43,470 B | 1,358 B | 44,828 B | 416 B |
 | `examples/m5gfx` (calls almost nothing) | `-O2` | 5,290 B | 220 B | 5,510 B | 208 B |
 
 The probe uses:
