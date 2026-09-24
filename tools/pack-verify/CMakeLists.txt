@@ -19,6 +19,8 @@ add_executable(orcmap_pack_verify
     ${ORCMAP_ROOT}/src/core/pack_json.cpp
     ${ORCMAP_ROOT}/src/core/pack_discovery.cpp
     ${ORCMAP_ROOT}/src/tiles/pmtiles_reader.cpp
+    ${ORCMAP_ROOT}/src/tiles/mvt_stream.cpp
+    ${ORCMAP_ROOT}/src/tiles/mvt_decoder.cpp
     ${ORCMAP_ROOT}/src/tiles/compression.cpp
     ${ORCMAP_ROOT}/adapters/host/file_byte_source.cpp
     ${ORCMAP_ROOT}/adapters/host/pack_filesystem.cpp
