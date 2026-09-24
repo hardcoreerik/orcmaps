@@ -1,5 +1,6 @@
 #include "orcmap/pack_discovery.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <map>
