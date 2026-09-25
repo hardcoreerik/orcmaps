@@ -10,3 +10,7 @@
 #ifndef MINIZ_EXPORT
 #define MINIZ_EXPORT
 #endif
+
+/* OrcMaps-private symbol names, so ESP-IDF ROM miniz cannot replace the
+   bundled one at link time. See orcmap_miniz_prefix.h. */
+#include "orcmap_miniz_prefix.h"

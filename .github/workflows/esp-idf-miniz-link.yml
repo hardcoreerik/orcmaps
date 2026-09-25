@@ -1,0 +1,42 @@
+name: ESP-IDF miniz link gate
+
+# ESP-IDF ROM linker scripts define miniz symbols at absolute addresses that
+# beat OrcMaps' bundled miniz. v0.2.0 called the ROM inflater with state sized
+# for the bundled one and corrupted the heap on an ESP32-P4. This builds a
+# small app that links every OrcMaps inflate path and fails if any miniz
+# symbol OrcMaps uses resolves to ROM. esp32p4 and esp32s3 are chips whose
+# ROM scripts assign those symbols directly (not PROVIDE).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  link:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.4
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [esp32p4, esp32s3]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build the link gate app
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py -C tests/esp_idf_link -B build-esp-idf-link \
+            set-target ${{ matrix.target }} build
+      - name: Check no OrcMaps miniz symbol is ROM-absolute
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          python tools/check_miniz_symbols.py build-esp-idf-link
