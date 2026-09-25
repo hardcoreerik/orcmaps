@@ -1,7 +1,7 @@
 # OrcSDR integration contract
 
 This is what OrcSDR (or any other ESP-IDF application) can rely on when it
-consumes OrcMaps **v0.2.0**. It lists which APIs are stable and which are
+consumes OrcMaps **v0.2.x** (currently v0.2.1). It lists which APIs are stable and which are
 experimental, the SD-card and flash contracts, memory behaviour, and how to
 update. OrcMaps stays a standalone engine: nothing below is OrcSDR-specific
 code, and OrcSDR must not carry a copy or fork of it.
@@ -20,8 +20,13 @@ full commit SHA of a release tag, never a branch.
 dependencies:
   orcmaps:
     git: https://github.com/hardcoreerik/orcmaps.git
-    version: <full 40-character SHA of tag v0.2.0>
+    version: <full 40-character SHA of tag v0.2.1>
 ```
+
+**Do not pin v0.2.0 on ESP32-P4, S3 or the C/H series.** In 0.2.0 the ROM's
+miniz replaced the bundled one at link time and corrupted the heap on the
+first inflate (`CHANGELOG.md` 0.2.1). CI now checks for this on every
+change (`tools/check_miniz_symbols.py`).
 
 ```cmake
 idf_component_register(... REQUIRES orcmaps ...)

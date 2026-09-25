@@ -5,6 +5,32 @@ OrcMaps follows semantic versioning with pre-1.0 discipline (see
 change, but only in a new minor version, and every such change is listed here.
 Consumers pin a release by its full commit SHA (`docs/ORCSDR_INTEGRATION.md`).
 
+## 0.2.1 — 2026-09-25
+
+### Fixed
+
+- **Bundled miniz was replaced by ESP32 ROM miniz on ESP-IDF, corrupting the
+  heap on first inflate.** ESP-IDF ROM linker scripts define `tinfl_*`,
+  `tdefl_*` and some `mz_*` symbols at absolute addresses. On ESP32-P4, S3
+  and the C/H series those beat the bundled objects, so OrcMaps called the
+  ROM inflater with a `tinfl_decompressor` sized for the bundled miniz
+  (8,364 B on ESP32-P4; the ROM's is 10,992 B). The first inflate, the
+  PMTiles root directory in `PmTilesReader::Open`, wrote past the
+  allocation. Found on a Tab5 during OrcSDR integration. Every bundled miniz
+  symbol, and every miniz name an ESP-IDF ROM exports, is now renamed to
+  `orcmap_*` (`third_party/miniz/orcmap_miniz_prefix.h`), so devices run the
+  same inflater as the host tests. The 0.2.0 change that moved
+  `DecompressPayload`'s state to the heap exposed this on the directory
+  path; the streaming path was already exposed.
+
+### Added
+
+- `tests/esp_idf_link` and `tools/check_miniz_symbols.py`, run in CI for
+  esp32p4 and esp32s3: fails if any miniz symbol OrcMaps uses resolves to
+  ROM.
+
+No API or data change; the 0.2.0 world pack is unchanged.
+
 ## 0.2.0 — 2026-09-24
 
 First tagged release (`v0.2.0`). 0.1.0 was the version in
