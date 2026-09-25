@@ -15,6 +15,11 @@ CMakeCache.txt
 # ESP-IDF local/generated. Keep sdkconfig.defaults and dependencies.lock.
 examples/**/sdkconfig
 examples/**/sdkconfig.old
+# The miniz link gate is built per target; nothing it generates is kept.
+tests/esp_idf_link/sdkconfig
+tests/esp_idf_link/sdkconfig.old
+tests/esp_idf_link/dependencies.lock
+build-esp-idf-link*/
 **/build_log.txt
 **/managed_components/
 build-host-render/
